@@ -1,41 +1,51 @@
+export type HabitDayStatus = 'met' | 'partial'
+
 const WEEKS = 14
 const DAYS = 7
 
-// Deterministic (seeded) pseudo-random so server and client render identically.
-function seededRandom(seed: number) {
-  let t = seed + 0x6d2b79f5
-  t = Math.imul(t ^ (t >>> 15), t | 1)
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+function buildDateGrid(): string[][] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const total = WEEKS * DAYS
+  const dates: string[] = []
+  for (let i = total - 1; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(d.getDate() - i)
+    dates.push(d.toISOString().slice(0, 10))
+  }
+  const grid: string[][] = []
+  for (let w = 0; w < WEEKS; w++) {
+    grid.push(dates.slice(w * DAYS, w * DAYS + DAYS))
+  }
+  return grid
 }
 
 export default function HabitHeatmap({
-  seed,
-  fillRate,
+  statusByDate,
   color,
 }: {
-  seed: number
-  fillRate: number
+  statusByDate: Map<string, HabitDayStatus>
   color: string
 }) {
-  const weeks = Array.from({ length: WEEKS }, (_, week) =>
-    Array.from(
-      { length: DAYS },
-      (_, day) => seededRandom(seed * 9973 + week * DAYS + day) < fillRate,
-    ),
-  )
+  const grid = buildDateGrid()
 
   return (
     <div className="flex gap-0.75">
-      {weeks.map((days, week) => (
-        <div key={week} className="flex flex-1 flex-col gap-0.75">
-          {days.map((filled, day) => (
-            <div
-              key={day}
-              className="aspect-square w-full rounded-[3px]"
-              style={{ backgroundColor: filled ? color : `${color}1f` }}
-            />
-          ))}
+      {grid.map((week, wi) => (
+        <div key={wi} className="flex flex-1 flex-col gap-0.75">
+          {week.map((date) => {
+            const status = statusByDate.get(date)
+            const bg =
+              status === 'met' ? color : status === 'partial' ? `${color}80` : `${color}1f`
+            return (
+              <div
+                key={date}
+                title={date}
+                className="aspect-square w-full rounded-[3px]"
+                style={{ backgroundColor: bg }}
+              />
+            )
+          })}
         </div>
       ))}
     </div>

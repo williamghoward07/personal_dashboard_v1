@@ -5,6 +5,8 @@
 -- years / modules / tasks / topics already exist and are left untouched.
 -- RLS is enabled with a permissive "allow all" policy on each new table,
 -- consistent with the existing tables (single-user app, anon key access).
+-- A policy alone doesn't grant table-level access in Postgres, so each
+-- table also gets an explicit grant to anon/authenticated.
 
 create table if not exists public.prompts (
   id uuid primary key default gen_random_uuid(),
@@ -14,6 +16,7 @@ create table if not exists public.prompts (
 );
 alter table public.prompts enable row level security;
 create policy "Allow all" on public.prompts for all using (true) with check (true);
+grant select, insert, update, delete on public.prompts to anon, authenticated;
 
 create table if not exists public.perplexity_links (
   id uuid primary key default gen_random_uuid(),
@@ -24,6 +27,7 @@ create table if not exists public.perplexity_links (
 );
 alter table public.perplexity_links enable row level security;
 create policy "Allow all" on public.perplexity_links for all using (true) with check (true);
+grant select, insert, update, delete on public.perplexity_links to anon, authenticated;
 
 -- Links a task to exactly one research item (a prompt OR a perplexity link).
 create table if not exists public.task_research_links (
@@ -38,6 +42,7 @@ create table if not exists public.task_research_links (
 );
 alter table public.task_research_links enable row level security;
 create policy "Allow all" on public.task_research_links for all using (true) with check (true);
+grant select, insert, update, delete on public.task_research_links to anon, authenticated;
 
 create index if not exists task_research_links_task_id_idx
   on public.task_research_links(task_id);

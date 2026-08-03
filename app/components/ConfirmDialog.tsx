@@ -18,19 +18,19 @@ export default function ConfirmDialog({
   return (
     <Modal onClose={onCancel}>
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-black/80 dark:text-white/80">{message}</p>
+        <p className="text-sm text-on-surface-variant">{message}</p>
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg px-3 py-1.5 text-sm text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700"
+            className="rounded-lg bg-error-container px-3 py-1.5 text-sm text-on-error-container hover:brightness-110"
           >
             Delete
           </button>

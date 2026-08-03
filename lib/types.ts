@@ -56,3 +56,56 @@ export interface TaskResearchLink {
   perplexity_link_id: string | null
   created_at: string
 }
+
+export type HabitFrequencyType = 'daily' | 'weekly'
+
+export interface Habit {
+  id: string
+  name: string
+  icon: string
+  description: string
+  color: string
+  frequency_type: HabitFrequencyType
+  frequency_count: number
+  is_quantifiable: boolean
+  target_value: number | null
+  unit: string | null
+  created_at: string
+}
+
+export interface HabitLog {
+  id: string
+  habit_id: string
+  date: string
+  completed: boolean
+  value: number | null
+  created_at: string
+}
+
+export interface RugbySession {
+  id: string
+  date: string
+  duration_minutes: number | null
+  notes: string | null
+  created_at: string
+}
+
+export interface TimeLog {
+  id: string
+  task_id: string
+  date: string
+  minutes_spent: number
+  created_at: string
+}
+
+export type TransactionType = 'income' | 'outgoing'
+
+export interface Transaction {
+  id: string
+  date: string
+  amount: number
+  category: string
+  description: string | null
+  type: TransactionType
+  created_at: string
+}

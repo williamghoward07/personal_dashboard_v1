@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import type { Task, TaskResearchLink, Prompt, PerplexityLink } from '@/lib/types'
 import Modal from '../../Modal'
 import ResearchAttachModal from './ResearchAttachModal'
+import TaskTimeTracking from './TaskTimeTracking'
 
 type LinkedItem =
   | { linkId: string; kind: 'prompt'; id: string; label: string }
@@ -126,6 +127,8 @@ export default function TaskDetailModal({
             <p className="text-sm text-black/70 dark:text-white/70">{task.notes}</p>
           </div>
         )}
+
+        <TaskTimeTracking taskId={task.id} />
 
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">

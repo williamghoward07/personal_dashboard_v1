@@ -29,7 +29,7 @@ connects across modules.
 5. Calendar API integration for day view
 6. Strava API (running + Hevy-synced gym sessions)
 7. Claude API research panel with saved conversation links
-8. Monzo/Starling integration (read-only scopes, encrypted token storage)
+8. Monzo/Starling/Trading212 integration (read-only scopes, encrypted token storage)
 9. (Optional stretch) One-way sync to Apple Reminders via CalDAV
 
 ## Decided / out of scope for v1

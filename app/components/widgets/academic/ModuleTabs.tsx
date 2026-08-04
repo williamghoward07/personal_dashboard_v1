@@ -8,6 +8,9 @@ import type { Module } from '@/lib/types'
 import Modal from '../../Modal'
 import ConfirmDialog from '../../ConfirmDialog'
 
+const inputClass =
+  'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none focus:border-academic-orange'
+
 export default function ModuleTabs({
   yearId,
   modules,
@@ -70,8 +73,8 @@ export default function ModuleTabs({
           key={m.id}
           className={`flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm ${
             selectedModuleId === m.id
-              ? 'border-black/30 bg-black/5 text-black dark:border-white/30 dark:bg-white/10 dark:text-white'
-              : 'border-black/10 text-black/60 hover:border-black/20 dark:border-white/10 dark:text-white/60 dark:hover:border-white/20'
+              ? 'border-academic-orange/50 bg-academic-orange/10 text-academic-orange'
+              : 'border-outline-variant text-on-surface-variant hover:border-outline'
           }`}
         >
           <button type="button" onClick={() => onSelect(m.id)} className="cursor-pointer">
@@ -81,7 +84,7 @@ export default function ModuleTabs({
             type="button"
             onClick={() => openEdit(m)}
             aria-label={`Edit ${m.name}`}
-            className="rounded p-0.5 text-black/30 hover:text-black/70 dark:text-white/30 dark:hover:text-white/70"
+            className="rounded p-0.5 text-on-surface-variant hover:text-on-surface"
           >
             <Pencil className="h-3 w-3" />
           </button>
@@ -89,7 +92,7 @@ export default function ModuleTabs({
             type="button"
             onClick={() => setDeletingModule(m)}
             aria-label={`Delete ${m.name}`}
-            className="rounded p-0.5 text-black/30 hover:text-red-600 dark:text-white/30 dark:hover:text-red-400"
+            className="rounded p-0.5 text-on-surface-variant hover:text-error"
           >
             <Trash2 className="h-3 w-3" />
           </button>
@@ -100,7 +103,7 @@ export default function ModuleTabs({
         type="button"
         onClick={openAdd}
         aria-label="Add module"
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-black/20 text-black/50 hover:border-black/40 hover:text-black dark:border-white/20 dark:text-white/50 dark:hover:border-white/40 dark:hover:text-white"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-dashed border-outline-variant text-on-surface-variant hover:border-academic-orange hover:text-academic-orange"
       >
         <Plus className="h-4 w-4" />
       </button>
@@ -108,27 +111,25 @@ export default function ModuleTabs({
       {isAddOpen && (
         <Modal onClose={() => setIsAddOpen(false)}>
           <form onSubmit={saveNew} className="flex flex-col gap-4">
-            <h2 className="text-sm font-semibold text-black/80 dark:text-white/80">
-              New module
-            </h2>
+            <h2 className="font-display text-sm font-semibold text-on-surface">New module</h2>
             <input
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Coasts"
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={inputClass}
             />
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setIsAddOpen(false)}
-                className="rounded-lg px-3 py-1.5 text-sm text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+                className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="rounded-lg bg-black/80 px-3 py-1.5 text-sm text-white dark:bg-white/80 dark:text-black"
+                className="rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
               >
                 Save
               </button>
@@ -140,26 +141,24 @@ export default function ModuleTabs({
       {editingModule && (
         <Modal onClose={() => setEditingModule(null)}>
           <form onSubmit={saveEdit} className="flex flex-col gap-4">
-            <h2 className="text-sm font-semibold text-black/80 dark:text-white/80">
-              Edit module
-            </h2>
+            <h2 className="font-display text-sm font-semibold text-on-surface">Edit module</h2>
             <input
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={inputClass}
             />
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setEditingModule(null)}
-                className="rounded-lg px-3 py-1.5 text-sm text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+                className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="rounded-lg bg-black/80 px-3 py-1.5 text-sm text-white dark:bg-white/80 dark:text-black"
+                className="rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
               >
                 Save
               </button>

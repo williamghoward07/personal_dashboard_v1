@@ -18,6 +18,9 @@ function formatMinutes(total: number) {
   return `${h}h ${m}m`
 }
 
+const inputClass =
+  'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs text-on-surface outline-none focus:border-academic-orange'
+
 export default function TaskTimeTracking({ taskId }: { taskId: string }) {
   const [logs, setLogs] = useState<TimeLog[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,21 +64,19 @@ export default function TaskTimeTracking({ taskId }: { taskId: string }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-black/60 dark:text-white/60">
-          Time spent
-        </h3>
+        <h3 className="text-xs font-semibold text-on-surface-variant">Time spent</h3>
         <button
           type="button"
           onClick={() => setIsAdding((v) => !v)}
           aria-label="Log time"
-          className="flex h-6 w-6 items-center justify-center rounded text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
+          className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-high hover:text-academic-orange"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
       </div>
 
       <div className="flex items-end gap-3">
-        <span className="text-lg font-semibold text-black/80 dark:text-white/80">
+        <span className="font-display text-lg font-semibold text-on-surface">
           {loading ? '...' : formatMinutes(total)}
         </span>
         {!loading && recent.length > 0 && (
@@ -84,7 +85,7 @@ export default function TaskTimeTracking({ taskId }: { taskId: string }) {
               <div
                 key={l.id}
                 title={`${l.date}: ${formatMinutes(l.minutes_spent)}`}
-                className="flex-1 rounded-t-sm bg-black/30 dark:bg-white/30"
+                className="flex-1 rounded-t-sm bg-academic-orange/60"
                 style={{ height: `${Math.max((l.minutes_spent / maxMinutes) * 100, 8)}%` }}
               />
             ))}
@@ -94,16 +95,16 @@ export default function TaskTimeTracking({ taskId }: { taskId: string }) {
 
       {isAdding && (
         <form onSubmit={addLog} className="flex items-end gap-2">
-          <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+          <label className="flex flex-col gap-1 text-xs text-on-surface-variant">
             Date
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={inputClass}
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+          <label className="flex flex-col gap-1 text-xs text-on-surface-variant">
             Minutes
             <input
               type="number"
@@ -111,12 +112,12 @@ export default function TaskTimeTracking({ taskId }: { taskId: string }) {
               autoFocus
               value={minutes}
               onChange={(e) => setMinutes(e.target.value)}
-              className="w-20 rounded-md border border-black/10 bg-transparent px-2 py-1 text-xs text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={`w-20 ${inputClass}`}
             />
           </label>
           <button
             type="submit"
-            className="rounded-md bg-black/80 px-2 py-1 text-xs text-white dark:bg-white/80 dark:text-black"
+            className="rounded-md bg-academic-orange px-2 py-1 text-xs font-medium text-white hover:brightness-110"
           >
             Log
           </button>
@@ -128,7 +129,7 @@ export default function TaskTimeTracking({ taskId }: { taskId: string }) {
           {[...logs].reverse().map((l) => (
             <li
               key={l.id}
-              className="flex items-center justify-between gap-2 text-xs text-black/60 dark:text-white/60"
+              className="flex items-center justify-between gap-2 text-xs text-on-surface-variant"
             >
               <span>
                 {l.date} · {formatMinutes(l.minutes_spent)}
@@ -137,7 +138,7 @@ export default function TaskTimeTracking({ taskId }: { taskId: string }) {
                 type="button"
                 onClick={() => deleteLog(l.id)}
                 aria-label="Delete time log"
-                className="rounded p-0.5 text-black/40 hover:text-red-600 dark:text-white/40 dark:hover:text-red-400"
+                className="rounded p-0.5 text-on-surface-variant hover:text-error"
               >
                 <Trash2 className="h-3 w-3" />
               </button>

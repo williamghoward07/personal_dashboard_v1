@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, ListChecks } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Habit, HabitLog } from '@/lib/types'
 import type { HabitDayStatus } from './HabitHeatmap'
@@ -132,47 +132,51 @@ export default function HabitBoard() {
   }
 
   return (
-    <main className="flex-1 px-8 py-6" style={{ backgroundColor: '#0b0f1a' }}>
-      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-white">Habit tracker</h1>
-          <button
-            type="button"
-            onClick={() => setIsAddOpen(true)}
-            aria-label="Add habit"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-white/50 hover:bg-white/10 hover:text-white"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 font-display text-headline-lg font-bold text-habit-purple">
+            <ListChecks className="h-6 w-6" />
+            Habits
+          </h1>
+          <p className="mt-1 text-sm text-on-surface-variant">Daily and weekly habit tracking.</p>
         </div>
-
-        {error && (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-            {error}
-          </div>
-        )}
-
-        {loading ? (
-          <p className="text-sm text-white/40">Loading...</p>
-        ) : habits.length === 0 ? (
-          <p className="text-sm text-white/40">No habits yet — add one to get started.</p>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {habits.map((habit) => (
-              <HabitCard
-                key={habit.id}
-                habit={habit}
-                statusByDate={statusByHabit.get(habit.id) ?? new Map()}
-                todayValue={todayValueByHabit.get(habit.id) ?? null}
-                onToggleToday={() => toggleToday(habit)}
-                onLogToday={() => setLoggingHabit(habit)}
-                onEdit={() => setEditingHabit(habit)}
-                onDelete={() => setDeletingHabit(habit)}
-              />
-            ))}
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={() => setIsAddOpen(true)}
+          aria-label="Add habit"
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-habit-purple"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
       </div>
+
+      {error && (
+        <div className="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-on-surface-variant">Loading...</p>
+      ) : habits.length === 0 ? (
+        <p className="text-sm text-on-surface-variant">No habits yet — add one to get started.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {habits.map((habit) => (
+            <HabitCard
+              key={habit.id}
+              habit={habit}
+              statusByDate={statusByHabit.get(habit.id) ?? new Map()}
+              todayValue={todayValueByHabit.get(habit.id) ?? null}
+              onToggleToday={() => toggleToday(habit)}
+              onLogToday={() => setLoggingHabit(habit)}
+              onEdit={() => setEditingHabit(habit)}
+              onDelete={() => setDeletingHabit(habit)}
+            />
+          ))}
+        </div>
+      )}
 
       <HabitFormModal
         isOpen={isAddOpen}
@@ -228,7 +232,6 @@ export default function HabitBoard() {
             refresh()
           }
         }}
-        variant="dark"
       />
     </main>
   )

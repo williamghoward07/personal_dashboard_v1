@@ -64,13 +64,14 @@ export default function PerplexityStore() {
     <>
       <WidgetCard
         title="Perplexity link store"
+        accent="pink"
         className="sm:col-span-2 xl:col-span-4"
         action={
           <button
             type="button"
             onClick={() => setIsAddOpen(true)}
             aria-label="Add Perplexity link"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-research-pink"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -84,7 +85,7 @@ export default function PerplexityStore() {
           <div className="flex flex-col gap-4">
             {folders.map(([folder, folderLinks]) => (
               <div key={folder} className="flex flex-col gap-2">
-                <h3 className="text-xs font-bold tracking-wide text-black/50 uppercase dark:text-white/50">
+                <h3 className="font-display text-xs font-bold tracking-wide text-on-surface-variant uppercase">
                   {folder}
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">

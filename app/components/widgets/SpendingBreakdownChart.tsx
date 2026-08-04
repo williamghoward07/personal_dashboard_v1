@@ -1,13 +1,8 @@
-import type { CSSProperties } from 'react'
 import WidgetCard from '../WidgetCard'
 import type { Transaction } from '@/lib/types'
 
-const PALETTE = [
-  { light: '#2a78d6', dark: '#3987e5' }, // blue
-  { light: '#eb6834', dark: '#d95926' }, // orange
-  { light: '#1baf7a', dark: '#199e70' }, // aqua
-]
-const OTHER = { light: '#898781', dark: '#898781' }
+const PALETTE = ['#3987e5', '#d95926', '#199e70']
+const OTHER = '#849587'
 
 const SIZE = 160
 const RADIUS = 60
@@ -18,10 +13,6 @@ const GAP = 3
 function currentMonthKey() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-function segmentStyle(light: string, dark: string): CSSProperties {
-  return { '--seg-light': light, '--seg-dark': dark } as CSSProperties
 }
 
 export default function SpendingBreakdownChart({
@@ -43,15 +34,15 @@ export default function SpendingBreakdownChart({
   const otherTotal = sorted.slice(3).reduce((sum, [, v]) => sum + v, 0)
 
   const categories = [
-    ...top.map(([label, value], i) => ({ label, value, ...PALETTE[i] })),
-    ...(otherTotal > 0 ? [{ label: 'Other', value: otherTotal, ...OTHER }] : []),
+    ...top.map(([label, value], i) => ({ label, value, color: PALETTE[i] })),
+    ...(otherTotal > 0 ? [{ label: 'Other', value: otherTotal, color: OTHER }] : []),
   ]
 
   const total = categories.reduce((sum, c) => sum + c.value, 0)
   let cumulative = 0
 
   return (
-    <WidgetCard title="Monthly spending breakdown" className="sm:col-span-2">
+    <WidgetCard title="Monthly spending breakdown" accent="blue" className="sm:col-span-2">
       {total === 0 ? (
         <p>No spending logged yet this month.</p>
       ) : (
@@ -75,11 +66,10 @@ export default function SpendingBreakdownChart({
                   cy={SIZE / 2}
                   r={RADIUS}
                   fill="none"
+                  stroke={category.color}
                   strokeWidth={STROKE}
                   strokeDasharray={`${Math.max(rawLength - GAP, 0)} ${CIRCUMFERENCE - rawLength + GAP}`}
                   strokeDashoffset={-offset}
-                  className="stroke-(--seg-light) dark:stroke-(--seg-dark)"
-                  style={segmentStyle(category.light, category.dark)}
                 >
                   <title>
                     {category.label}: £{category.value.toFixed(2)}
@@ -93,13 +83,11 @@ export default function SpendingBreakdownChart({
             {categories.map((category) => (
               <li key={category.label} className="flex items-center gap-2">
                 <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full bg-(--seg-light) dark:bg-(--seg-dark)"
-                  style={segmentStyle(category.light, category.dark)}
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: category.color }}
                 />
-                <span className="text-black/60 dark:text-white/60">
-                  {category.label}
-                </span>
-                <span className="text-black/30 dark:text-white/30">
+                <span className="text-on-surface">{category.label}</span>
+                <span className="text-on-surface-variant">
                   £{category.value.toFixed(2)} ·{' '}
                   {Math.round((category.value / total) * 100)}%
                 </span>

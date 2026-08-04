@@ -37,15 +37,11 @@ export default function ModuleDetail({ moduleId }: { moduleId: string }) {
   }, [moduleId])
 
   if (loading) {
-    return (
-      <p className="text-sm text-black/40 dark:text-white/40">
-        Loading module...
-      </p>
-    )
+    return <p className="text-sm text-on-surface-variant">Loading module...</p>
   }
 
   return (
-    <div className="flex flex-col gap-6 rounded-xl border border-black/10 bg-white/40 p-4 dark:border-white/10 dark:bg-white/5">
+    <div className="flex flex-col gap-6 rounded-xl border border-outline-variant bg-surface-container-low p-4">
       <TaskSection moduleId={moduleId} tasks={tasks} onChange={refresh} />
       <TopicSection moduleId={moduleId} topics={topics} onChange={refresh} />
     </div>

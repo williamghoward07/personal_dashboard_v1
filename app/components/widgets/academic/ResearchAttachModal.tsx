@@ -64,32 +64,24 @@ export default function ResearchAttachModal({
   return (
     <Modal onClose={onClose}>
       <div className="flex max-h-[70vh] flex-col gap-4">
-        <h2 className="text-sm font-semibold text-black/80 dark:text-white/80">
-          Attach research
-        </h2>
+        <h2 className="font-display text-sm font-semibold text-on-surface">Attach research</h2>
 
         {loading ? (
-          <p className="text-xs text-black/40 dark:text-white/40">Loading...</p>
+          <p className="text-xs text-on-surface-variant">Loading...</p>
         ) : (
           <div className="flex flex-col gap-4 overflow-y-auto">
             <div className="flex flex-col gap-1.5">
-              <h3 className="text-xs font-semibold text-black/50 dark:text-white/50">
-                Prompts
-              </h3>
+              <h3 className="text-xs font-semibold text-on-surface-variant">Prompts</h3>
               {availablePrompts.length === 0 ? (
-                <p className="text-xs text-black/40 dark:text-white/40">
-                  Nothing available.
-                </p>
+                <p className="text-xs text-on-surface-variant">Nothing available.</p>
               ) : (
                 availablePrompts.map((p) => (
-                  <label
-                    key={p.id}
-                    className="flex items-center gap-2 text-sm text-black/70 dark:text-white/70"
-                  >
+                  <label key={p.id} className="flex items-center gap-2 text-sm text-on-surface">
                     <input
                       type="checkbox"
                       checked={selected.has(p.id)}
                       onChange={() => toggle(p.id)}
+                      className="accent-research-pink"
                     />
                     {p.title}
                   </label>
@@ -98,23 +90,17 @@ export default function ResearchAttachModal({
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <h3 className="text-xs font-semibold text-black/50 dark:text-white/50">
-                Perplexity links
-              </h3>
+              <h3 className="text-xs font-semibold text-on-surface-variant">Perplexity links</h3>
               {availableLinks.length === 0 ? (
-                <p className="text-xs text-black/40 dark:text-white/40">
-                  Nothing available.
-                </p>
+                <p className="text-xs text-on-surface-variant">Nothing available.</p>
               ) : (
                 availableLinks.map((l) => (
-                  <label
-                    key={l.id}
-                    className="flex items-center gap-2 text-sm text-black/70 dark:text-white/70"
-                  >
+                  <label key={l.id} className="flex items-center gap-2 text-sm text-on-surface">
                     <input
                       type="checkbox"
                       checked={selected.has(l.id)}
                       onChange={() => toggle(l.id)}
+                      className="accent-research-pink"
                     />
                     {l.title || l.url}
                   </label>
@@ -128,7 +114,7 @@ export default function ResearchAttachModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
           >
             Cancel
           </button>
@@ -136,7 +122,7 @@ export default function ResearchAttachModal({
             type="button"
             onClick={attach}
             disabled={selected.size === 0}
-            className="rounded-lg bg-black/80 px-3 py-1.5 text-sm text-white disabled:opacity-40 dark:bg-white/80 dark:text-black"
+            className="rounded-lg bg-research-pink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40 hover:brightness-110"
           >
             Attach
           </button>

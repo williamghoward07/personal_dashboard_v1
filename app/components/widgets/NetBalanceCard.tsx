@@ -16,18 +16,16 @@ export default function NetBalanceCard({ transactions }: { transactions: Transac
   const formatted = `${isPositive ? '+' : '-'}£${Math.abs(net).toFixed(2)}`
 
   return (
-    <WidgetCard title="Net balance change">
+    <WidgetCard title="Net balance change" accent="blue">
       <div className="flex flex-col gap-1">
         <span
-          className={`text-2xl font-semibold ${
-            isPositive
-              ? 'text-[#006300] dark:text-[#0ca30c]'
-              : 'text-red-600 dark:text-red-400'
+          className={`font-display text-data-display ${
+            isPositive ? 'text-primary-container' : 'text-error'
           }`}
         >
           {formatted}
         </span>
-        <span className="text-xs text-black/30 dark:text-white/30">this month</span>
+        <span className="text-xs text-on-surface-variant">this month</span>
       </div>
     </WidgetCard>
   )

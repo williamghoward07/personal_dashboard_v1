@@ -9,6 +9,10 @@ export interface TopicFormValues {
   confidence: number | null
 }
 
+const inputClass =
+  'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none focus:border-academic-orange'
+const labelClass = 'flex flex-col gap-1 text-xs text-on-surface-variant'
+
 export default function TopicFormModal({
   isOpen,
   heading,
@@ -44,20 +48,18 @@ export default function TopicFormModal({
         }}
         className="flex flex-col gap-4"
       >
-        <h2 className="text-sm font-semibold text-black/80 dark:text-white/80">
-          {heading}
-        </h2>
-        <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+        <h2 className="font-display text-sm font-semibold text-on-surface">{heading}</h2>
+        <label className={labelClass}>
           Name
           <input
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Fluvial processes"
-            className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+            className={inputClass}
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+        <label className={labelClass}>
           Confidence (1–5)
           <input
             type="number"
@@ -67,20 +69,20 @@ export default function TopicFormModal({
             onChange={(e) =>
               setConfidence(e.target.value === '' ? null : Number(e.target.value))
             }
-            className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+            className={inputClass}
           />
         </label>
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="rounded-lg bg-black/80 px-3 py-1.5 text-sm text-white dark:bg-white/80 dark:text-black"
+            className="rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
           >
             Save
           </button>

@@ -26,10 +26,10 @@ export default function HabitLogValueModal({
   if (!isOpen || !habit) return null
 
   const inputClass =
-    'rounded-md border border-white/15 bg-white/5 px-2 py-1.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/40'
+    'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-habit-purple'
 
   return (
-    <Modal onClose={onClose} variant="dark">
+    <Modal onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -39,13 +39,13 @@ export default function HabitLogValueModal({
         }}
         className="flex flex-col gap-4"
       >
-        <h2 className="text-sm font-semibold text-white">
+        <h2 className="font-display text-sm font-semibold text-on-surface">
           {habit.icon} {habit.name} — today
         </h2>
-        <label className="flex flex-col gap-1 text-xs text-white/60">
+        <label className="flex flex-col gap-1 text-xs text-on-surface-variant">
           {habit.unit ? `Value (${habit.unit})` : 'Value'}
           {habit.target_value != null && (
-            <span className="text-white/30">
+            <span className="text-on-surface-variant/70">
               Target: {habit.target_value} {habit.unit}
             </span>
           )}
@@ -62,13 +62,13 @@ export default function HabitLogValueModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-white/60 hover:bg-white/10"
+            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="rounded-lg bg-white/90 px-3 py-1.5 text-sm text-[#0b0f1a]"
+            className="rounded-lg bg-habit-purple px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110"
           >
             Save
           </button>

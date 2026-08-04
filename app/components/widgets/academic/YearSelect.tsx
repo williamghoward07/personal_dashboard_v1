@@ -12,12 +12,12 @@ export default function YearSelect({
   onChange: (id: string) => void
 }) {
   return (
-    <label className="flex w-fit flex-col gap-1 text-xs text-black/50 dark:text-white/50">
+    <label className="flex w-fit flex-col gap-1 text-xs text-on-surface-variant">
       Academic year
       <select
         value={selectedYearId ?? ''}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-black/10 bg-white/60 px-3 py-2 text-sm font-medium text-black/80 outline-none focus:border-black/30 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:focus:border-white/30"
+        className="rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2 text-sm font-medium text-on-surface outline-none focus:border-academic-orange"
       >
         {years.map((y) => (
           <option key={y.id} value={y.id}>

@@ -47,13 +47,14 @@ export default function PromptLibrary() {
     <>
       <WidgetCard
         title="Prompt library"
+        accent="pink"
         className="sm:col-span-2 xl:col-span-4"
         action={
           <button
             type="button"
             onClick={() => setIsAddOpen(true)}
             aria-label="Add prompt"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-research-pink"
           >
             <Plus className="h-4 w-4" />
           </button>

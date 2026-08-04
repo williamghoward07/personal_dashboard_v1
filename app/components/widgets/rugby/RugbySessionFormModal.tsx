@@ -14,6 +14,10 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
+const inputClass =
+  'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none focus:border-primary-container'
+const labelClass = 'flex flex-col gap-1 text-xs text-on-surface-variant'
+
 export default function RugbySessionFormModal({
   isOpen,
   heading,
@@ -51,22 +55,20 @@ export default function RugbySessionFormModal({
         }}
         className="flex flex-col gap-4"
       >
-        <h2 className="text-sm font-semibold text-black/80 dark:text-white/80">
-          {heading}
-        </h2>
+        <h2 className="font-display text-sm font-semibold text-on-surface">{heading}</h2>
 
         <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+          <label className={labelClass}>
             Date
             <input
               autoFocus
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={inputClass}
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+          <label className={labelClass}>
             Duration (minutes)
             <input
               type="number"
@@ -74,19 +76,19 @@ export default function RugbySessionFormModal({
               onChange={(e) =>
                 setDuration(e.target.value === '' ? null : Number(e.target.value))
               }
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={inputClass}
             />
           </label>
         </div>
 
-        <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+        <label className={labelClass}>
           Notes
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
             placeholder="e.g. Contact session, worked on tackling technique"
-            className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+            className={inputClass}
           />
         </label>
 
@@ -94,13 +96,13 @@ export default function RugbySessionFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="rounded-lg bg-black/80 px-3 py-1.5 text-sm text-white dark:bg-white/80 dark:text-black"
+            className="rounded-lg bg-primary-container px-3 py-1.5 text-sm font-medium text-on-primary-container hover:brightness-110"
           >
             Save
           </button>

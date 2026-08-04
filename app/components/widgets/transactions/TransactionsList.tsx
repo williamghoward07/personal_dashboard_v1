@@ -27,13 +27,14 @@ export default function TransactionsList({
     <>
       <WidgetCard
         title="Transactions"
+        accent="blue"
         className="sm:col-span-2 xl:col-span-4"
         action={
           <button
             type="button"
             onClick={() => setIsAddOpen(true)}
             aria-label="Add transaction"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-secondary-container"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -48,23 +49,19 @@ export default function TransactionsList({
             {sorted.map((t) => (
               <li
                 key={t.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-black/10 p-2 dark:border-white/10"
+                className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant p-2"
               >
                 <div className="flex min-w-0 flex-col">
-                  <span className="text-sm font-medium text-black/80 dark:text-white/80">
+                  <span className="text-sm font-medium text-on-surface">
                     {t.category}
                     {t.description ? ` — ${t.description}` : ''}
                   </span>
-                  <span className="text-xs text-black/40 dark:text-white/40">
-                    {t.date}
-                  </span>
+                  <span className="text-xs text-on-surface-variant">{t.date}</span>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span
                     className={`text-sm font-medium ${
-                      t.type === 'income'
-                        ? 'text-[#006300] dark:text-[#0ca30c]'
-                        : 'text-black/70 dark:text-white/70'
+                      t.type === 'income' ? 'text-primary-container' : 'text-on-surface'
                     }`}
                   >
                     {t.type === 'income' ? '+' : '-'}£{t.amount.toFixed(2)}
@@ -73,7 +70,7 @@ export default function TransactionsList({
                     type="button"
                     onClick={() => setEditingTx(t)}
                     aria-label={`Edit ${t.category} transaction`}
-                    className="rounded p-1 text-black/40 hover:bg-black/5 hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/70"
+                    className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -81,7 +78,7 @@ export default function TransactionsList({
                     type="button"
                     onClick={() => setDeletingTx(t)}
                     aria-label={`Delete ${t.category} transaction`}
-                    className="rounded p-1 text-black/40 hover:bg-black/5 hover:text-red-600 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-red-400"
+                    className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-error"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>

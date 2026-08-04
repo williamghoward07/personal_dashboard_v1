@@ -47,7 +47,7 @@ export default function AcademicBoard() {
 
   if (loadingYears) {
     return (
-      <p className="text-sm text-black/40 sm:col-span-2 xl:col-span-4 dark:text-white/40">
+      <p className="text-sm text-on-surface-variant sm:col-span-2 xl:col-span-4">
         Loading years...
       </p>
     )
@@ -55,7 +55,7 @@ export default function AcademicBoard() {
 
   if (years.length === 0) {
     return (
-      <p className="text-sm text-black/40 sm:col-span-2 xl:col-span-4 dark:text-white/40">
+      <p className="text-sm text-on-surface-variant sm:col-span-2 xl:col-span-4">
         No academic years yet — add one to the `years` table in Supabase to
         get started.
       </p>

@@ -12,8 +12,16 @@ connects across modules.
 - Research prompts library is standalone, not nested under academics
 - Notion-style tailored views per task (e.g. clicking an essay shows a
   bespoke checklist for that task, not a generic template)
-- CSS/theming/branding is being deferred — don't worry about polish yet,
-  focus on structure and function first
+- Visual design system: "BIO-SYSTEM" dark cyber-kinetic theme (committed
+  dark-only, not light/dark-adaptive). Deep charcoal/green surface scale,
+  Geist for headings/data, Inter for body text, glassy bento cards with a
+  hover glow in the active module's accent color. Per-module accent colors:
+  mint = Health, electric blue = Money, orange = Education, pink = Research,
+  purple = Habits. Tokens live in `app/globals.css` (`@theme`) and
+  `lib/theme.ts` (accent → class maps). Icons stay on `lucide-react`
+  (not the reference mockups' Material Symbols) to avoid a second icon
+  system — reskin new UI to match this rather than reverting to the old
+  neutral light/dark styling.
 
 ## Tech stack
 - Frontend: Next.js (App Router), TypeScript, Tailwind CSS

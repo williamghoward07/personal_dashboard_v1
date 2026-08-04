@@ -28,6 +28,10 @@ const EMPTY: TaskFormValues = {
   description: '',
 }
 
+const inputClass =
+  'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none focus:border-academic-orange'
+const labelClass = 'flex flex-col gap-1 text-xs text-on-surface-variant'
+
 export default function TaskFormModal({
   isOpen,
   heading,
@@ -79,40 +83,38 @@ export default function TaskFormModal({
         }}
         className="flex max-h-[80vh] flex-col gap-3 overflow-y-auto"
       >
-        <h2 className="text-sm font-semibold text-black/80 dark:text-white/80">
-          {heading}
-        </h2>
+        <h2 className="font-display text-sm font-semibold text-on-surface">{heading}</h2>
 
-        <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+        <label className={labelClass}>
           Title
           <input
             autoFocus
             value={values.title}
             onChange={(e) => setValues((v) => ({ ...v, title: e.target.value }))}
-            className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+            className={inputClass}
           />
         </label>
 
         <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+          <label className={labelClass}>
             Type
             <input
               value={values.type ?? ''}
               onChange={(e) => setValues((v) => ({ ...v, type: e.target.value }))}
               placeholder="e.g. Essay"
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={inputClass}
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+          <label className={labelClass}>
             Due date
             <input
               type="date"
               value={values.due_date ?? ''}
               onChange={(e) => setValues((v) => ({ ...v, due_date: e.target.value }))}
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={inputClass}
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+          <label className={labelClass}>
             Credit weight (%)
             <input
               type="number"
@@ -123,15 +125,15 @@ export default function TaskFormModal({
                   credit_weight: e.target.value === '' ? null : Number(e.target.value),
                 }))
               }
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={inputClass}
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+          <label className={labelClass}>
             Status
             <select
               value={values.status ?? ''}
               onChange={(e) => setValues((v) => ({ ...v, status: e.target.value }))}
-              className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+              className={inputClass}
             >
               <option value="">—</option>
               {STATUS_OPTIONS.map((s) => (
@@ -143,33 +145,33 @@ export default function TaskFormModal({
           </label>
         </div>
 
-        <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+        <label className={labelClass}>
           Grade
           <input
             value={values.grade ?? ''}
             onChange={(e) => setValues((v) => ({ ...v, grade: e.target.value }))}
             placeholder="e.g. 68% or First"
-            className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+            className={inputClass}
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+        <label className={labelClass}>
           Description
           <textarea
             value={values.description ?? ''}
             onChange={(e) => setValues((v) => ({ ...v, description: e.target.value }))}
             rows={2}
-            className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+            className={inputClass}
           />
         </label>
 
-        <label className="flex flex-col gap-1 text-xs text-black/60 dark:text-white/60">
+        <label className={labelClass}>
           Notes
           <textarea
             value={values.notes ?? ''}
             onChange={(e) => setValues((v) => ({ ...v, notes: e.target.value }))}
             rows={2}
-            className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm text-black outline-none focus:border-black/30 dark:border-white/10 dark:text-white dark:focus:border-white/30"
+            className={inputClass}
           />
         </label>
 
@@ -177,13 +179,13 @@ export default function TaskFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="rounded-lg bg-black/80 px-3 py-1.5 text-sm text-white dark:bg-white/80 dark:text-black"
+            className="rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
           >
             Save
           </button>

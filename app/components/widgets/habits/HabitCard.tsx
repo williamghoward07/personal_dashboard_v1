@@ -30,10 +30,7 @@ export default function HabitCard({
       : (statusByDate.get(new Date().toISOString().slice(0, 10)) ?? null) === 'met'
 
   return (
-    <div
-      className="flex flex-col gap-4 rounded-2xl border p-4"
-      style={{ backgroundColor: '#141a2e', borderColor: 'rgba(255,255,255,0.06)' }}
-    >
+    <div className="flex flex-col gap-4 rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-4 transition-all hover:border-habit-purple/40 hover:shadow-[0_0_15px_rgba(192,132,252,0.15)]">
       <div className="flex items-center gap-3">
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg"
@@ -43,13 +40,13 @@ export default function HabitCard({
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-white">{habit.name}</h3>
-            <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-white/50">
+            <h3 className="truncate text-sm font-semibold text-on-surface">{habit.name}</h3>
+            <span className="shrink-0 rounded-full bg-surface-container-highest px-1.5 py-0.5 text-[10px] text-on-surface-variant">
               {frequencyLabel}
             </span>
           </div>
           {habit.description && (
-            <p className="truncate text-xs text-white/40">{habit.description}</p>
+            <p className="truncate text-xs text-on-surface-variant">{habit.description}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -57,7 +54,7 @@ export default function HabitCard({
             type="button"
             onClick={onEdit}
             aria-label={`Edit ${habit.name}`}
-            className="rounded p-1.5 text-white/30 hover:bg-white/10 hover:text-white/70"
+            className="rounded p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
@@ -65,7 +62,7 @@ export default function HabitCard({
             type="button"
             onClick={onDelete}
             aria-label={`Delete ${habit.name}`}
-            className="rounded p-1.5 text-white/30 hover:bg-white/10 hover:text-red-400"
+            className="rounded p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-error"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -81,8 +78,8 @@ export default function HabitCard({
               aria-label={`Log today's ${habit.name}`}
               className="flex h-8 shrink-0 items-center justify-center rounded-full px-2.5 text-[11px] font-semibold"
               style={{
-                backgroundColor: metToday ? habit.color : 'rgba(255,255,255,0.06)',
-                color: metToday ? '#0b0f1a' : 'rgba(255,255,255,0.6)',
+                backgroundColor: metToday ? habit.color : 'rgba(218,229,218,0.08)',
+                color: metToday ? '#07100a' : 'rgba(218,229,218,0.6)',
               }}
             >
               {todayValue ?? 0}
@@ -97,8 +94,8 @@ export default function HabitCard({
               }
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
               style={{
-                backgroundColor: metToday ? habit.color : 'rgba(255,255,255,0.06)',
-                color: metToday ? '#0b0f1a' : 'rgba(255,255,255,0.3)',
+                backgroundColor: metToday ? habit.color : 'rgba(218,229,218,0.08)',
+                color: metToday ? '#07100a' : 'rgba(218,229,218,0.3)',
               }}
             >
               <Check className="h-4 w-4" strokeWidth={3} />

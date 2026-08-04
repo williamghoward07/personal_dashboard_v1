@@ -87,20 +87,18 @@ export default function TaskDetailModal({
     <Modal onClose={onClose}>
       <div className="flex max-h-[80vh] flex-col gap-4 overflow-y-auto">
         <div className="flex items-start justify-between gap-2">
-          <h2 className="text-base font-bold text-black/80 dark:text-white/80">
-            {task.title}
-          </h2>
+          <h2 className="font-display text-base font-bold text-on-surface">{task.title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded p-1 text-black/40 hover:bg-black/5 dark:text-white/40 dark:hover:bg-white/10"
+            className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-black/50 dark:text-white/50">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-surface-variant">
           {task.type && <span>Type: {task.type}</span>}
           {task.due_date && <span>Due: {task.due_date}</span>}
           {task.credit_weight != null && <span>Weight: {task.credit_weight}%</span>}
@@ -110,21 +108,15 @@ export default function TaskDetailModal({
 
         {task.description && (
           <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-semibold text-black/60 dark:text-white/60">
-              Description
-            </h3>
-            <p className="text-sm text-black/70 dark:text-white/70">
-              {task.description}
-            </p>
+            <h3 className="text-xs font-semibold text-on-surface-variant">Description</h3>
+            <p className="text-sm text-on-surface">{task.description}</p>
           </div>
         )}
 
         {task.notes && (
           <div className="flex flex-col gap-1">
-            <h3 className="text-xs font-semibold text-black/60 dark:text-white/60">
-              Notes
-            </h3>
-            <p className="text-sm text-black/70 dark:text-white/70">{task.notes}</p>
+            <h3 className="text-xs font-semibold text-on-surface-variant">Notes</h3>
+            <p className="text-sm text-on-surface">{task.notes}</p>
           </div>
         )}
 
@@ -132,40 +124,34 @@ export default function TaskDetailModal({
 
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-black/60 dark:text-white/60">
-              Linked research
-            </h3>
+            <h3 className="text-xs font-semibold text-on-surface-variant">Linked research</h3>
             <button
               type="button"
               onClick={() => setIsAttachOpen(true)}
               aria-label="Attach research"
-              className="flex h-6 w-6 items-center justify-center rounded text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
+              className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-high hover:text-research-pink"
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
           </div>
 
           {loading ? (
-            <p className="text-xs text-black/40 dark:text-white/40">Loading...</p>
+            <p className="text-xs text-on-surface-variant">Loading...</p>
           ) : linkedItems.length === 0 ? (
-            <p className="text-xs text-black/40 dark:text-white/40">
-              Nothing attached yet.
-            </p>
+            <p className="text-xs text-on-surface-variant">Nothing attached yet.</p>
           ) : (
             <ul className="flex flex-col gap-1.5">
               {linkedItems.map((li) => (
                 <li
                   key={li.linkId}
-                  className="flex items-center justify-between gap-2 rounded-md border border-black/10 px-2 py-1.5 text-xs dark:border-white/10"
+                  className="flex items-center justify-between gap-2 rounded-md border border-research-pink/30 bg-research-pink/5 px-2 py-1.5 text-xs"
                 >
-                  <span className="truncate text-black/70 dark:text-white/70">
-                    {li.label}
-                  </span>
+                  <span className="truncate text-on-surface">{li.label}</span>
                   <button
                     type="button"
                     onClick={() => unlink(li.linkId)}
                     aria-label="Unlink"
-                    className="shrink-0 rounded p-0.5 text-black/40 hover:text-red-600 dark:text-white/40 dark:hover:text-red-400"
+                    className="shrink-0 rounded p-0.5 text-on-surface-variant hover:text-error"
                   >
                     <X className="h-3 w-3" />
                   </button>

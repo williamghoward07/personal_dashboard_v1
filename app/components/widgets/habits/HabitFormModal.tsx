@@ -72,11 +72,11 @@ export default function HabitFormModal({
   if (!isOpen) return null
 
   const inputClass =
-    'rounded-md border border-white/15 bg-white/5 px-2 py-1.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/40'
-  const labelClass = 'flex flex-col gap-1 text-xs text-white/60'
+    'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-habit-purple'
+  const labelClass = 'flex flex-col gap-1 text-xs text-on-surface-variant'
 
   return (
-    <Modal onClose={onClose} variant="dark">
+    <Modal onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -91,7 +91,7 @@ export default function HabitFormModal({
         }}
         className="flex max-h-[80vh] flex-col gap-4 overflow-y-auto"
       >
-        <h2 className="text-sm font-semibold text-white">{heading}</h2>
+        <h2 className="font-display text-sm font-semibold text-on-surface">{heading}</h2>
 
         <div className="flex gap-3">
           <label className={`${labelClass} w-16 shrink-0`}>
@@ -161,11 +161,12 @@ export default function HabitFormModal({
           )}
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-white/60">
+        <label className="flex items-center gap-2 text-xs text-on-surface-variant">
           <input
             type="checkbox"
             checked={values.is_quantifiable}
             onChange={(e) => setValues((v) => ({ ...v, is_quantifiable: e.target.checked }))}
+            className="accent-habit-purple"
           />
           This habit is quantifiable (e.g. pages read, km run)
         </label>
@@ -211,7 +212,7 @@ export default function HabitFormModal({
                 className="h-7 w-7 rounded-full"
                 style={{
                   backgroundColor: c,
-                  outline: values.color === c ? '2px solid white' : 'none',
+                  outline: values.color === c ? '2px solid #dae5da' : 'none',
                   outlineOffset: 2,
                 }}
               />
@@ -223,13 +224,13 @@ export default function HabitFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-white/60 hover:bg-white/10"
+            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
           >
             Cancel
           </button>
           <button
             type="submit"
-            className="rounded-lg bg-white/90 px-3 py-1.5 text-sm text-[#0b0f1a]"
+            className="rounded-lg bg-habit-purple px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110"
           >
             Save
           </button>

@@ -19,11 +19,15 @@ export default function WidgetCard({
 }) {
   return (
     <section
-      className={`flex flex-col gap-3 rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-5 transition-all duration-200 ${ACCENT_GLOW[accent]} ${className}`}
+      className={`group flex flex-col gap-3 rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-5 transition-all duration-300 ease-out hover:-translate-y-1 ${ACCENT_GLOW[accent]} ${className}`}
     >
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
-          {icon && <span className={ACCENT_TEXT[accent]}>{icon}</span>}
+          {icon && (
+            <span className={`transition-transform duration-300 group-hover:scale-[1.15] ${ACCENT_TEXT[accent]}`}>
+              {icon}
+            </span>
+          )}
           {title}
         </h2>
         {action}

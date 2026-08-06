@@ -2,20 +2,14 @@
 
 import { useState } from 'react'
 import { Hexagon } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { connectGoogleCalendar } from '@/lib/google/connect'
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false)
 
   const handleSignIn = async () => {
     setLoading(true)
-    const supabase = createClient()
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
+    await connectGoogleCalendar()
   }
 
   return (

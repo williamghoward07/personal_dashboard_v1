@@ -1,5 +1,6 @@
 import WidgetCard from '../WidgetCard'
 import type { Transaction } from '@/lib/types'
+import { minorUnitsOf } from '@/lib/money'
 
 const PALETTE = ['#3987e5', '#d95926', '#199e70']
 const OTHER = '#849587'
@@ -25,9 +26,11 @@ export default function SpendingBreakdownChart({
     (t) => t.type === 'outgoing' && t.date.startsWith(monthKey),
   )
 
+  // All values from here on are minor units (pence) — converted to pounds
+  // only where rendered as text below.
   const byCategory = new Map<string, number>()
   for (const t of outgoing) {
-    byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount)
+    byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + minorUnitsOf(t))
   }
   const sorted = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1])
   const top = sorted.slice(0, 3)
@@ -72,7 +75,7 @@ export default function SpendingBreakdownChart({
                   strokeDashoffset={-offset}
                 >
                   <title>
-                    {category.label}: £{category.value.toFixed(2)}
+                    {category.label}: £{(category.value / 100).toFixed(2)}
                   </title>
                 </circle>
               )
@@ -88,7 +91,7 @@ export default function SpendingBreakdownChart({
                 />
                 <span className="text-on-surface">{category.label}</span>
                 <span className="text-on-surface-variant">
-                  £{category.value.toFixed(2)} ·{' '}
+                  £{(category.value / 100).toFixed(2)} ·{' '}
                   {Math.round((category.value / total) * 100)}%
                 </span>
               </li>

@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Heart, GraduationCap, DollarSign, FileSearch, ListChecks, Hexagon } from 'lucide-react'
+import { Home, Heart, GraduationCap, DollarSign, FileSearch, ListChecks, CalendarDays, Hexagon } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ACCENT_TEXT, MODULE_ACCENT } from '@/lib/theme'
 
 const navItems: { href: string; label: string; icon: LucideIcon; module: keyof typeof MODULE_ACCENT }[] = [
   { href: '/', label: 'Home', icon: Home, module: 'home' },
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays, module: 'calendar' },
   { href: '/health', label: 'Health', icon: Heart, module: 'health' },
   { href: '/education', label: 'Education', icon: GraduationCap, module: 'education' },
   { href: '/money', label: 'Money', icon: DollarSign, module: 'money' },

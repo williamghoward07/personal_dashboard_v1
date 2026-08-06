@@ -94,6 +94,28 @@ body {
   font-family: var(--font-body);
 }
 
+.led-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-primary-container);
+  animation: led-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes led-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 8px 2px color-mix(in srgb, var(--color-primary-container) 60%, transparent);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+    box-shadow: 0 0 4px 1px color-mix(in srgb, var(--color-primary-container) 30%, transparent);
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

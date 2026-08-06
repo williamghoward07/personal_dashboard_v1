@@ -99,13 +99,20 @@ export interface TimeLog {
 }
 
 export type TransactionType = 'income' | 'outgoing'
+export type TransactionSource = 'manual' | 'monzo' | 'starling'
 
 export interface Transaction {
   id: string
   date: string
-  amount: number
+  amount: number | null
   category: string
   description: string | null
   type: TransactionType
   created_at: string
+  source: TransactionSource
+  external_id: string | null
+  account_label: string | null
+  merchant_name: string | null
+  amount_minor_units: number | null
+  raw: Record<string, unknown> | null
 }

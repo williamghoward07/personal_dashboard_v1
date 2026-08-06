@@ -36,11 +36,24 @@ export const ACCENT_BAR: Record<Accent, string> = {
   neutral: 'bg-outline',
 }
 
-export const MODULE_ACCENT: Record<'home' | 'health' | 'education' | 'money' | 'research' | 'habits', Accent> = {
+export const ACCENT_VAR: Record<Accent, string> = {
+  mint: 'var(--color-primary-container)',
+  blue: 'var(--color-secondary-container)',
+  orange: 'var(--color-academic-orange)',
+  pink: 'var(--color-research-pink)',
+  purple: 'var(--color-habit-purple)',
+  neutral: 'var(--color-outline)',
+}
+
+export const MODULE_ACCENT: Record<
+  'home' | 'health' | 'education' | 'money' | 'research' | 'habits' | 'calendar',
+  Accent
+> = {
   home: 'neutral',
   health: 'mint',
   education: 'orange',
   money: 'blue',
   research: 'pink',
   habits: 'purple',
+  calendar: 'neutral',
 }

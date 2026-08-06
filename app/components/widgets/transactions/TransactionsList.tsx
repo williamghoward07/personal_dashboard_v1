@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Transaction } from '@/lib/types'
+import { minorUnitsOf, formatPounds } from '@/lib/money'
 import WidgetCard from '../../WidgetCard'
 import ConfirmDialog from '../../ConfirmDialog'
 import TransactionFormModal from './TransactionFormModal'
@@ -54,9 +55,14 @@ export default function TransactionsList({
                 <div className="flex min-w-0 flex-col">
                   <span className="text-sm font-medium text-on-surface">
                     {t.category}
-                    {t.description ? ` — ${t.description}` : ''}
+                    {t.description || t.merchant_name
+                      ? ` — ${t.description ?? t.merchant_name}`
+                      : ''}
                   </span>
-                  <span className="text-xs text-on-surface-variant">{t.date}</span>
+                  <span className="text-xs text-on-surface-variant">
+                    {t.date}
+                    {t.account_label ? ` · ${t.account_label}` : ''}
+                  </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <span
@@ -64,24 +70,29 @@ export default function TransactionsList({
                       t.type === 'income' ? 'text-primary-container' : 'text-on-surface'
                     }`}
                   >
-                    {t.type === 'income' ? '+' : '-'}£{t.amount.toFixed(2)}
+                    {t.type === 'income' ? '+' : '-'}
+                    {formatPounds(minorUnitsOf(t))}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setEditingTx(t)}
-                    aria-label={`Edit ${t.category} transaction`}
-                    className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeletingTx(t)}
-                    aria-label={`Delete ${t.category} transaction`}
-                    className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-error"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {t.source === 'manual' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditingTx(t)}
+                        aria-label={`Edit ${t.category} transaction`}
+                        className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingTx(t)}
+                        aria-label={`Delete ${t.category} transaction`}
+                        className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-error"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </li>
             ))}

@@ -17,6 +17,82 @@
 > Until step 3 is done the People page will render an error banner telling you
 > the migration hasn't run. That's expected, not a bug.
 
+---
+
+## Start here — the runbook
+
+Do these in order; each step depends on the one before it. Budget ~20 minutes,
+most of it in the Google Cloud console.
+
+### 1. Get the code
+
+```bash
+git fetch origin claude/custom-crm-supabase-tooor7
+git checkout claude/custom-crm-supabase-tooor7
+npm install
+```
+
+### 2. Create the Google OAuth client
+
+Follow **§7a** below in the browser. It ends with a Client ID and Client Secret.
+
+When you get to the redirect URIs, register **both** of these — localhost for
+the testing you're about to do, production for after you merge:
+
+```
+http://localhost:3000/api/google/callback
+https://<your-production-domain>/api/google/callback
+```
+
+### 3. Set the environment variables
+
+Two places, because they serve different things.
+
+**Vercel** (for deployed builds) — dashboard, per **§7b**. Do this even if
+you're only testing locally today, so the eventual deploy already has them.
+
+**`.env.local`** (for `npm run dev`) — either copy `.env.example` and fill it
+in by hand, or pull everything down from Vercel:
+
+```bash
+npx vercel link      # first time only, connects this folder to the project
+npx vercel env pull .env.local
+```
+
+`.env.local` is gitignored — it must never be committed.
+
+### 4. Run the migrations
+
+Follow **§7c**: paste `supabase/migrations/20260810000000_people_crm.sql` then
+`20260810000100_google_contacts_tokens.sql` into the Supabase SQL editor and
+run them. Nothing on the People page works until this is done.
+
+### 5. Start it and connect
+
+```bash
+npm run dev
+```
+
+Open <http://localhost:3000/people>, click **Connect**, complete the Google
+consent screen, then **Sync now**. Then walk §6's checklist: add a place, add a
+person, log a conversation linking both, set a follow-up.
+
+### 6. Deploy
+
+Merge the branch to `main` — Vercel builds it and picks up the env vars from
+step 3. See **§7d** on why merging beats testing on a preview URL.
+
+### If something breaks
+
+| Symptom | Cause |
+|---|---|
+| Red banner naming a migration file | Step 4 not done |
+| `redirect_uri_mismatch` from Google | The URI in step 2 doesn't match exactly — check scheme, port, no trailing slash |
+| "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set" | Step 3 not done, or dev server not restarted after editing `.env.local` |
+| Sync says "Google sign-in expired" | Normal after ~7 days on Testing status — click Reconnect (§8) |
+
+---
+
 ## Context
 
 Study Copilot currently has five modules (Health, Money, Education, Research,

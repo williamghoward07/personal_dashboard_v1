@@ -109,3 +109,87 @@ export interface Transaction {
   type: TransactionType
   created_at: string
 }
+
+export type PlaceCategory =
+  | 'cafe'
+  | 'university'
+  | 'pub'
+  | 'restaurant'
+  | 'gym'
+  | 'office'
+  | 'home'
+  | 'event'
+  | 'other'
+
+export interface Place {
+  id: string
+  name: string
+  address: string | null
+  category: PlaceCategory
+  latitude: number | null
+  longitude: number | null
+  notes: string | null
+  created_at: string
+}
+
+export interface Person {
+  id: string
+  full_name: string
+  email: string | null
+  phone: string | null
+  company: string | null
+  job_title: string | null
+  linkedin_url: string | null
+  photo_url: string | null
+  how_we_met: string | null
+  birthday: string | null
+  notes: string | null
+  tags: string[]
+  google_resource_name: string | null
+  google_etag: string | null
+  google_synced_at: string | null
+  archived: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type InteractionChannel =
+  | 'in_person'
+  | 'call'
+  | 'video'
+  | 'message'
+  | 'email'
+  | 'other'
+
+export interface Interaction {
+  id: string
+  occurred_at: string
+  title: string | null
+  summary: string
+  channel: InteractionChannel
+  place_id: string | null
+  follow_up: string | null
+  follow_up_done: boolean
+  created_at: string
+}
+
+export interface InteractionPerson {
+  id: string
+  interaction_id: string
+  person_id: string
+  created_at: string
+}
+
+export interface Integration {
+  id: string
+  provider: string
+  connected_at: string
+  expires_at: string | null
+  scopes: string[]
+  vault_secret_name: string | null
+  last_synced_at: string | null
+  last_error: string | null
+  encrypted_refresh_token: string | null
+  sync_token: string | null
+  account_email: string | null
+}

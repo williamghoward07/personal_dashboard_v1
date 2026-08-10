@@ -1,18 +1,21 @@
 # People CRM module (`/people`)
 
-> **Status: not yet implemented — this is a design document only.**
+> **Status: code written and pushed. Not yet runnable — three setup steps remain.**
 >
-> Planned on 2026-08-10 from an iPad. The decision was to defer execution until
-> back at a PC, where the Google Cloud / Vercel / Supabase setup is less painful.
+> Planned and built on 2026-08-10 on branch `claude/custom-crm-supabase-tooor7`.
+> Every file in §4 exists. Verified by `npx tsc --noEmit` (clean) and
+> `npm run build` (clean, all four API routes registered).
 >
-> **The only action taken in that session was committing this document** to
-> `claude/custom-crm-supabase-tooor7`. No application code, migrations, or
-> configuration were written.
+> **Nothing has touched the database.** The migrations are committed as SQL files
+> but have *not* been run — Supabase was unreachable from the build environment.
 >
-> **To pick this up:** open this file with Claude Code on your PC and ask it to
-> execute the plan. Everything it needs — schema, file list, build order,
-> verification steps, and the manual Google/Vercel/Supabase setup — is below.
-> Start with §7 (setup) and §5 (build order).
+> **What's left, all browser work (see §7):**
+> 1. Create the Google Cloud OAuth client — §7a
+> 2. Add three environment variables to Vercel — §7b
+> 3. Run the two migrations in the Supabase SQL editor — §7c
+>
+> Until step 3 is done the People page will render an error banner telling you
+> the migration hasn't run. That's expected, not a bug.
 
 ## Context
 

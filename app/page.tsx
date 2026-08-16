@@ -6,6 +6,7 @@ import HealthGlance from './components/widgets/home/HealthGlance'
 import ResearchGlance from './components/widgets/home/ResearchGlance'
 import HabitsGlance from './components/widgets/home/HabitsGlance'
 import DailyGoals from './components/widgets/home/DailyGoals'
+import PeopleGlance from './components/widgets/home/PeopleGlance'
 
 export default function Home() {
   return (
@@ -19,6 +20,7 @@ export default function Home() {
         <HealthGlance />
         <ResearchGlance />
         <HabitsGlance />
+        <PeopleGlance />
         <CalendarModule />
       </div>
     </main>

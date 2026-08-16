@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Heart, GraduationCap, DollarSign, FileSearch, ListChecks, CalendarDays, Hexagon } from 'lucide-react'
+import { Home, Heart, GraduationCap, DollarSign, FileSearch, ListChecks, CalendarDays, Contact, Hexagon } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ACCENT_TEXT, MODULE_ACCENT } from '@/lib/theme'
 
@@ -14,6 +14,7 @@ const navItems: { href: string; label: string; icon: LucideIcon; module: keyof t
   { href: '/money', label: 'Money', icon: DollarSign, module: 'money' },
   { href: '/research', label: 'Research', icon: FileSearch, module: 'research' },
   { href: '/habits', label: 'Habits', icon: ListChecks, module: 'habits' },
+  { href: '/people', label: 'People', icon: Contact, module: 'people' },
 ]
 
 export default function Sidebar() {

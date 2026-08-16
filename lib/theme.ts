@@ -1,4 +1,4 @@
-export type Accent = 'mint' | 'blue' | 'orange' | 'pink' | 'purple' | 'neutral'
+export type Accent = 'mint' | 'blue' | 'orange' | 'pink' | 'purple' | 'amber' | 'neutral'
 
 export const ACCENT_TEXT: Record<Accent, string> = {
   mint: 'text-primary-container',
@@ -6,6 +6,7 @@ export const ACCENT_TEXT: Record<Accent, string> = {
   orange: 'text-academic-orange',
   pink: 'text-research-pink',
   purple: 'text-habit-purple',
+  amber: 'text-people-amber',
   neutral: 'text-on-surface-variant',
 }
 
@@ -15,6 +16,7 @@ export const ACCENT_GLOW: Record<Accent, string> = {
   orange: 'hover:border-academic-orange/50 hover:shadow-[0_0_15px_rgba(255,107,0,0.2)]',
   pink: 'hover:border-research-pink/50 hover:shadow-[0_0_15px_rgba(255,0,127,0.2)]',
   purple: 'hover:border-habit-purple/50 hover:shadow-[0_0_15px_rgba(192,132,252,0.2)]',
+  amber: 'hover:border-people-amber/50 hover:shadow-[0_0_15px_rgba(255,194,51,0.2)]',
   neutral: 'hover:border-outline/50',
 }
 
@@ -24,6 +26,7 @@ export const ACCENT_CHIP: Record<Accent, string> = {
   orange: 'bg-academic-orange/10 text-academic-orange border-academic-orange/30',
   pink: 'bg-research-pink/10 text-research-pink border-research-pink/30',
   purple: 'bg-habit-purple/10 text-habit-purple border-habit-purple/30',
+  amber: 'bg-people-amber/10 text-people-amber border-people-amber/30',
   neutral: 'bg-surface-container-highest text-on-surface-variant border-outline-variant',
 }
 
@@ -33,6 +36,7 @@ export const ACCENT_BAR: Record<Accent, string> = {
   orange: 'bg-academic-orange',
   pink: 'bg-research-pink',
   purple: 'bg-habit-purple',
+  amber: 'bg-people-amber',
   neutral: 'bg-outline',
 }
 
@@ -42,11 +46,12 @@ export const ACCENT_VAR: Record<Accent, string> = {
   orange: 'var(--color-academic-orange)',
   pink: 'var(--color-research-pink)',
   purple: 'var(--color-habit-purple)',
+  amber: 'var(--color-people-amber)',
   neutral: 'var(--color-outline)',
 }
 
 export const MODULE_ACCENT: Record<
-  'home' | 'health' | 'education' | 'money' | 'research' | 'habits' | 'calendar',
+  'home' | 'health' | 'education' | 'money' | 'research' | 'habits' | 'calendar' | 'people',
   Accent
 > = {
   home: 'neutral',
@@ -56,4 +61,5 @@ export const MODULE_ACCENT: Record<
   research: 'pink',
   habits: 'purple',
   calendar: 'neutral',
+  people: 'amber',
 }

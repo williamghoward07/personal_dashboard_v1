@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { Target, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { DailyGoalHabit, DailyGoalHabitCompletion, EducationTask } from '@/lib/types'
@@ -119,10 +120,18 @@ export default function DailyGoals() {
       </div>
 
       <GlassCardHeader>
-        <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-foreground">
-          <Target className="h-4 w-4 text-on-surface-variant" aria-hidden="true" />
-          Daily Goals
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-foreground">
+            <Target className="h-4 w-4 text-on-surface-variant" aria-hidden="true" />
+            Daily Goals
+          </h2>
+          <Link
+            href="/todos"
+            className="shrink-0 text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline"
+          >
+            All todos →
+          </Link>
+        </div>
       </GlassCardHeader>
 
       <GlassCardContent className="flex flex-col gap-4">

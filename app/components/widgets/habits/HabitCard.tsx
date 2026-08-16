@@ -1,40 +1,87 @@
 'use client'
 
-import { Check, Pencil, Trash2 } from 'lucide-react'
+import { Check, GripVertical, Pencil, Trash2 } from 'lucide-react'
+import { useSortable } from '@dnd-kit/sortable'
 import HabitHeatmap, { type HabitDayStatus } from './HabitHeatmap'
-import type { Habit } from '@/lib/types'
+import type { DailyGoalHabit } from '@/lib/types'
+
+const DAY_ABBREV = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function frequencyLabel(habit: DailyGoalHabit) {
+  if (habit.frequency_type === 'daily') return 'Daily'
+  if (habit.frequency_type === 'times_per_week') return `${habit.weekly_target}x / week`
+  return (habit.days_of_week ?? [])
+    .slice()
+    .sort((a, b) => a - b)
+    .map((d) => DAY_ABBREV[d - 1])
+    .join(', ') || 'Specific days'
+}
 
 export default function HabitCard({
   habit,
   statusByDate,
   todayValue,
-  onToggleToday,
-  onLogToday,
+  onCellClick,
   onEdit,
   onDelete,
 }: {
-  habit: Habit
+  habit: DailyGoalHabit
   statusByDate: Map<string, HabitDayStatus>
   todayValue: number | null
-  onToggleToday: () => void
-  onLogToday: () => void
+  // Single entry point for "act on habit X for date Y" — the header's
+  // quick-toggle/quick-log buttons and the heatmap's individual cells all
+  // funnel through this one callback, which HabitBoard branches on
+  // (today vs past, quantifiable vs plain) in one place rather than each
+  // caller re-deriving that logic.
+  onCellClick: (date: string) => void
   onEdit: () => void
   onDelete: () => void
 }) {
-  const frequencyLabel =
-    habit.frequency_type === 'daily' ? 'Daily' : `${habit.frequency_count}x / week`
+  // Drag reordering is scoped to a small handle, not the whole card —
+  // the card is already full of its own clickable buttons, and dnd-kit's
+  // pointer sensor would otherwise compete with those for the same
+  // pointerdown events.
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: habit.id,
+  })
+
+  const style = {
+    transform: transform
+      ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0) scaleX(${transform.scaleX}) scaleY(${transform.scaleY})`
+      : undefined,
+    transition: transition ?? undefined,
+  }
 
   const metToday =
     habit.is_quantifiable && habit.target_value != null
       ? todayValue != null && todayValue >= habit.target_value
-      : (statusByDate.get(new Date().toISOString().slice(0, 10)) ?? null) === 'met'
+      : (statusByDate.get(todayISO()) ?? null) === 'met'
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-4 transition-all hover:border-habit-purple/40 hover:shadow-[0_0_15px_rgba(192,132,252,0.15)]">
-      <div className="flex items-center gap-3">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex flex-col gap-4 rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-4 transition-all hover:border-habit-purple/40 hover:shadow-[0_0_15px_rgba(192,132,252,0.15)] ${
+        isDragging ? 'z-10 opacity-60' : ''
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label={`Reorder ${habit.name}`}
+          className="shrink-0 touch-none cursor-grab rounded p-1 text-on-surface-variant/40 hover:bg-surface-container-high hover:text-on-surface-variant active:cursor-grabbing"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lg"
-          style={{ backgroundColor: `${habit.color}26` }}
+          style={{ backgroundColor: `${habit.colour}26` }}
         >
           {habit.icon}
         </div>
@@ -42,7 +89,7 @@ export default function HabitCard({
           <div className="flex items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-on-surface">{habit.name}</h3>
             <span className="shrink-0 rounded-full bg-surface-container-highest px-1.5 py-0.5 text-[10px] text-on-surface-variant">
-              {frequencyLabel}
+              {frequencyLabel(habit)}
             </span>
           </div>
           {habit.description && (
@@ -69,7 +116,7 @@ export default function HabitCard({
           {habit.is_quantifiable ? (
             <button
               type="button"
-              onClick={onLogToday}
+              onClick={() => onCellClick(todayISO())}
               title={
                 habit.target_value != null
                   ? `${todayValue ?? 0} / ${habit.target_value} ${habit.unit ?? ''}`
@@ -78,7 +125,7 @@ export default function HabitCard({
               aria-label={`Log today's ${habit.name}`}
               className="flex h-8 shrink-0 items-center justify-center rounded-full px-2.5 text-[11px] font-semibold"
               style={{
-                backgroundColor: metToday ? habit.color : 'rgba(218,229,218,0.08)',
+                backgroundColor: metToday ? habit.colour : 'rgba(218,229,218,0.08)',
                 color: metToday ? '#07100a' : 'rgba(218,229,218,0.6)',
               }}
             >
@@ -88,13 +135,13 @@ export default function HabitCard({
           ) : (
             <button
               type="button"
-              onClick={onToggleToday}
+              onClick={() => onCellClick(todayISO())}
               aria-label={
                 metToday ? `Mark ${habit.name} not done today` : `Mark ${habit.name} done today`
               }
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
               style={{
-                backgroundColor: metToday ? habit.color : 'rgba(218,229,218,0.08)',
+                backgroundColor: metToday ? habit.colour : 'rgba(218,229,218,0.08)',
                 color: metToday ? '#07100a' : 'rgba(218,229,218,0.3)',
               }}
             >
@@ -104,7 +151,7 @@ export default function HabitCard({
         </div>
       </div>
 
-      <HabitHeatmap statusByDate={statusByDate} color={habit.color} />
+      <HabitHeatmap statusByDate={statusByDate} colour={habit.colour} onCellClick={onCellClick} />
     </div>
   )
 }

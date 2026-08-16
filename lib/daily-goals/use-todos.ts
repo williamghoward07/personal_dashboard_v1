@@ -8,21 +8,24 @@ export interface UseTodosResult {
   todos: Todo[]
   loading: boolean
   error: string | null
-  addTodo: (title: string) => Promise<void>
+  addTodo: (title: string, extra?: { due_date?: string | null; notes?: string | null }) => Promise<void>
   toggleTodo: (id: string) => Promise<void>
+  updateTodo: (id: string, patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date'>>) => Promise<void>
+  deleteTodo: (id: string) => Promise<void>
 }
 
-// Todos due today or still incomplete, for the Daily Goals checklist.
-// Fetches a superset (`selectChecklistTodos` in ./checklist narrows it
-// to the exact due-today/overdue-incomplete view) so the ring's "todos
-// due today" count can also be derived client-side from the same list
-// without a second query.
+// Todos for either the Daily Goals checklist (scope: 'today', the
+// default — due today or still incomplete, so the ring's "todos due
+// today" count can also be derived client-side from the same list
+// without a second query) or the full /todos management page
+// (scope: 'all' — every todo, regardless of date or completion).
 //
-// Both mutations are optimistic: the local list updates immediately,
+// All mutations are optimistic: the local list updates immediately,
 // then the write fires; on failure the previous state is restored and
-// `error` is set. "Undo" is deliberately the same toggle — clicking a
-// completed item un-completes it — rather than a separate control.
-export function useTodos(todayDateKey: string): UseTodosResult {
+// `error` is set. "Undo" for completion is deliberately the same
+// toggle — clicking a completed item un-completes it — rather than a
+// separate control.
+export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today'): UseTodosResult {
   const [todos, setTodos] = useState<Todo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -33,37 +36,39 @@ export function useTodos(todayDateKey: string): UseTodosResult {
   // trips react-hooks/set-state-in-effect, but the same call inside a
   // .then() callback doesn't.
   const refresh = useCallback(() => {
-    supabase
-      .from('todos')
-      .select('*')
-      .or(`completed_at.is.null,due_date.eq.${todayDateKey}`)
-      .order('created_at', { ascending: true })
-      .then(({ data, error: fetchError }) => {
-        if (fetchError) {
-          setError(fetchError.message)
-        } else {
-          setError(null)
-          setTodos((data ?? []) as Todo[])
-        }
-        setLoading(false)
-      })
-  }, [todayDateKey])
+    let query = supabase.from('todos').select('*').order('created_at', { ascending: true })
+    if (scope === 'today') {
+      query = query.or(`completed_at.is.null,due_date.eq.${todayDateKey}`)
+    }
+    query.then(({ data, error: fetchError }) => {
+      if (fetchError) {
+        setError(fetchError.message)
+      } else {
+        setError(null)
+        setTodos((data ?? []) as Todo[])
+      }
+      setLoading(false)
+    })
+  }, [todayDateKey, scope])
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
   const addTodo = useCallback(
-    async (title: string) => {
+    async (title: string, extra?: { due_date?: string | null; notes?: string | null }) => {
       const trimmed = title.trim()
       if (!trimmed) return
+
+      const dueDate = extra ? (extra.due_date ?? null) : todayDateKey
+      const notes = extra?.notes ?? null
 
       const optimisticId = `optimistic-${crypto.randomUUID()}`
       const optimisticTodo: Todo = {
         id: optimisticId,
         title: trimmed,
-        notes: null,
-        due_date: todayDateKey,
+        notes,
+        due_date: dueDate,
         completed_at: null,
         created_at: new Date().toISOString(),
       }
@@ -72,7 +77,7 @@ export function useTodos(todayDateKey: string): UseTodosResult {
 
       const { data, error: insertError } = await supabase
         .from('todos')
-        .insert({ title: trimmed, due_date: todayDateKey })
+        .insert({ title: trimmed, due_date: dueDate, notes })
         .select()
         .single()
 
@@ -114,5 +119,48 @@ export function useTodos(todayDateKey: string): UseTodosResult {
     [todos]
   )
 
-  return { todos, loading, error, addTodo, toggleTodo }
+  const updateTodo = useCallback(
+    async (id: string, patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date'>>) => {
+      const target = todos.find((t) => t.id === id)
+      if (!target) return
+
+      setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+      setError(null)
+
+      const { error: updateError } = await supabase.from('todos').update(patch).eq('id', id)
+
+      if (updateError) {
+        setTodos((prev) => prev.map((t) => (t.id === id ? target : t)))
+        setError(updateError.message)
+      }
+    },
+    [todos]
+  )
+
+  const deleteTodo = useCallback(
+    async (id: string) => {
+      const index = todos.findIndex((t) => t.id === id)
+      if (index === -1) return
+      const target = todos[index]
+
+      setTodos((prev) => prev.filter((t) => t.id !== id))
+      setError(null)
+
+      const { error: deleteError } = await supabase.from('todos').delete().eq('id', id)
+
+      if (deleteError) {
+        // Restore at its original position rather than appending, so a
+        // failed delete doesn't reorder the list out from under the user.
+        setTodos((prev) => {
+          const next = [...prev]
+          next.splice(index, 0, target)
+          return next
+        })
+        setError(deleteError.message)
+      }
+    },
+    [todos]
+  )
+
+  return { todos, loading, error, addTodo, toggleTodo, updateTodo, deleteTodo }
 }

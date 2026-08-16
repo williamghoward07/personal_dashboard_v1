@@ -21,7 +21,15 @@ export default function Modal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={(e) => {
+        // Stops the click from bubbling past the backdrop — matters now
+        // that a modal can be rendered inside a clickable ancestor (e.g.
+        // CalendarModule's home-page Link): without this, dismissing the
+        // modal by clicking outside it would also trigger the ancestor's
+        // click behaviour.
+        e.stopPropagation()
+        onClose()
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}

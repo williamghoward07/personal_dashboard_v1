@@ -2,17 +2,25 @@
 
 import { useEffect, useState } from 'react'
 import Modal from '../../Modal'
-import type { Habit } from '@/lib/types'
+import type { DailyGoalHabit } from '@/lib/types'
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
 
 export default function HabitLogValueModal({
   isOpen,
   habit,
+  date,
   initialValue,
   onSave,
   onClose,
 }: {
   isOpen: boolean
-  habit: Habit | null
+  habit: DailyGoalHabit | null
+  // Defaults to today when omitted — every existing call site (the
+  // header's quick-log button) still means "log today's value".
+  date?: string
   initialValue: number | null
   onSave: (value: number) => void
   onClose: () => void
@@ -27,6 +35,7 @@ export default function HabitLogValueModal({
 
   const inputClass =
     'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-habit-purple'
+  const isToday = (date ?? todayISO()) === todayISO()
 
   return (
     <Modal onClose={onClose}>
@@ -40,7 +49,7 @@ export default function HabitLogValueModal({
         className="flex flex-col gap-4"
       >
         <h2 className="font-display text-sm font-semibold text-on-surface">
-          {habit.icon} {habit.name} — today
+          {habit.icon} {habit.name} — {isToday ? 'today' : date}
         </h2>
         <label className="flex flex-col gap-1 text-xs text-on-surface-variant">
           {habit.unit ? `Value (${habit.unit})` : 'Value'}

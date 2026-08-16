@@ -57,6 +57,11 @@ export interface TaskResearchLink {
   created_at: string
 }
 
+// Legacy: superseded by DailyGoalHabit/DailyGoalHabitCompletion below,
+// which the Habits page and widget now read/write instead (see the
+// 2026-08-16 habits data-model consolidation). Kept only because the
+// old habits/habit_logs tables are still around as a rollback safety
+// net — nothing in the app imports these anymore.
 export type HabitFrequencyType = 'daily' | 'weekly'
 
 export interface Habit {
@@ -123,12 +128,18 @@ export type DailyGoalHabitWidget = 'habits' | 'health'
 export interface DailyGoalHabit {
   id: string
   name: string
+  icon: string
+  description: string
   frequency_type: DailyGoalHabitFrequency
   days_of_week: number[] | null
   weekly_target: number | null
   widget: DailyGoalHabitWidget
   colour: string
   is_active: boolean
+  is_quantifiable: boolean
+  target_value: number | null
+  unit: string | null
+  sort_order: number
   created_at: string
 }
 
@@ -136,6 +147,7 @@ export interface DailyGoalHabitCompletion {
   id: string
   habit_id: string
   completed_on: string
+  value: number | null
   created_at: string
 }
 
@@ -156,6 +168,22 @@ export interface Transaction {
   merchant_name: string | null
   amount_minor_units: number | null
   raw: Record<string, unknown> | null
+  account_id: string | null
+}
+
+export type AccountSource = 'starling' | 'manual'
+
+export interface Account {
+  id: string
+  name: string
+  source: AccountSource
+  external_id: string | null
+  currency: string
+  // Manual accounts only — see the migration's column comment. Ignored
+  // for Starling accounts, whose balance is always fetched live.
+  opening_balance_minor_units: number
+  is_pinned: boolean
+  created_at: string
 }
 
 export type PlaceCategory =

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAccounts, getTransactionsBetween, type StarlingFeedItem } from '@/lib/starling/client'
+import { getAccounts, getTransactionsBetween, type StarlingAccount, type StarlingFeedItem } from '@/lib/starling/client'
 import { isSuccessfulStarlingStatus } from '@/lib/money'
 
 const FIRST_SYNC_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000
@@ -38,6 +38,63 @@ function toRawPayload(item: StarlingFeedItem) {
   }
 }
 
+type AdminClient = ReturnType<typeof createAdminClient>
+
+// Resolves a Starling account to its `accounts` row id, creating or
+// reconciling one as needed. Tries the stable Starling id first; falls
+// back to matching an un-linked row by name (the 20260816020000
+// migration backfilled accounts from historical account_label text with
+// external_id left null, since that id was never captured before this
+// change) and fills in its external_id rather than inserting a duplicate
+// for the same real-world account. That fallback only ever matters once,
+// right after the migration ships — every sync after that hits the
+// external_id lookup directly.
+async function resolveAccountId(admin: AdminClient, userId: string, starlingAccount: StarlingAccount): Promise<string> {
+  const name = starlingAccount.name || starlingAccount.accountType
+
+  const { data: byExternalId } = await admin
+    .from('accounts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('source', 'starling')
+    .eq('external_id', starlingAccount.accountUid)
+    .maybeSingle()
+
+  if (byExternalId) return byExternalId.id
+
+  const { data: byName } = await admin
+    .from('accounts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('source', 'starling')
+    .is('external_id', null)
+    .eq('name', name)
+    .maybeSingle()
+
+  if (byName) {
+    await admin.from('accounts').update({ external_id: starlingAccount.accountUid }).eq('id', byName.id)
+    return byName.id
+  }
+
+  const { data: created, error: insertError } = await admin
+    .from('accounts')
+    .insert({
+      user_id: userId,
+      name,
+      source: 'starling',
+      external_id: starlingAccount.accountUid,
+      currency: starlingAccount.currency,
+    })
+    .select('id')
+    .single()
+
+  if (insertError || !created) {
+    throw new Error(insertError?.message ?? 'Failed to create account for Starling sync')
+  }
+
+  return created.id
+}
+
 export async function POST() {
   const supabase = await createClient()
   const {
@@ -63,10 +120,13 @@ export async function POST() {
 
   try {
     const accounts = await getAccounts()
+    const accountIds = await Promise.all(
+      accounts.map((account) => resolveAccountId(admin, user.id, account))
+    )
 
     const rows = (
       await Promise.all(
-        accounts.map(async (account) => {
+        accounts.map(async (account, i) => {
           const feedItems = await getTransactionsBetween(
             account.accountUid,
             account.defaultCategory,
@@ -81,6 +141,7 @@ export async function POST() {
               source: 'starling',
               external_id: item.feedItemUid,
               account_label: account.name || account.accountType,
+              account_id: accountIds[i],
               merchant_name: item.counterPartyName ?? null,
               amount_minor_units: item.amount.minorUnits,
               type: item.direction === 'IN' ? 'income' : 'outgoing',

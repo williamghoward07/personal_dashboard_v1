@@ -1,11 +1,9 @@
 import PageContainer from '../components/PageContainer'
-import TradingProfileCard from '../components/widgets/TradingProfileCard'
 import MoneyBoard from '../components/widgets/MoneyBoard'
 
 export default function MoneyPage() {
   return (
-    <PageContainer title="Money" subtitle="Liquidity, spend, and portfolio tracking." accent="blue">
-      <TradingProfileCard />
+    <PageContainer title="Money" subtitle="Balances and spending across every account." accent="blue">
       <MoneyBoard />
     </PageContainer>
   )

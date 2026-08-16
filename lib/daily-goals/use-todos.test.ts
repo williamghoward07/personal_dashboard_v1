@@ -3,14 +3,25 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { useTodos } from './use-todos'
 
 const { mockState } = vi.hoisted(() => ({
-  mockState: { updateShouldFail: false },
+  mockState: { updateShouldFail: false, deleteShouldFail: false },
 }))
 
-// Mimics supabase-js's PostgrestFilterBuilder: each chain method returns
-// another chainable object, and the final link is "thenable" so `await`
-// resolves it like a real query response ({ data, error }).
-function thenable<T>(result: T) {
-  return { then: (resolve: (value: T) => void) => Promise.resolve(result).then(resolve) }
+// Mimics supabase-js's PostgrestFilterBuilder: filter/order methods
+// (.or/.order/.eq/.gt/.limit) are independent modifiers that can be
+// chained in any order and combination, each returning a builder that
+// still has every other method available, and the whole chain is
+// "thenable" at any point — awaiting it resolves like a real query
+// response ({ data, error }).
+function chainable<T>(result: T) {
+  const node = {
+    or: () => node,
+    order: () => node,
+    eq: () => node,
+    gt: () => node,
+    limit: () => node,
+    then: (resolve: (value: T) => void) => Promise.resolve(result).then(resolve),
+  }
+  return node
 }
 
 vi.mock('@/lib/supabase', () => {
@@ -26,19 +37,21 @@ vi.mock('@/lib/supabase', () => {
   return {
     supabase: {
       from: () => ({
-        select: () => ({
-          or: () => ({
-            order: () => thenable({ data: [existingTodo], error: null }),
-          }),
-        }),
+        select: () => chainable({ data: [existingTodo], error: null }),
         update: () => ({
           eq: () =>
-            thenable(
+            chainable(
               mockState.updateShouldFail ? { error: { message: 'network error' } } : { error: null }
             ),
         }),
+        delete: () => ({
+          eq: () =>
+            chainable(
+              mockState.deleteShouldFail ? { error: { message: 'network error' } } : { error: null }
+            ),
+        }),
         insert: () => ({
-          select: () => ({ single: () => thenable({ data: null, error: null }) }),
+          select: () => ({ single: () => chainable({ data: null, error: null }) }),
         }),
       }),
     },
@@ -48,6 +61,7 @@ vi.mock('@/lib/supabase', () => {
 describe('useTodos optimistic toggle', () => {
   beforeEach(() => {
     mockState.updateShouldFail = false
+    mockState.deleteShouldFail = false
   })
 
   it('rolls back the optimistic completion when the write fails', async () => {
@@ -77,6 +91,77 @@ describe('useTodos optimistic toggle', () => {
     })
 
     expect(result.current.todos[0].completed_at).not.toBeNull()
+    expect(result.current.error).toBeNull()
+  })
+})
+
+describe('useTodos scope', () => {
+  it('fetches everything (no .or narrowing) when scope is "all"', async () => {
+    const { result } = renderHook(() => useTodos('2026-08-05', 'all'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.todos).toHaveLength(1)
+    expect(result.current.error).toBeNull()
+  })
+})
+
+describe('useTodos updateTodo', () => {
+  beforeEach(() => {
+    mockState.updateShouldFail = false
+  })
+
+  it('rolls back the optimistic edit when the write fails', async () => {
+    mockState.updateShouldFail = true
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.updateTodo('todo-1', { title: 'Renamed' })
+    })
+
+    expect(result.current.todos[0].title).toBe('Existing todo')
+    expect(result.current.error).toBe('network error')
+  })
+
+  it('keeps the optimistic edit when the write succeeds', async () => {
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.updateTodo('todo-1', { title: 'Renamed' })
+    })
+
+    expect(result.current.todos[0].title).toBe('Renamed')
+    expect(result.current.error).toBeNull()
+  })
+})
+
+describe('useTodos deleteTodo', () => {
+  beforeEach(() => {
+    mockState.deleteShouldFail = false
+  })
+
+  it('restores the optimistically-removed todo when the write fails', async () => {
+    mockState.deleteShouldFail = true
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.deleteTodo('todo-1')
+    })
+
+    expect(result.current.todos).toHaveLength(1)
+    expect(result.current.error).toBe('network error')
+  })
+
+  it('keeps the todo removed when the write succeeds', async () => {
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.deleteTodo('todo-1')
+    })
+
+    expect(result.current.todos).toHaveLength(0)
     expect(result.current.error).toBeNull()
   })
 })

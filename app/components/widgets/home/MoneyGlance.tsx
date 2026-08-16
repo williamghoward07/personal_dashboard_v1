@@ -1,69 +1,57 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { DollarSign } from 'lucide-react'
 import HomeSectionCard from './HomeSectionCard'
-
-interface Part {
-  status: 'loading' | 'ready' | 'unavailable'
-  value: number
-  currency: string
-}
-
-const IDLE: Part = { status: 'loading', value: 0, currency: 'GBP' }
+import { useAccounts } from '@/lib/money/use-accounts'
+import { useTransactions } from '@/lib/money/use-transactions'
+import { useStarlingBalances } from '@/lib/money/use-starling-balances'
+import {
+  resolveAccountBalance,
+  computeOverallBalance,
+  hasMixedCurrencies,
+  overallNetChangeMinorUnits,
+} from '@/lib/money/accounts'
+import { formatPounds } from '@/lib/money'
 
 export default function MoneyGlance() {
-  const [cash, setCash] = useState<Part>(IDLE)
-  const [investments, setInvestments] = useState<Part>(IDLE)
+  const { accounts, loading: accountsLoading } = useAccounts()
+  const { transactions, loading: transactionsLoading } = useTransactions()
+  const { state: starlingState } = useStarlingBalances()
 
-  useEffect(() => {
-    fetch('/api/starling/balance')
-      .then(async (res) => {
-        if (!res.ok) return setCash({ status: 'unavailable', value: 0, currency: 'GBP' })
-        const data = await res.json()
-        setCash({ status: 'ready', value: data.minorUnits / 100, currency: data.currency })
-      })
-      .catch(() => setCash({ status: 'unavailable', value: 0, currency: 'GBP' }))
+  const starlingBalances =
+    starlingState.status === 'ready'
+      ? starlingState.balances
+      : starlingState.status === 'loading'
+        ? 'loading'
+        : 'unavailable'
 
-    fetch('/api/trading212/snapshot')
-      .then(async (res) => {
-        if (!res.ok) return setInvestments({ status: 'unavailable', value: 0, currency: 'GBP' })
-        const data = await res.json()
-        setInvestments({ status: 'ready', value: data.cash.total, currency: data.primaryCurrency })
-      })
-      .catch(() => setInvestments({ status: 'unavailable', value: 0, currency: 'GBP' }))
-  }, [])
+  const resolved = accounts
+    .map((account) => resolveAccountBalance(account, transactions, starlingBalances))
+    .filter((b): b is { minorUnits: number; currency: string } => typeof b === 'object')
 
-  const loading = cash.status === 'loading' && investments.status === 'loading'
-  const bothUnavailable = cash.status === 'unavailable' && investments.status === 'unavailable'
-  const currencyMismatch =
-    cash.status === 'ready' && investments.status === 'ready' && cash.currency !== investments.currency
-
-  const total = (cash.status === 'ready' ? cash.value : 0) + (investments.status === 'ready' ? investments.value : 0)
-  const currency = cash.status === 'ready' ? cash.currency : investments.currency
+  const overall = computeOverallBalance(resolved)
+  const mixedCurrencies = hasMixedCurrencies(resolved)
+  const changeMinorUnits = overallNetChangeMinorUnits(accounts, transactions, 'month')
+  const isPositive = changeMinorUnits >= 0
+  const loading = accountsLoading || transactionsLoading
 
   return (
     <HomeSectionCard href="/money" title="Money" icon={<DollarSign className="h-4 w-4" />} accent="blue">
       {loading ? (
         <p>Loading...</p>
-      ) : bothUnavailable ? (
-        <p className="text-xs text-on-surface-variant">Balances unavailable</p>
+      ) : accounts.length === 0 ? (
+        <p className="text-xs text-on-surface-variant">No accounts yet</p>
       ) : (
         <div className="flex flex-col gap-1">
           <span className="font-display text-xl font-semibold text-on-surface">
-            {currency === 'GBP' ? '£' : `${currency} `}
-            {total.toFixed(2)}
+            {formatPounds(overall.minorUnits)}
           </span>
-          <span className="text-xs text-on-surface-variant">total assets — cash + investments</span>
-          {currencyMismatch && (
-            <span className="text-xs text-on-surface-variant">
-              Trading 212 balance in {investments.currency}, not converted
-            </span>
-          )}
-          {(cash.status === 'unavailable' || investments.status === 'unavailable') && !bothUnavailable && (
-            <span className="text-xs text-on-surface-variant">
-              {cash.status === 'unavailable' ? 'Starling' : 'Trading 212'} not connected — showing partial total
-            </span>
+          <span className="text-xs text-on-surface-variant">
+            {isPositive ? '+' : ''}
+            {formatPounds(changeMinorUnits)} this month · {accounts.length} account{accounts.length === 1 ? '' : 's'}
+          </span>
+          {mixedCurrencies && (
+            <span className="text-xs text-on-surface-variant">Uses more than one currency — not converted.</span>
           )}
         </div>
       )}

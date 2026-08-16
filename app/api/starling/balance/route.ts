@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getAccounts, getAccountBalance } from '@/lib/starling/client'
 
+// One entry per Starling account rather than a single summed figure — the
+// Money page renders one card per account (see AccountCard), matched to
+// its accounts row via externalId (Starling's accountUid).
 export async function GET() {
   const supabase = await createClient()
   const {
@@ -20,10 +23,14 @@ export async function GET() {
     const accounts = await getAccounts()
     const balances = await Promise.all(accounts.map((a) => getAccountBalance(a.accountUid)))
 
-    const currency = balances[0]?.effectiveBalance.currency ?? 'GBP'
-    const minorUnits = balances.reduce((sum, b) => sum + b.effectiveBalance.minorUnits, 0)
-
-    return NextResponse.json({ minorUnits, currency })
+    return NextResponse.json({
+      accounts: accounts.map((account, i) => ({
+        externalId: account.accountUid,
+        name: account.name || account.accountType,
+        minorUnits: balances[i].effectiveBalance.minorUnits,
+        currency: balances[i].effectiveBalance.currency,
+      })),
+    })
   } catch (err) {
     console.error('Starling balance fetch failed:', err)
     return NextResponse.json({ error: 'starling_balance_failed' }, { status: 502 })

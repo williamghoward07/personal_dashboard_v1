@@ -1,70 +1,11 @@
-import type { DailyGoalHabit, DailyGoalHabitCompletion } from '@/lib/types'
+import { computeHabitSchedule, type HabitScheduleResult } from '@/lib/habits/schedule'
 
-// ISO-8601 weekday: 1 = Monday ... 7 = Sunday. `dateKey` must already be
-// the correct calendar day in whatever timezone matters (this app uses
-// Europe/London — see lib/google/london-day.ts) — this function is
-// timezone-free on purpose. Once you have a 'YYYY-MM-DD' calendar date,
-// its weekday doesn't depend on timezone anymore, only on the date
-// itself, so there is no DST edge case to handle here.
-export function isoWeekday(dateKey: string): number {
-  const [year, month, day] = dateKey.split('-').map(Number)
-  const jsDay = new Date(Date.UTC(year, month - 1, day)).getUTCDay() // 0=Sun..6=Sat
-  return jsDay === 0 ? 7 : jsDay
-}
-
-export interface HabitScheduleResult {
-  habit: DailyGoalHabit
-  scheduledToday: boolean
-  completedToday: boolean
-  // Completed today, but the habit wasn't scheduled today (already met
-  // its weekly target, or an off-schedule day for specific_days). Never
-  // counted toward the roll-up ring's numerator or denominator — surface
-  // it as a subtle "+1" instead of letting it distort progress.
-  isExtraCompletion: boolean
-}
-
-// Pure: which of the given (already-filtered-to-active) habits are
-// scheduled for `todayDateKey`, and whether each was completed today.
-export function computeHabitSchedule(
-  habits: DailyGoalHabit[],
-  completions: DailyGoalHabitCompletion[],
-  todayDateKey: string
-): HabitScheduleResult[] {
-  const weekday = isoWeekday(todayDateKey)
-
-  return habits
-    .filter((habit) => habit.is_active)
-    .map((habit) => {
-      const habitCompletions = completions.filter((c) => c.habit_id === habit.id)
-      const completedToday = habitCompletions.some((c) => c.completed_on === todayDateKey)
-
-      let scheduledToday: boolean
-      if (habit.frequency_type === 'daily') {
-        scheduledToday = true
-      } else if (habit.frequency_type === 'specific_days') {
-        scheduledToday = (habit.days_of_week ?? []).includes(weekday)
-      } else {
-        // times_per_week: scheduled while completions logged *before*
-        // today haven't yet reached the target. Excluding today's own
-        // completion from this check keeps the habit scheduled on the
-        // day it actually meets target (today's tick still counts
-        // normally), and only drops it from the schedule starting the
-        // following day.
-        const target = habit.weekly_target ?? 0
-        const completionsBeforeToday = habitCompletions.filter(
-          (c) => c.completed_on !== todayDateKey
-        ).length
-        scheduledToday = target <= 0 || completionsBeforeToday < target
-      }
-
-      return {
-        habit,
-        scheduledToday,
-        completedToday,
-        isExtraCompletion: completedToday && !scheduledToday,
-      }
-    })
-}
+// Re-exported so existing imports of computeHabitSchedule from this
+// module (e.g. DailyGoals.tsx) keep working unchanged — the underlying
+// scheduling logic now lives in lib/habits/schedule.ts since Habits and
+// Health need it too, not just the Daily Goals roll-up.
+export { computeHabitSchedule }
+export type { HabitScheduleResult }
 
 export interface DailyGoalsRollupInput {
   todosDueToday: { completed_at: string | null }[]

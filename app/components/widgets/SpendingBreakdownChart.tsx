@@ -1,4 +1,5 @@
-import WidgetCard from '../WidgetCard'
+import { ModuleGlassCard } from '@/components/ui/module-glass-card'
+import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
 import type { Transaction } from '@/lib/types'
 import { minorUnitsOf } from '@/lib/money'
 
@@ -45,9 +46,13 @@ export default function SpendingBreakdownChart({
   let cumulative = 0
 
   return (
-    <WidgetCard title="Monthly spending breakdown" accent="blue" className="sm:col-span-2">
+    <ModuleGlassCard accent="blue" className="flex flex-col gap-3 sm:col-span-2">
+      <GlassCardHeader>
+        <h2 className="font-display text-sm font-semibold text-foreground">Monthly spending breakdown</h2>
+      </GlassCardHeader>
+      <GlassCardContent>
       {total === 0 ? (
-        <p>No spending logged yet this month.</p>
+        <p className="text-sm text-on-surface-variant">No spending logged yet this month.</p>
       ) : (
         <div className="flex flex-wrap items-center gap-6">
           <svg
@@ -99,6 +104,7 @@ export default function SpendingBreakdownChart({
           </ul>
         </div>
       )}
-    </WidgetCard>
+      </GlassCardContent>
+    </ModuleGlassCard>
   )
 }

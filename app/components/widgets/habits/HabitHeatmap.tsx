@@ -1,53 +1,66 @@
+'use client'
+
+import { buildDateGrid, monthLabelsForGrid, HEATMAP_DAY_LABELS } from '@/lib/habits/heatmap'
+
 export type HabitDayStatus = 'met' | 'partial'
-
-const WEEKS = 14
-const DAYS = 7
-
-function buildDateGrid(): string[][] {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const total = WEEKS * DAYS
-  const dates: string[] = []
-  for (let i = total - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
-    dates.push(d.toISOString().slice(0, 10))
-  }
-  const grid: string[][] = []
-  for (let w = 0; w < WEEKS; w++) {
-    grid.push(dates.slice(w * DAYS, w * DAYS + DAYS))
-  }
-  return grid
-}
 
 export default function HabitHeatmap({
   statusByDate,
-  color,
+  colour,
+  onCellClick,
 }: {
   statusByDate: Map<string, HabitDayStatus>
-  color: string
+  colour: string
+  onCellClick: (date: string) => void
 }) {
   const grid = buildDateGrid()
+  const monthLabels = monthLabelsForGrid(grid)
 
   return (
-    <div className="flex gap-0.75">
-      {grid.map((week, wi) => (
-        <div key={wi} className="flex flex-1 flex-col gap-0.75">
-          {week.map((date) => {
-            const status = statusByDate.get(date)
-            const bg =
-              status === 'met' ? color : status === 'partial' ? `${color}80` : `${color}1f`
-            return (
-              <div
-                key={date}
-                title={date}
-                className="aspect-square w-full rounded-[3px]"
-                style={{ backgroundColor: bg }}
-              />
-            )
-          })}
+    <div className="flex flex-col gap-1">
+      <div className="flex gap-0.75 pl-4">
+        {monthLabels.map((label, wi) => (
+          <span key={wi} className="flex-1 text-[9px] leading-none text-on-surface-variant">
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        <div className="flex shrink-0 flex-col justify-between gap-0.75 text-[8px] leading-none text-on-surface-variant">
+          {HEATMAP_DAY_LABELS.map((label, i) => (
+            <span key={label} className={i % 2 === 0 ? undefined : 'invisible'}>
+              {label[0]}
+            </span>
+          ))}
         </div>
-      ))}
+        <div className="flex flex-1 gap-0.75">
+          {grid.map((week, wi) => (
+            <div key={wi} className="flex flex-1 flex-col gap-0.75">
+              {week.map((cell) => {
+                const status = statusByDate.get(cell.date)
+                const bg =
+                  status === 'met' ? colour : status === 'partial' ? `${colour}80` : `${colour}1f`
+                return (
+                  <button
+                    key={cell.date}
+                    type="button"
+                    disabled={cell.isFuture}
+                    onClick={() => onCellClick(cell.date)}
+                    title={cell.isFuture ? undefined : cell.date}
+                    aria-label={cell.isFuture ? undefined : `${cell.date}: ${status ?? 'not done'}`}
+                    className={`aspect-square w-full rounded-[3px] transition-transform ${
+                      cell.isFuture
+                        ? 'cursor-default border border-dashed border-outline-variant/30'
+                        : 'cursor-pointer hover:scale-110 hover:ring-1 hover:ring-on-surface/30'
+                    }`}
+                    style={{ backgroundColor: cell.isFuture ? 'transparent' : bg }}
+                  />
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

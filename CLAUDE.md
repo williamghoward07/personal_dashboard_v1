@@ -96,7 +96,9 @@ Seven widgets on the bento grid, each self-contained:
 5. Calendar API integration for day view
 6. Strava API (running + Hevy-synced gym sessions)
 7. Claude API research panel with saved conversation links
-8. Monzo/Starling/Trading212 integration (read-only scopes, encrypted token storage)
+8. Monzo/Starling integration (read-only scopes, encrypted token storage) — Trading212
+   was attempted and removed (broken auth against its live API, never fixed);
+   PDF bank-statement upload covers accounts without a working read-only API instead.
 9. (Optional stretch) One-way sync to Apple Reminders via CalDAV
 
 ## Decided / out of scope for v1
@@ -115,4 +117,3 @@ actual values.
 - **Google Contacts (People module)**: `GOOGLE_CLIENT_ID`,
   `GOOGLE_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`
 - **Starling**: `STARLING_ACCESS_TOKEN`
-- **Trading212**: `TRADING212_API_KEY`, `TRADING212_API_SECRET`

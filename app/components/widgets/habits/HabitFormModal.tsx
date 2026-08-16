@@ -2,21 +2,22 @@
 
 import { useEffect, useState } from 'react'
 import Modal from '../../Modal'
-import type { Habit, HabitFrequencyType } from '@/lib/types'
+import type { DailyGoalHabit, DailyGoalHabitFrequency } from '@/lib/types'
 
 export interface HabitFormValues {
   name: string
   icon: string
   description: string
-  color: string
-  frequency_type: HabitFrequencyType
-  frequency_count: number
+  colour: string
+  frequency_type: DailyGoalHabitFrequency
+  days_of_week: number[] | null
+  weekly_target: number | null
   is_quantifiable: boolean
   target_value: number | null
   unit: string | null
 }
 
-const COLOR_OPTIONS = [
+const COLOUR_OPTIONS = [
   '#3987e5', // blue
   '#d95926', // orange
   '#199e70', // aqua
@@ -26,13 +27,24 @@ const COLOR_OPTIONS = [
   '#e66767', // red
 ]
 
+const DAY_OPTIONS: { value: number; label: string }[] = [
+  { value: 1, label: 'Mon' },
+  { value: 2, label: 'Tue' },
+  { value: 3, label: 'Wed' },
+  { value: 4, label: 'Thu' },
+  { value: 5, label: 'Fri' },
+  { value: 6, label: 'Sat' },
+  { value: 7, label: 'Sun' },
+]
+
 const EMPTY: HabitFormValues = {
   name: '',
   icon: '⭐',
   description: '',
-  color: COLOR_OPTIONS[0],
+  colour: COLOUR_OPTIONS[0],
   frequency_type: 'daily',
-  frequency_count: 1,
+  days_of_week: null,
+  weekly_target: null,
   is_quantifiable: false,
   target_value: null,
   unit: null,
@@ -47,7 +59,7 @@ export default function HabitFormModal({
 }: {
   isOpen: boolean
   heading: string
-  initialValues?: Partial<Habit> | null
+  initialValues?: Partial<DailyGoalHabit> | null
   onSave: (values: HabitFormValues) => void
   onClose: () => void
 }) {
@@ -59,9 +71,10 @@ export default function HabitFormModal({
         name: initialValues?.name ?? '',
         icon: initialValues?.icon ?? '⭐',
         description: initialValues?.description ?? '',
-        color: initialValues?.color ?? COLOR_OPTIONS[0],
+        colour: initialValues?.colour ?? COLOUR_OPTIONS[0],
         frequency_type: initialValues?.frequency_type ?? 'daily',
-        frequency_count: initialValues?.frequency_count ?? 1,
+        days_of_week: initialValues?.days_of_week ?? null,
+        weekly_target: initialValues?.weekly_target ?? null,
         is_quantifiable: initialValues?.is_quantifiable ?? false,
         target_value: initialValues?.target_value ?? null,
         unit: initialValues?.unit ?? null,
@@ -75,12 +88,35 @@ export default function HabitFormModal({
     'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-habit-purple'
   const labelClass = 'flex flex-col gap-1 text-xs text-on-surface-variant'
 
+  const canSubmit =
+    values.name.trim().length > 0 &&
+    (values.frequency_type !== 'specific_days' || (values.days_of_week?.length ?? 0) > 0)
+
+  const setFrequencyType = (frequency_type: DailyGoalHabitFrequency) => {
+    setValues((v) => ({
+      ...v,
+      frequency_type,
+      days_of_week: frequency_type === 'specific_days' ? (v.days_of_week ?? []) : null,
+      weekly_target: frequency_type === 'times_per_week' ? (v.weekly_target ?? 3) : null,
+    }))
+  }
+
+  const toggleDay = (day: number) => {
+    setValues((v) => {
+      const current = v.days_of_week ?? []
+      const next = current.includes(day)
+        ? current.filter((d) => d !== day)
+        : [...current, day].sort((a, b) => a - b)
+      return { ...v, days_of_week: next }
+    })
+  }
+
   return (
     <Modal onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          if (!values.name.trim()) return
+          if (!canSubmit) return
           onSave({
             ...values,
             name: values.name.trim(),
@@ -126,40 +162,63 @@ export default function HabitFormModal({
           />
         </label>
 
-        <div className="flex gap-3">
-          <label className={`${labelClass} flex-1`}>
-            Frequency
-            <select
-              value={values.frequency_type}
+        <label className={labelClass}>
+          Frequency
+          <select
+            value={values.frequency_type}
+            onChange={(e) => setFrequencyType(e.target.value as DailyGoalHabitFrequency)}
+            className={inputClass}
+          >
+            <option value="daily">Daily</option>
+            <option value="specific_days">Specific days</option>
+            <option value="times_per_week">Times per week</option>
+          </select>
+        </label>
+
+        {values.frequency_type === 'specific_days' && (
+          <div className={labelClass}>
+            Which days
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {DAY_OPTIONS.map((day) => {
+                const active = (values.days_of_week ?? []).includes(day.value)
+                return (
+                  <button
+                    key={day.value}
+                    type="button"
+                    onClick={() => toggleDay(day.value)}
+                    aria-pressed={active}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                      active
+                        ? 'bg-habit-purple text-surface-container-lowest'
+                        : 'bg-surface-container-highest text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                )
+              })}
+            </div>
+            {(values.days_of_week?.length ?? 0) === 0 && (
+              <span className="text-[11px] text-error">Pick at least one day</span>
+            )}
+          </div>
+        )}
+
+        {values.frequency_type === 'times_per_week' && (
+          <label className={`${labelClass} w-28 shrink-0`}>
+            Times / week
+            <input
+              type="number"
+              min={1}
+              max={7}
+              value={values.weekly_target ?? 3}
               onChange={(e) =>
-                setValues((v) => ({
-                  ...v,
-                  frequency_type: e.target.value as HabitFrequencyType,
-                  frequency_count: e.target.value === 'daily' ? 1 : v.frequency_count,
-                }))
+                setValues((v) => ({ ...v, weekly_target: Number(e.target.value) || 1 }))
               }
               className={inputClass}
-            >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-            </select>
+            />
           </label>
-          {values.frequency_type === 'weekly' && (
-            <label className={`${labelClass} w-28 shrink-0`}>
-              Times / week
-              <input
-                type="number"
-                min={1}
-                max={7}
-                value={values.frequency_count}
-                onChange={(e) =>
-                  setValues((v) => ({ ...v, frequency_count: Number(e.target.value) || 1 }))
-                }
-                className={inputClass}
-              />
-            </label>
-          )}
-        </div>
+        )}
 
         <label className="flex items-center gap-2 text-xs text-on-surface-variant">
           <input
@@ -201,18 +260,18 @@ export default function HabitFormModal({
         )}
 
         <div className={labelClass}>
-          Color
+          Colour
           <div className="flex gap-2 pt-1">
-            {COLOR_OPTIONS.map((c) => (
+            {COLOUR_OPTIONS.map((c) => (
               <button
                 key={c}
                 type="button"
-                onClick={() => setValues((v) => ({ ...v, color: c }))}
-                aria-label={`Color ${c}`}
+                onClick={() => setValues((v) => ({ ...v, colour: c }))}
+                aria-label={`Colour ${c}`}
                 className="h-7 w-7 rounded-full"
                 style={{
                   backgroundColor: c,
-                  outline: values.color === c ? '2px solid #dae5da' : 'none',
+                  outline: values.colour === c ? '2px solid #dae5da' : 'none',
                   outlineOffset: 2,
                 }}
               />
@@ -230,7 +289,8 @@ export default function HabitFormModal({
           </button>
           <button
             type="submit"
-            className="rounded-lg bg-habit-purple px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110"
+            disabled={!canSubmit}
+            className="rounded-lg bg-habit-purple px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110 disabled:opacity-40"
           >
             Save
           </button>

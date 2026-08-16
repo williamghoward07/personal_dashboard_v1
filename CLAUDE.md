@@ -46,3 +46,14 @@ connects across modules.
 - Perplexity integration is manual link-saving only (no public API available),
   just a URL + note field attached to a task
 - Apple Reminders stays as-is on the phone widget — no in-app replication
+
+## Environment Variables
+Required in `.env.local` (see `.env.example` for setup notes). Never commit
+actual values.
+
+- **Supabase**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`
+- **Google Contacts (People module)**: `GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`
+- **Starling**: `STARLING_ACCESS_TOKEN`
+- **Trading212**: `TRADING212_API_KEY`, `TRADING212_API_SECRET`

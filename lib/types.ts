@@ -98,6 +98,47 @@ export interface TimeLog {
   created_at: string
 }
 
+export interface Todo {
+  id: string
+  title: string
+  notes: string | null
+  due_date: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+export interface EducationTask {
+  id: string
+  title: string
+  notes: string | null
+  module_id: string | null
+  due_date: string | null
+  completed_at: string | null
+  created_at: string
+}
+
+export type DailyGoalHabitFrequency = 'daily' | 'specific_days' | 'times_per_week'
+export type DailyGoalHabitWidget = 'habits' | 'health'
+
+export interface DailyGoalHabit {
+  id: string
+  name: string
+  frequency_type: DailyGoalHabitFrequency
+  days_of_week: number[] | null
+  weekly_target: number | null
+  widget: DailyGoalHabitWidget
+  colour: string
+  is_active: boolean
+  created_at: string
+}
+
+export interface DailyGoalHabitCompletion {
+  id: string
+  habit_id: string
+  completed_on: string
+  created_at: string
+}
+
 export type TransactionType = 'income' | 'outgoing'
 export type TransactionSource = 'manual' | 'monzo' | 'starling'
 

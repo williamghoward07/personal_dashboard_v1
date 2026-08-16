@@ -27,11 +27,13 @@ export async function GET() {
   }
 
   try {
-    const [accountInfo, cash, positions] = await Promise.all([
-      getAccountInfo(),
-      getCash(),
-      getPortfolio(),
-    ])
+    // Trading 212 enforces a per-endpoint, per-key rate limit tight enough
+    // (as little as 1 request per 2s) that firing these concurrently gets
+    // 2 of 3 rejected with 401/403 — confirmed by hitting the live API
+    // directly. Sequential awaits give each request room to clear.
+    const accountInfo = await getAccountInfo()
+    const cash = await getCash()
+    const positions = await getPortfolio()
 
     // Logged so the raw shape can be sanity-checked against real field
     // names/types before trusting the formatting below.

@@ -18,6 +18,13 @@ export class Trading212ApiError extends Error {
   }
 }
 
+// Trading 212 rate-limits hard per endpoint (account/info tolerates roughly
+// one request per 30s) and the snapshot route is polled independently by
+// both the home page and the Money page on every mount. Without a shared
+// cache window those add up fast and Trading 212 starts returning 403s —
+// same trap as Starling's balance endpoint, see lib/starling/client.ts.
+const REVALIDATE_SECONDS = 30
+
 async function trading212Fetch<T>(path: string): Promise<T> {
   const apiKey = process.env.TRADING212_API_KEY
   const apiSecret = process.env.TRADING212_API_SECRET
@@ -31,13 +38,16 @@ async function trading212Fetch<T>(path: string): Promise<T> {
       Authorization: `Basic ${credentials}`,
       Accept: 'application/json',
     },
-    cache: 'no-store',
+    next: { revalidate: REVALIDATE_SECONDS },
   })
 
-  if (res.status === 401) {
-    throw new Trading212ConfigError(`Trading 212 rejected credentials: 401 ${path}`)
-  }
   if (!res.ok) {
+    const body = await res.text().catch(() => '<failed to read response body>')
+    console.error(`Trading 212 API error: ${res.status} ${path}`, body)
+
+    if (res.status === 401) {
+      throw new Trading212ConfigError(`Trading 212 rejected credentials: 401 ${path}`)
+    }
     throw new Trading212ApiError(res.status, path)
   }
 

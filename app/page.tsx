@@ -5,7 +5,7 @@ import MoneyGlance from './components/widgets/home/MoneyGlance'
 import HealthGlance from './components/widgets/home/HealthGlance'
 import ResearchGlance from './components/widgets/home/ResearchGlance'
 import HabitsGlance from './components/widgets/home/HabitsGlance'
-import GoalTicker from './components/widgets/home/GoalTicker'
+import DailyGoals from './components/widgets/home/DailyGoals'
 
 export default function Home() {
   return (
@@ -13,7 +13,7 @@ export default function Home() {
       <AiQueryBar />
 
       <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <GoalTicker />
+        <DailyGoals />
         <EducationGlance />
         <MoneyGlance />
         <HealthGlance />

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit*)",
+      "Bash(npx eslint *)",
+      "Bash(curl -s *)",
+      "Bash(npx supabase migration list*)",
+      "Bash(npm run lint*)"
+    ]
+  }
+}

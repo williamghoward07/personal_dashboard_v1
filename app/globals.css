@@ -86,6 +86,42 @@
   --text-data-display--line-height: 48px;
   --text-data-display--letter-spacing: -0.04em;
   --text-data-display--font-weight: 700;
+
+  /* --- glinui (Liquid Glass) token bridge ---
+     glinui's components reference this token vocabulary directly, but
+     `glinui init` never generated a theme file to define it. --color-*
+     values below are aliases onto the BIO-SYSTEM palette above, kept as
+     the single source of truth. --color-accent is a global fallback;
+     ModuleGlassCard/ProgressRing override it per-instance with the
+     module's own accent. Elevation/blur/motion tokens are structural,
+     not BIO-SYSTEM-specific, so they're new rather than remapped. */
+  --color-foreground: var(--color-on-surface);
+  --color-border: var(--color-outline-variant);
+  --color-accent: var(--color-primary-container);
+
+  --glass-border: rgb(255 255 255 / 0.12);
+  --glass-refraction-top: rgb(255 255 255 / 0.32);
+  --glass-saturate: 180%;
+
+  --glass-1-surface: rgb(35 44 37 / 0.45);
+  --glass-2-surface: rgb(35 44 37 / 0.58);
+  --glass-3-surface: rgb(45 55 48 / 0.62);
+  --glass-4-surface: rgb(45 55 48 / 0.75);
+
+  --glass-1-blur: 8px;
+  --glass-2-blur: 12px;
+  --glass-3-blur: 16px;
+  --glass-4-blur: 24px;
+
+  --glass-3-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06) inset, 0 10px 24px -16px rgb(0 0 0 / 0.55);
+  --glass-4-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08) inset, 0 16px 32px -16px rgb(0 0 0 / 0.6);
+
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 400ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 body {

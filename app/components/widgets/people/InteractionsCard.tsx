@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type { ComponentProps } from 'react'
 import { MapPin, MessagesSquare, Pencil, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Interaction, InteractionPerson, Person, Place } from '@/lib/types'
@@ -58,6 +59,19 @@ export default function InteractionsCard({
     place_id: values.place_id,
     follow_up: values.follow_up,
   })
+
+  /** Inline "new place" escape hatch for the interaction form's place dropdown. */
+  const createPlace: ComponentProps<typeof InteractionFormModal>['onCreatePlace'] = async (
+    values,
+  ) => {
+    const { data, error } = await supabase.from('places').insert(values).select().single()
+    if (error || !data) {
+      await runMutation(() => Promise.resolve({ error }))
+      return null
+    }
+    onChange()
+    return data
+  }
 
   return (
     <>
@@ -150,6 +164,7 @@ export default function InteractionsCard({
         heading="Log a conversation"
         people={people}
         places={places}
+        onCreatePlace={createPlace}
         onClose={() => setIsAddOpen(false)}
         onSave={async (values) => {
           const { data, error } = await supabase
@@ -178,6 +193,7 @@ export default function InteractionsCard({
             ? links.filter((l) => l.interaction_id === editing.id).map((l) => l.person_id)
             : []
         }
+        onCreatePlace={createPlace}
         onClose={() => setEditing(null)}
         onSave={async (values) => {
           if (!editing) return

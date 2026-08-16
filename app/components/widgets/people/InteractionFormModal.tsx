@@ -1,8 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
 import Modal from '../../Modal'
 import type { Interaction, InteractionChannel, Person, Place } from '@/lib/types'
+import PlaceFormModal from './PlaceFormModal'
+import type { PlaceFormValues } from './PlaceFormModal'
 import {
   CHANNELS,
   cancelButtonClass,
@@ -31,6 +34,7 @@ export default function InteractionFormModal({
   initialPersonIds,
   onSave,
   onClose,
+  onCreatePlace,
 }: {
   isOpen: boolean
   heading: string
@@ -40,6 +44,8 @@ export default function InteractionFormModal({
   initialPersonIds?: string[]
   onSave: (values: InteractionFormValues) => void
   onClose: () => void
+  /** Inline "new place" escape hatch — creates the place and returns it so it can be selected immediately. */
+  onCreatePlace: (values: PlaceFormValues) => Promise<Place | null>
 }) {
   const [occurredAt, setOccurredAt] = useState('')
   const [title, setTitle] = useState('')
@@ -48,6 +54,7 @@ export default function InteractionFormModal({
   const [placeId, setPlaceId] = useState('')
   const [followUp, setFollowUp] = useState('')
   const [personIds, setPersonIds] = useState<string[]>([])
+  const [isAddingPlace, setIsAddingPlace] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
@@ -170,7 +177,17 @@ export default function InteractionFormModal({
         </fieldset>
 
         <label className={labelClass}>
-          Where
+          <span className="flex items-center justify-between">
+            Where
+            <button
+              type="button"
+              onClick={() => setIsAddingPlace(true)}
+              className="flex items-center gap-0.5 text-people-amber hover:brightness-110"
+            >
+              <Plus className="h-3 w-3" />
+              New place
+            </button>
+          </span>
           <select
             value={placeId}
             onChange={(e) => setPlaceId(e.target.value)}
@@ -204,6 +221,19 @@ export default function InteractionFormModal({
           </button>
         </div>
       </form>
+
+      <PlaceFormModal
+        isOpen={isAddingPlace}
+        heading="New place"
+        onClose={() => setIsAddingPlace(false)}
+        onSave={async (values) => {
+          const place = await onCreatePlace(values)
+          if (place) {
+            setPlaceId(place.id)
+            setIsAddingPlace(false)
+          }
+        }}
+      />
     </Modal>
   )
 }

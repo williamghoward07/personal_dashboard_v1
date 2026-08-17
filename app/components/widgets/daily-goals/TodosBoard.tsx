@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ListTodo, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Bell, ListTodo, Plus, Pencil, Trash2 } from 'lucide-react'
 import { useTodos } from '@/lib/daily-goals/use-todos'
 import { londonDayBoundsUTC } from '@/lib/google/london-day'
 import type { Todo } from '@/lib/types'
@@ -37,7 +37,7 @@ function sortTodos(todos: Todo[], todayDateKey: string): Todo[] {
 
 export default function TodosBoard() {
   const todayDateKey = useMemo(() => londonDayBoundsUTC().startDateKey, [])
-  const { todos, loading, error, addTodo, toggleTodo, updateTodo, deleteTodo } = useTodos(
+  const { todos, loading, error, addTodo, toggleTodo, updateTodo, deleteTodo, pullReminders } = useTodos(
     todayDateKey,
     'all'
   )
@@ -46,10 +46,19 @@ export default function TodosBoard() {
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [deletingTodo, setDeletingTodo] = useState<Todo | null>(null)
 
+  // CalDAV has no push/webhook support, so polling on load is how a
+  // Siri-created reminder actually shows up here — fires once per mount
+  // (i.e. once per visit to this tab). pullReminders is stable (from
+  // useCallback on stable deps), so this genuinely only fires once, not
+  // on every render.
+  useEffect(() => {
+    pullReminders()
+  }, [pullReminders])
+
   const sorted = useMemo(() => sortTodos(todos, todayDateKey), [todos, todayDateKey])
 
   return (
-    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 font-display text-headline-lg font-bold text-on-surface">
@@ -97,12 +106,20 @@ export default function TodosBoard() {
                       className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border border-outline-variant bg-transparent checked:border-primary-container checked:bg-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-container/50"
                     />
                     <label htmlFor={inputId} className="min-w-0 flex-1 cursor-pointer">
-                      <span
-                        className={`block truncate text-sm ${
-                          completed ? 'text-on-surface-variant line-through' : 'text-on-surface'
-                        }`}
-                      >
-                        {todo.title}
+                      <span className="flex items-center gap-1.5">
+                        {todo.caldav_uid && (
+                          <Bell
+                            className="h-3 w-3 shrink-0 text-on-surface-variant"
+                            aria-label="Synced from Apple Reminders"
+                          />
+                        )}
+                        <span
+                          className={`block truncate text-sm ${
+                            completed ? 'text-on-surface-variant line-through' : 'text-on-surface'
+                          }`}
+                        >
+                          {todo.title}
+                        </span>
                       </span>
                       {todo.notes && (
                         <span className="block truncate text-xs text-on-surface-variant">
@@ -176,6 +193,6 @@ export default function TodosBoard() {
           setDeletingTodo(null)
         }}
       />
-    </main>
+    </div>
   )
 }

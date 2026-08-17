@@ -9,8 +9,8 @@ export interface LondonDateRange {
   timeMin: string
   timeMax: string
   // Plain 'YYYY-MM-DD' bounds for the same range, for filtering date-only
-  // Supabase columns (tasks.due_date, rugby_sessions.date) without a second
-  // timezone conversion. endDateKey is exclusive, like timeMax.
+  // Supabase columns (e.g. tasks.due_date) without a second timezone
+  // conversion. endDateKey is exclusive, like timeMax.
   startDateKey: string
   endDateKey: string
 }

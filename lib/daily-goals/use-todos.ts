@@ -12,6 +12,11 @@ export interface UseTodosResult {
   toggleTodo: (id: string) => Promise<void>
   updateTodo: (id: string, patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date'>>) => Promise<void>
   deleteTodo: (id: string) => Promise<void>
+  // Pulls from Apple Reminders (see app/api/caldav/reminders/pull) and
+  // refreshes afterward. Not called automatically by this hook — the
+  // /todos page triggers it on load; the home widget doesn't, so opening
+  // the dashboard never blocks on an iCloud round trip.
+  pullReminders: () => Promise<void>
 }
 
 // Todos for either the Daily Goals checklist (scope: 'today', the
@@ -71,6 +76,9 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
         due_date: dueDate,
         completed_at: null,
         created_at: new Date().toISOString(),
+        // Todos added through this function are always app-created —
+        // never linked to a reminder.
+        caldav_uid: null,
       }
       setTodos((prev) => [...prev, optimisticTodo])
       setError(null)
@@ -114,10 +122,40 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
       if (updateError) {
         setTodos((prev) => prev.map((t) => (t.id === id ? target : t)))
         setError(updateError.message)
+        return
+      }
+
+      // Best-effort: the local toggle already succeeded and stays even
+      // if pushing the completion back to Reminders fails — a stale
+      // Reminders entry is a minor inconvenience, not a reason to undo
+      // what the user just did in the app.
+      if (target.caldav_uid) {
+        try {
+          const res = await fetch('/api/caldav/reminders/push-completion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ caldav_uid: target.caldav_uid, completed: nextCompletedAt !== null }),
+          })
+          if (!res.ok) setError("Updated here, but couldn't sync that to Reminders.")
+        } catch {
+          setError("Updated here, but couldn't sync that to Reminders.")
+        }
       }
     },
     [todos]
   )
+
+  const pullReminders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/caldav/reminders/pull', { method: 'POST' })
+      if (res.ok) refresh()
+    } catch {
+      // Silent — CalDAV sync is a nice-to-have layered on top of the
+      // todos page, not something that should interrupt it (e.g. the env
+      // vars simply aren't configured yet, which is expected until the
+      // user sets up an app-specific password).
+    }
+  }, [refresh])
 
   const updateTodo = useCallback(
     async (id: string, patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date'>>) => {
@@ -162,5 +200,5 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
     [todos]
   )
 
-  return { todos, loading, error, addTodo, toggleTodo, updateTodo, deleteTodo }
+  return { todos, loading, error, addTodo, toggleTodo, updateTodo, deleteTodo, pullReminders }
 }

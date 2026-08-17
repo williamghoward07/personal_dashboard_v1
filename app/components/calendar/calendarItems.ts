@@ -1,4 +1,4 @@
-import type { Task, RugbySession } from '@/lib/types'
+import type { Task, ActivitySession } from '@/lib/types'
 import { londonDateKey } from '@/lib/google/london-day'
 
 export interface CalendarEvent {
@@ -23,7 +23,7 @@ export type DayItem =
       spanEndKey: string
     }
   | { kind: 'task'; id: string; title: string; task: Task }
-  | { kind: 'rugby'; id: string; title: string }
+  | { kind: 'activity'; id: string; title: string }
 
 export interface EventSpan {
   id: string
@@ -37,7 +37,7 @@ export interface EventSpan {
 export const DOT_CLASS: Record<DayItem['kind'], string> = {
   calendar: 'bg-on-surface-variant',
   task: 'bg-academic-orange',
-  rugby: 'bg-primary-container',
+  activity: 'bg-primary-container',
 }
 
 export function formatTime(iso: string) {
@@ -81,16 +81,17 @@ function resolveEventSpan(event: CalendarEvent): { startKey: string; endKey: str
   return { startKey, endKey: adjustedEndKey < startKey ? startKey : adjustedEndKey }
 }
 
-// Buckets Google Calendar events, tasks (by due date), and rugby sessions
-// into one map keyed by 'YYYY-MM-DD'. A multi-day event appears under every
-// date it spans (annotated with spanStartKey/spanEndKey) so day/agenda
-// views can show it wherever it's relevant; month/week grid views instead
-// render it once as a spanning bar (see getMultiDayEventSpans) and filter
-// these per-day entries out to avoid showing it twice.
+// Buckets Google Calendar events, tasks (by due date), and activity
+// sessions into one map keyed by 'YYYY-MM-DD'. A multi-day event appears
+// under every date it spans (annotated with spanStartKey/spanEndKey) so
+// day/agenda views can show it wherever it's relevant; month/week grid
+// views instead render it once as a spanning bar (see
+// getMultiDayEventSpans) and filter these per-day entries out to avoid
+// showing it twice.
 export function groupItemsByDate(
   events: CalendarEvent[],
   tasks: Task[],
-  sessions: RugbySession[]
+  sessions: ActivitySession[]
 ): Map<string, DayItem[]> {
   const byDate = new Map<string, DayItem[]>()
 
@@ -123,10 +124,10 @@ export function groupItemsByDate(
   }
 
   for (const session of sessions) {
-    push(session.date, {
-      kind: 'rugby',
+    push(londonDateKey(session.occurred_at), {
+      kind: 'activity',
       id: session.id,
-      title: `Rugby session${session.duration_minutes ? ` — ${session.duration_minutes}m` : ''}`,
+      title: `${session.activity_type}${session.duration_minutes ? ` — ${session.duration_minutes}m` : ''}`,
     })
   }
 

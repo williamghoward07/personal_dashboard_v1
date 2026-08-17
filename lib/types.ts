@@ -87,11 +87,31 @@ export interface HabitLog {
   created_at: string
 }
 
+// Legacy: superseded by ActivitySession below (see the 2026-08-17
+// activity_sessions migration). Kept only because rugby_sessions is
+// still around as a rollback safety net — nothing in the app imports
+// this anymore.
 export interface RugbySession {
   id: string
   date: string
   duration_minutes: number | null
   notes: string | null
+  created_at: string
+}
+
+export type ActivitySource = 'manual' | 'strava_export'
+
+export interface ActivitySession {
+  id: string
+  occurred_at: string
+  activity_type: string
+  source: ActivitySource
+  duration_minutes: number | null
+  notes: string | null
+  distance_km: number | null
+  elevation_gain_m: number | null
+  external_id: string | null
+  raw: Record<string, unknown> | null
   created_at: string
 }
 
@@ -110,6 +130,9 @@ export interface Todo {
   due_date: string | null
   completed_at: string | null
   created_at: string
+  // Set only for a todo pulled from Apple Reminders via CalDAV — null for
+  // everything created directly in the app. See lib/caldav/reminders.ts.
+  caldav_uid: string | null
 }
 
 export interface EducationTask {

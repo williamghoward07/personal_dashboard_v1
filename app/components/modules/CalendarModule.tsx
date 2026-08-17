@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { CalendarDays, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { Task, RugbySession } from '@/lib/types'
+import type { Task, ActivitySession } from '@/lib/types'
 import { connectGoogleCalendar } from '@/lib/google/connect'
 import { londonDayBoundsUTC } from '@/lib/google/london-day'
 import { pickNextUpcoming, type UpcomingCandidate } from '@/lib/calendar/next-upcoming'
@@ -21,14 +21,14 @@ interface CalendarEvent {
 type DayItem =
   | { kind: 'calendar'; id: string; title: string; allDay: boolean; start: string | null }
   | { kind: 'task'; id: string; title: string; task: Task }
-  | { kind: 'rugby'; id: string; title: string }
+  | { kind: 'activity'; id: string; title: string }
 
 type UpcomingItem = UpcomingCandidate & { task?: Task }
 
 const DOT_CLASS: Record<DayItem['kind'], string> = {
   calendar: 'bg-on-surface-variant',
   task: 'bg-academic-orange',
-  rugby: 'bg-primary-container',
+  activity: 'bg-primary-container',
 }
 
 // How far ahead to look for a next-upcoming item once today's confirmed
@@ -36,10 +36,6 @@ const DOT_CLASS: Record<DayItem['kind'], string> = {
 // generous ceiling rather than a tuned value — going further adds cost
 // without meaningfully improving what a "what's next" glance shows.
 const UPCOMING_LOOKAHEAD_DAYS = 90
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-GB', {
@@ -49,7 +45,7 @@ function formatTime(iso: string) {
   })
 }
 
-// sortKey is either a plain 'YYYY-MM-DD' (all-day/task/rugby) or a full
+// sortKey is either a plain 'YYYY-MM-DD' (all-day/task/manual activity) or a full
 // ISO datetime (timed calendar event) — see UpcomingCandidate.
 function formatUpcomingWhen(sortKey: string, allDay: boolean) {
   const instant = allDay ? `${sortKey}T00:00:00Z` : sortKey
@@ -64,7 +60,7 @@ function formatUpcomingWhen(sortKey: string, allDay: boolean) {
 
 export default function CalendarModule() {
   const [tasks, setTasks] = useState<Task[]>([])
-  const [sessions, setSessions] = useState<RugbySession[]>([])
+  const [sessions, setSessions] = useState<ActivitySession[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [needsReconnect, setNeedsReconnect] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -74,11 +70,15 @@ export default function CalendarModule() {
   const [upcomingLoading, setUpcomingLoading] = useState(false)
 
   useEffect(() => {
-    const today = todayISO()
+    const todayRange = londonDayBoundsUTC()
 
     Promise.all([
-      supabase.from('tasks').select('*').eq('due_date', today),
-      supabase.from('rugby_sessions').select('*').eq('date', today),
+      supabase.from('tasks').select('*').eq('due_date', todayRange.startDateKey),
+      supabase
+        .from('activity_sessions')
+        .select('*')
+        .gte('occurred_at', todayRange.timeMin)
+        .lt('occurred_at', todayRange.timeMax),
       fetch('/api/calendar/today')
         .then(async (res) => {
           if (res.status === 409) {
@@ -98,9 +98,10 @@ export default function CalendarModule() {
     })
   }, [])
 
-  // All-day items (calendar all-day events, tasks due today, rugby
-  // sessions — none of them carry a time) sort before timed calendar
-  // events, which are then ordered by start time.
+  // All-day items (calendar all-day events, tasks due today, activity
+  // sessions — shown without a time here even for a Strava import that
+  // has a real one, since this glance view only ever covers "today") sort
+  // before timed calendar events, which are then ordered by start time.
   const allDayItems: DayItem[] = [
     ...events
       .filter((e) => e.allDay)
@@ -108,9 +109,9 @@ export default function CalendarModule() {
     ...tasks.map((t): DayItem => ({ kind: 'task', id: t.id, title: t.title, task: t })),
     ...sessions.map(
       (s): DayItem => ({
-        kind: 'rugby',
+        kind: 'activity',
         id: s.id,
-        title: `Rugby session${s.duration_minutes ? ` — ${s.duration_minutes}m` : ''}`,
+        title: `${s.activity_type}${s.duration_minutes ? ` — ${s.duration_minutes}m` : ''}`,
       })
     ),
   ]
@@ -150,10 +151,10 @@ export default function CalendarModule() {
         .order('due_date', { ascending: true })
         .limit(1),
       supabase
-        .from('rugby_sessions')
+        .from('activity_sessions')
         .select('*')
-        .gt('date', todayRange.startDateKey)
-        .order('date', { ascending: true })
+        .gt('occurred_at', todayRange.timeMax)
+        .order('occurred_at', { ascending: true })
         .limit(1),
       fetch(`/api/calendar/range?${rangeParams.toString()}`)
         .then(async (res) => {
@@ -162,7 +163,7 @@ export default function CalendarModule() {
           return (json.events ?? []) as CalendarEvent[]
         })
         .catch(() => []),
-    ]).then(([taskRes, rugbyRes, rangeEvents]) => {
+    ]).then(([taskRes, activityRes, rangeEvents]) => {
       if (cancelled) return
 
       const candidates: UpcomingItem[] = [
@@ -176,13 +177,15 @@ export default function CalendarModule() {
             task: t,
           })
         ),
-        ...(rugbyRes.data ?? []).map(
+        ...(activityRes.data ?? []).map(
           (s): UpcomingItem => ({
-            kind: 'rugby',
+            kind: 'activity',
             id: s.id,
-            title: `Rugby session${s.duration_minutes ? ` — ${s.duration_minutes}m` : ''}`,
-            allDay: true,
-            sortKey: s.date,
+            title: `${s.activity_type}${s.duration_minutes ? ` — ${s.duration_minutes}m` : ''}`,
+            // Manual entries have no real time (the form is date-only);
+            // a Strava import's occurred_at does, so it's worth showing.
+            allDay: s.source === 'manual',
+            sortKey: s.occurred_at,
           })
         ),
         ...rangeEvents.map(

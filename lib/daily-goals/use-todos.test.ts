@@ -3,8 +3,11 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { useTodos } from './use-todos'
 
 const { mockState } = vi.hoisted(() => ({
-  mockState: { updateShouldFail: false, deleteShouldFail: false },
+  mockState: { updateShouldFail: false, deleteShouldFail: false, includeLinkedTodo: false },
 }))
+
+const fetchMock = vi.fn()
+vi.stubGlobal('fetch', fetchMock)
 
 // Mimics supabase-js's PostgrestFilterBuilder: filter/order methods
 // (.or/.order/.eq/.gt/.limit) are independent modifiers that can be
@@ -32,12 +35,27 @@ vi.mock('@/lib/supabase', () => {
     due_date: '2026-08-05',
     completed_at: null,
     created_at: '2026-08-01T00:00:00.000Z',
+    caldav_uid: null,
+  }
+
+  const linkedTodo = {
+    id: 'todo-2',
+    title: 'Reminders todo',
+    notes: null,
+    due_date: null,
+    completed_at: null,
+    created_at: '2026-08-01T00:00:00.000Z',
+    caldav_uid: 'uid-abc',
   }
 
   return {
     supabase: {
       from: () => ({
-        select: () => chainable({ data: [existingTodo], error: null }),
+        select: () =>
+          chainable({
+            data: mockState.includeLinkedTodo ? [existingTodo, linkedTodo] : [existingTodo],
+            error: null,
+          }),
         update: () => ({
           eq: () =>
             chainable(
@@ -162,6 +180,82 @@ describe('useTodos deleteTodo', () => {
     })
 
     expect(result.current.todos).toHaveLength(0)
+    expect(result.current.error).toBeNull()
+  })
+})
+
+describe('useTodos CalDAV integration', () => {
+  beforeEach(() => {
+    mockState.updateShouldFail = false
+    mockState.deleteShouldFail = false
+    mockState.includeLinkedTodo = true
+    fetchMock.mockReset()
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) })
+  })
+
+  it('does not call the Reminders push route when toggling a todo with no caldav_uid', async () => {
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.toggleTodo('todo-1')
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('pushes the completion to Reminders when toggling a caldav-linked todo', async () => {
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.toggleTodo('todo-2')
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/caldav/reminders/push-completion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ caldav_uid: 'uid-abc', completed: true }),
+    })
+    expect(result.current.todos.find((t) => t.id === 'todo-2')?.completed_at).not.toBeNull()
+    expect(result.current.error).toBeNull()
+  })
+
+  it('surfaces an error, without rolling back, when the Reminders push fails', async () => {
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({}) })
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.toggleTodo('todo-2')
+    })
+
+    expect(result.current.todos.find((t) => t.id === 'todo-2')?.completed_at).not.toBeNull()
+    expect(result.current.error).toBe("Updated here, but couldn't sync that to Reminders.")
+  })
+
+  it('pullReminders calls the pull route and refreshes on success', async () => {
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    fetchMock.mockClear()
+
+    await act(async () => {
+      await result.current.pullReminders()
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/caldav/reminders/pull', { method: 'POST' })
+  })
+
+  it('pullReminders fails silently when the pull route is unreachable', async () => {
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    fetchMock.mockClear()
+    fetchMock.mockRejectedValue(new Error('network down'))
+
+    await act(async () => {
+      await result.current.pullReminders()
+    })
+
     expect(result.current.error).toBeNull()
   })
 })

@@ -120,7 +120,7 @@ export default function CalendarPageView() {
         })
         .catch(() => []),
       supabase.from('tasks').select('*').gte('due_date', range.startDateKey).lt('due_date', range.endDateKey),
-      supabase.from('rugby_sessions').select('*').gte('date', range.startDateKey).lt('date', range.endDateKey),
+      supabase.from('activity_sessions').select('*').gte('occurred_at', range.timeMin).lt('occurred_at', range.timeMax),
     ]).then(([events, tasksRes, sessionsRes]) => {
       if (cancelled) return
       setItemsByDate(groupItemsByDate(events, tasksRes.data ?? [], sessionsRes.data ?? []))

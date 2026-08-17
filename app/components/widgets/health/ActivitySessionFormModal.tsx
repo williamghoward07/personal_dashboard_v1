@@ -2,13 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import Modal from '../../Modal'
-import type { RugbySession } from '@/lib/types'
+import type { ActivitySession } from '@/lib/types'
 
-export interface RugbySessionFormValues {
-  date: string
+export interface ActivitySessionFormValues {
+  occurred_at: string
+  activity_type: string
   duration_minutes: number | null
+  distance_km: number | null
   notes: string | null
 }
+
+const ACTIVITY_TYPE_SUGGESTIONS = ['Rugby', 'Running', 'Gym', 'Swimming', 'Cycling', 'Other']
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -18,7 +22,7 @@ const inputClass =
   'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none focus:border-primary-container'
 const labelClass = 'flex flex-col gap-1 text-xs text-on-surface-variant'
 
-export default function RugbySessionFormModal({
+export default function ActivitySessionFormModal({
   isOpen,
   heading,
   initialValues,
@@ -27,18 +31,22 @@ export default function RugbySessionFormModal({
 }: {
   isOpen: boolean
   heading: string
-  initialValues?: Partial<RugbySession> | null
-  onSave: (values: RugbySessionFormValues) => void
+  initialValues?: Partial<ActivitySession> | null
+  onSave: (values: ActivitySessionFormValues) => void
   onClose: () => void
 }) {
   const [date, setDate] = useState(todayISO())
+  const [activityType, setActivityType] = useState('')
   const [duration, setDuration] = useState<number | null>(null)
+  const [distance, setDistance] = useState<number | null>(null)
   const [notes, setNotes] = useState('')
 
   useEffect(() => {
     if (isOpen) {
-      setDate(initialValues?.date ?? todayISO())
+      setDate(initialValues?.occurred_at ? initialValues.occurred_at.slice(0, 10) : todayISO())
+      setActivityType(initialValues?.activity_type ?? '')
       setDuration(initialValues?.duration_minutes ?? null)
+      setDistance(initialValues?.distance_km ?? null)
       setNotes(initialValues?.notes ?? '')
     }
   }, [isOpen, initialValues])
@@ -50,8 +58,14 @@ export default function RugbySessionFormModal({
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          if (!date) return
-          onSave({ date, duration_minutes: duration, notes: notes || null })
+          if (!date || !activityType.trim()) return
+          onSave({
+            occurred_at: date,
+            activity_type: activityType.trim(),
+            duration_minutes: duration,
+            distance_km: distance,
+            notes: notes || null,
+          })
         }}
         className="flex flex-col gap-4"
       >
@@ -69,13 +83,41 @@ export default function RugbySessionFormModal({
             />
           </label>
           <label className={labelClass}>
+            Activity type
+            <input
+              list="activity-type-suggestions"
+              value={activityType}
+              onChange={(e) => setActivityType(e.target.value)}
+              placeholder="e.g. Running"
+              className={inputClass}
+            />
+            <datalist id="activity-type-suggestions">
+              {ACTIVITY_TYPE_SUGGESTIONS.map((type) => (
+                <option key={type} value={type} />
+              ))}
+            </datalist>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <label className={labelClass}>
             Duration (minutes)
             <input
               type="number"
+              min={0}
               value={duration ?? ''}
-              onChange={(e) =>
-                setDuration(e.target.value === '' ? null : Number(e.target.value))
-              }
+              onChange={(e) => setDuration(e.target.value === '' ? null : Number(e.target.value))}
+              className={inputClass}
+            />
+          </label>
+          <label className={labelClass}>
+            Distance (km)
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={distance ?? ''}
+              onChange={(e) => setDistance(e.target.value === '' ? null : Number(e.target.value))}
               className={inputClass}
             />
           </label>

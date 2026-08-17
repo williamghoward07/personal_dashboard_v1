@@ -1,13 +1,14 @@
 export interface UpcomingCandidate {
-  kind: 'calendar' | 'task' | 'rugby'
+  kind: 'calendar' | 'task' | 'activity'
   id: string
   title: string
   allDay: boolean
   // A comparable ISO-shaped string: a full datetime for timed calendar
-  // events, a plain 'YYYY-MM-DD' date for everything else (all-day
-  // events, tasks, rugby sessions). A date-only string always sorts
-  // correctly before a same-day timed one via plain string comparison,
-  // since it's a prefix of any longer string that starts with it.
+  // events and Strava-imported activities, a plain 'YYYY-MM-DD' date for
+  // everything else (all-day events, tasks, manually-logged activities).
+  // A date-only string always sorts correctly before a same-day timed one
+  // via plain string comparison, since it's a prefix of any longer string
+  // that starts with it.
   sortKey: string
 }
 

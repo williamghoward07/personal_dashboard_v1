@@ -33,7 +33,12 @@ connects across modules.
 - Frontend: Next.js (App Router), TypeScript, Tailwind CSS
 - Backend/Auth/DB: Supabase
 - Deployment: Vercel
-- AI: Anthropic API (console.anthropic.com) for in-app research panel
+- AI: Gemini (aistudio.google.com), behind a swappable interface in
+  `lib/ai/gemini.ts` — every AI call site imports only from there, so a
+  provider switch (e.g. to Claude) only touches that one file. Currently
+  powers the home page's search box and the People quick-add bar; a
+  dedicated Education/research panel is still unbuilt (deferred, see
+  Features below)
 
 ## Home page widgets (v1 layout, decided)
 Seven widgets on the bento grid, each self-contained:
@@ -53,8 +58,9 @@ Seven widgets on the bento grid, each self-contained:
 - **Prompt Library** — home widget is a small quick-copy card: title +
   one-line explanation, click copies the prompt. Full searchable/
   organizable library lives on its own page. "Auto-organize" is a UI
-  stub for now (tells the user it isn't wired up yet) — no AI
-  categorization until the Claude API research panel exists.
+  stub for now (tells the user it isn't wired up yet) — the AI infra
+  it would need now exists (`lib/ai/gemini.ts`), it just hasn't been
+  connected to this specific feature yet.
 - **Calendar** — widget shows "nothing on today" (or today's items),
   a horizontal divider, then the next upcoming event with date/time.
   On the full calendar page, clicking an event opens an anchored
@@ -85,7 +91,12 @@ Seven widgets on the bento grid, each self-contained:
 - Frontend: Next.js (App Router), TypeScript, Tailwind CSS
 - Backend/Auth/DB: Supabase
 - Deployment: Vercel
-- AI: Anthropic API (console.anthropic.com) for in-app research panel
+- AI: Gemini (aistudio.google.com), behind a swappable interface in
+  `lib/ai/gemini.ts` — every AI call site imports only from there, so a
+  provider switch (e.g. to Claude) only touches that one file. Currently
+  powers the home page's search box and the People quick-add bar; a
+  dedicated Education/research panel is still unbuilt (deferred, see
+  Features below)
 
 ## Features (build order — easiest to hardest)
 1. App shell with placeholder slots for every feature
@@ -95,18 +106,28 @@ Seven widgets on the bento grid, each self-contained:
    Running/Gym rings, which are a separate mechanism from this log)
 5. Calendar API integration for day view
 6. Strava API (running + Hevy-synced gym sessions)
-7. Claude API research panel with saved conversation links
+7. A dedicated research panel with saved conversation links (still
+   pending — distinct from the Gemini search/quick-add in item 10,
+   deferred alongside the Education rework)
 8. Monzo/Starling integration (read-only scopes, encrypted token storage) — Trading212
    was attempted and removed (broken auth against its live API, never fixed);
    PDF bank-statement upload covers accounts without a working read-only API instead.
-9. (Optional stretch) One-way sync to Apple Reminders via CalDAV
+9. One-way sync (pull) from Apple Reminders via CalDAV, plus a narrow
+   completion-push back — see the Environment Variables section
+10. Gemini-powered home search box (extracts keywords + relevant modules
+    only — no AI in the actual query execution, which is hand-written
+    `ilike` lookups) and a People quick-add bar that extracts a new/
+    updated contact or a logged conversation from a short typed note
 
 ## Decided / out of scope for v1
 - No push/email notifications — in-app only, not building for mobile yet
 - No data export feature — Supabase's own export covers this
 - Perplexity integration is manual link-saving only (no public API available),
   stored within Education modules as a URL + note field, not a separate widget
-- Apple Reminders stays as-is on the phone widget — no in-app replication
+- Apple Reminders sync is one-way pull (plus completion-push) only — see
+  Environment Variables. Todos created in the app stay app-only, never
+  pushed to Reminders; editing a synced reminder's title/due date is done
+  in Reminders/via Siri, not in the app
 
 ## Environment Variables
 Required in `.env.local` (see `.env.example` for setup notes). Never commit
@@ -117,3 +138,11 @@ actual values.
 - **Google Contacts (People module)**: `GOOGLE_CLIENT_ID`,
   `GOOGLE_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`
 - **Starling**: `STARLING_ACCESS_TOKEN`
+- **Apple Reminders (Todos page, via CalDAV)**: `ICLOUD_CALDAV_USERNAME`,
+  `ICLOUD_CALDAV_APP_PASSWORD` (an app-specific password from
+  appleid.apple.com, not your real Apple ID password — Apple doesn't
+  support OAuth for CalDAV), optional `ICLOUD_CALDAV_LIST_NAME` (a single
+  list name, or a comma-separated list of names to sync multiple lists
+  into the same flat pool)
+- **Gemini (home search, People quick-add)**: `GEMINI_API_KEY` from
+  aistudio.google.com (free tier)

@@ -1,5 +1,5 @@
-import TodosBoard from '../components/widgets/daily-goals/TodosBoard'
+import HabitsTodosBoard from '../components/widgets/habits/HabitsTodosBoard'
 
 export default function TodosPage() {
-  return <TodosBoard />
+  return <HabitsTodosBoard defaultTab="todos" />
 }

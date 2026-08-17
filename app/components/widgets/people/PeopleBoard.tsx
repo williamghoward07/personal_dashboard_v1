@@ -8,6 +8,7 @@ import FollowUpsCard from './FollowUpsCard'
 import InteractionsCard from './InteractionsCard'
 import PlacesCard from './PlacesCard'
 import GoogleContactsCard from './GoogleContactsCard'
+import QuickAddBar from './QuickAddBar'
 
 const MIGRATION_HINT =
   'Have you run supabase/migrations/20260810000000_people_crm.sql in the Supabase SQL editor yet?'
@@ -59,6 +60,8 @@ export default function PeopleBoard() {
           {error}
         </div>
       )}
+
+      <QuickAddBar people={people} places={places} runMutation={runMutation} onChange={refresh} />
 
       <PeopleDirectoryCard
         people={people}

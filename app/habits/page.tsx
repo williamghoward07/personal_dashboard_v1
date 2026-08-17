@@ -1,5 +1,5 @@
-import HabitBoard from '../components/widgets/habits/HabitBoard'
+import HabitsTodosBoard from '../components/widgets/habits/HabitsTodosBoard'
 
 export default function HabitsPage() {
-  return <HabitBoard />
+  return <HabitsTodosBoard defaultTab="habits" />
 }

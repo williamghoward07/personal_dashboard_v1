@@ -6,14 +6,20 @@ import { Home, Heart, GraduationCap, DollarSign, FileSearch, ListChecks, Calenda
 import type { LucideIcon } from 'lucide-react'
 import { ACCENT_TEXT, MODULE_ACCENT } from '@/lib/theme'
 
-const navItems: { href: string; label: string; icon: LucideIcon; module: keyof typeof MODULE_ACCENT }[] = [
+const navItems: {
+  href: string
+  label: string
+  icon: LucideIcon
+  module: keyof typeof MODULE_ACCENT
+  matchPrefixes?: string[]
+}[] = [
   { href: '/', label: 'Home', icon: Home, module: 'home' },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays, module: 'calendar' },
   { href: '/health', label: 'Health', icon: Heart, module: 'health' },
   { href: '/education', label: 'Education', icon: GraduationCap, module: 'education' },
   { href: '/money', label: 'Money', icon: DollarSign, module: 'money' },
   { href: '/research', label: 'Research', icon: FileSearch, module: 'research' },
-  { href: '/habits', label: 'Habits', icon: ListChecks, module: 'habits' },
+  { href: '/habits', label: 'Tasks', icon: ListChecks, module: 'habits', matchPrefixes: ['/habits', '/todos'] },
   { href: '/people', label: 'People', icon: Contact, module: 'people' },
 ]
 
@@ -27,8 +33,11 @@ export default function Sidebar() {
       </Link>
 
       <div className="flex flex-1 flex-col items-center gap-3">
-        {navItems.map(({ href, label, icon: Icon, module }) => {
-          const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
+        {navItems.map(({ href, label, icon: Icon, module, matchPrefixes }) => {
+          const active =
+            href === '/'
+              ? pathname === '/'
+              : (matchPrefixes ?? [href]).some((prefix) => pathname.startsWith(prefix))
           const accentText = ACCENT_TEXT[MODULE_ACCENT[module]]
           return (
             <Link

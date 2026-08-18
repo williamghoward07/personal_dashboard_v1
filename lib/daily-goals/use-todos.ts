@@ -8,9 +8,15 @@ export interface UseTodosResult {
   todos: Todo[]
   loading: boolean
   error: string | null
-  addTodo: (title: string, extra?: { due_date?: string | null; notes?: string | null }) => Promise<void>
+  addTodo: (
+    title: string,
+    extra?: { due_date?: string | null; notes?: string | null; list_id?: string | null; parent_id?: string | null }
+  ) => Promise<void>
   toggleTodo: (id: string) => Promise<void>
-  updateTodo: (id: string, patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date'>>) => Promise<void>
+  updateTodo: (
+    id: string,
+    patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date' | 'list_id' | 'parent_id'>>
+  ) => Promise<void>
   deleteTodo: (id: string) => Promise<void>
   // Pulls from Apple Reminders (see app/api/caldav/reminders/pull) and
   // refreshes afterward. Not called automatically by this hook — the
@@ -61,12 +67,17 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
   }, [refresh])
 
   const addTodo = useCallback(
-    async (title: string, extra?: { due_date?: string | null; notes?: string | null }) => {
+    async (
+      title: string,
+      extra?: { due_date?: string | null; notes?: string | null; list_id?: string | null; parent_id?: string | null }
+    ) => {
       const trimmed = title.trim()
       if (!trimmed) return
 
       const dueDate = extra ? (extra.due_date ?? null) : todayDateKey
       const notes = extra?.notes ?? null
+      const listId = extra?.list_id ?? null
+      const parentId = extra?.parent_id ?? null
 
       const optimisticId = `optimistic-${crypto.randomUUID()}`
       const optimisticTodo: Todo = {
@@ -79,13 +90,15 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
         // Todos added through this function are always app-created —
         // never linked to a reminder.
         caldav_uid: null,
+        list_id: listId,
+        parent_id: parentId,
       }
       setTodos((prev) => [...prev, optimisticTodo])
       setError(null)
 
       const { data, error: insertError } = await supabase
         .from('todos')
-        .insert({ title: trimmed, due_date: dueDate, notes })
+        .insert({ title: trimmed, due_date: dueDate, notes, list_id: listId, parent_id: parentId })
         .select()
         .single()
 

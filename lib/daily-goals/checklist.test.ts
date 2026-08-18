@@ -12,6 +12,9 @@ function todo(overrides: Partial<Todo> = {}): Todo {
     due_date: null,
     completed_at: null,
     created_at: '2026-08-01T00:00:00.000Z',
+    caldav_uid: null,
+    list_id: null,
+    parent_id: null,
     ...overrides,
   }
 }

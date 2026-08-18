@@ -133,6 +133,18 @@ export interface Todo {
   // Set only for a todo pulled from Apple Reminders via CalDAV — null for
   // everything created directly in the app. See lib/caldav/reminders.ts.
   caldav_uid: string | null
+  list_id: string | null
+  // Self-referencing, single-level only — a CalDAV-linked todo can never
+  // be a parent or a child (enforced by a DB trigger, not just app code).
+  parent_id: string | null
+}
+
+export interface TodoList {
+  id: string
+  name: string
+  color: string
+  sort_order: number
+  created_at: string
 }
 
 export interface EducationTask {

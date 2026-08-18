@@ -10,7 +10,7 @@ export interface UseTodoListsResult {
   error: string | null
   refresh: () => void
   createList: (name: string, color: string) => Promise<TodoList | null>
-  renameList: (id: string, name: string) => Promise<void>
+  updateList: (id: string, patch: { name: string; color: string }) => Promise<void>
   reorderLists: (orderedIds: string[]) => Promise<void>
   deleteList: (id: string) => Promise<void>
 }
@@ -80,17 +80,20 @@ export function useTodoLists(): UseTodoListsResult {
     [lists]
   )
 
-  const renameList = useCallback(
-    async (id: string, name: string) => {
+  const updateList = useCallback(
+    async (id: string, patch: { name: string; color: string }) => {
       const target = lists.find((l) => l.id === id)
       if (!target) return
-      const trimmed = name.trim()
+      const trimmed = patch.name.trim()
       if (!trimmed) return
 
-      setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: trimmed } : l)))
+      setLists((prev) => prev.map((l) => (l.id === id ? { ...l, name: trimmed, color: patch.color } : l)))
       setError(null)
 
-      const { error: updateError } = await supabase.from('todo_lists').update({ name: trimmed }).eq('id', id)
+      const { error: updateError } = await supabase
+        .from('todo_lists')
+        .update({ name: trimmed, color: patch.color })
+        .eq('id', id)
 
       if (updateError) {
         setLists((prev) => prev.map((l) => (l.id === id ? target : l)))
@@ -148,5 +151,5 @@ export function useTodoLists(): UseTodoListsResult {
     [lists]
   )
 
-  return { lists, loading, error, refresh, createList, renameList, reorderLists, deleteList }
+  return { lists, loading, error, refresh, createList, updateList, reorderLists, deleteList }
 }

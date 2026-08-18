@@ -3,11 +3,18 @@
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 
+const SIZE_CLASS: Record<'sm' | 'lg', string> = {
+  sm: 'max-w-md',
+  lg: 'max-w-2xl',
+}
+
 export default function Modal({
   onClose,
+  size = 'sm',
   children,
 }: {
   onClose: () => void
+  size?: 'sm' | 'lg'
   children: ReactNode
 }) {
   useEffect(() => {
@@ -33,9 +40,9 @@ export default function Modal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-xl border border-outline-variant bg-surface-container-low p-5 text-on-surface shadow-2xl shadow-black/50"
+        className={`w-full ${SIZE_CLASS[size]} rounded-xl border border-outline-variant bg-surface-container-low p-5 text-on-surface shadow-2xl shadow-black/50`}
       >
-        {children}
+        {size === 'lg' ? <div className="flex max-h-[80vh] flex-col overflow-y-auto">{children}</div> : children}
       </div>
     </div>
   )

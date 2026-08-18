@@ -2,18 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import Modal from '../../Modal'
+import { useTodoLists } from '@/lib/todos/use-todo-lists'
 import type { Todo } from '@/lib/types'
 
 export interface TodoFormValues {
   title: string
   due_date: string | null
   notes: string | null
+  list_id: string | null
 }
 
 const EMPTY: TodoFormValues = {
   title: '',
   due_date: '',
   notes: '',
+  list_id: null,
 }
 
 const inputClass =
@@ -34,6 +37,7 @@ export default function TodoFormModal({
   onClose: () => void
 }) {
   const [values, setValues] = useState<TodoFormValues>(EMPTY)
+  const { lists } = useTodoLists()
 
   useEffect(() => {
     if (isOpen) {
@@ -41,6 +45,7 @@ export default function TodoFormModal({
         title: initialValues?.title ?? '',
         due_date: initialValues?.due_date ?? '',
         notes: initialValues?.notes ?? '',
+        list_id: initialValues?.list_id ?? null,
       })
     }
   }, [isOpen, initialValues])
@@ -48,7 +53,7 @@ export default function TodoFormModal({
   if (!isOpen) return null
 
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={onClose} size="lg">
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -57,6 +62,7 @@ export default function TodoFormModal({
             title: values.title.trim(),
             due_date: values.due_date || null,
             notes: values.notes || null,
+            list_id: values.list_id,
           })
         }}
         className="flex flex-col gap-3"
@@ -81,6 +87,22 @@ export default function TodoFormModal({
             onChange={(e) => setValues((v) => ({ ...v, due_date: e.target.value }))}
             className={inputClass}
           />
+        </label>
+
+        <label className={labelClass}>
+          List
+          <select
+            value={values.list_id ?? ''}
+            onChange={(e) => setValues((v) => ({ ...v, list_id: e.target.value || null }))}
+            className={inputClass}
+          >
+            <option value="">No list</option>
+            {lists.map((list) => (
+              <option key={list.id} value={list.id}>
+                {list.name}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className={labelClass}>

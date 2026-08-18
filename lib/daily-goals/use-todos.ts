@@ -171,7 +171,7 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
   }, [refresh])
 
   const updateTodo = useCallback(
-    async (id: string, patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date'>>) => {
+    async (id: string, patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date' | 'list_id' | 'parent_id'>>) => {
       const target = todos.find((t) => t.id === id)
       if (!target) return
 

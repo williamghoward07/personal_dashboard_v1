@@ -1,16 +1,33 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Bell, ListTodo, Plus, Pencil, Trash2 } from 'lucide-react'
+import { ListTodo, Pencil, Plus, X } from 'lucide-react'
 import { useTodos } from '@/lib/daily-goals/use-todos'
+import { useTodoLists } from '@/lib/todos/use-todo-lists'
+import { groupByParent } from '@/lib/todos/subtasks'
 import { londonDayBoundsUTC } from '@/lib/google/london-day'
-import type { Todo } from '@/lib/types'
+import type { Todo, TodoList } from '@/lib/types'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
 import ConfirmDialog from '../../ConfirmDialog'
 import TodoFormModal, { type TodoFormValues } from './TodoFormModal'
+import TodoDetailModal from './TodoDetailModal'
+import TodoListFormModal from './TodoListFormModal'
+import TodoRow from './TodoRow'
+import TodosExtendedView from './TodosExtendedView'
+import CompletedTodosList from './CompletedTodosList'
+
+type ViewMode = 'list' | 'extended' | 'completed'
+
+const VIEW_MODES: { id: ViewMode; label: string }[] = [
+  { id: 'list', label: 'List' },
+  { id: 'extended', label: 'Extended' },
+  { id: 'completed', label: 'Completed' },
+]
+
+const RECENTLY_COMPLETED_MS = 5000
 
 // Incomplete first (overdue, then soonest due, undated last), completed
 // last (most recently completed first, so a just-finished item doesn't
@@ -41,10 +58,21 @@ export default function TodosBoard() {
     todayDateKey,
     'all'
   )
+  const { lists, createList, updateList, deleteList } = useTodoLists()
 
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [deletingTodo, setDeletingTodo] = useState<Todo | null>(null)
+  const [viewingTodo, setViewingTodo] = useState<Todo | null>(null)
+
+  const [isAddListOpen, setIsAddListOpen] = useState(false)
+  const [editingList, setEditingList] = useState<TodoList | null>(null)
+  const [deletingList, setDeletingList] = useState<TodoList | null>(null)
+  const [activeListId, setActiveListId] = useState<string | null>(null)
+
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [recentlyCompletedIds, setRecentlyCompletedIds] = useState<Set<string>>(new Set())
+  const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   // CalDAV has no push/webhook support, so polling on load is how a
   // Siri-created reminder actually shows up here — fires once per mount
@@ -55,7 +83,58 @@ export default function TodosBoard() {
     pullReminders()
   }, [pullReminders])
 
-  const sorted = useMemo(() => sortTodos(todos, todayDateKey), [todos, todayDateKey])
+  useEffect(() => {
+    const timeouts = timeoutsRef.current
+    return () => {
+      timeouts.forEach((t) => clearTimeout(t))
+    }
+  }, [])
+
+  const handleToggle = (id: string) => {
+    const target = todos.find((t) => t.id === id)
+    const isCompleting = target ? target.completed_at === null : false
+    toggleTodo(id)
+
+    if (!isCompleting) return
+
+    setRecentlyCompletedIds((prev) => new Set(prev).add(id))
+    const existing = timeoutsRef.current.get(id)
+    if (existing) clearTimeout(existing)
+    timeoutsRef.current.set(
+      id,
+      setTimeout(() => {
+        setRecentlyCompletedIds((prev) => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
+        timeoutsRef.current.delete(id)
+      }, RECENTLY_COMPLETED_MS)
+    )
+  }
+
+  const { topLevel, childrenByParent } = useMemo(() => groupByParent(todos), [todos])
+
+  const listFilteredTopLevel = useMemo(
+    () => (activeListId ? topLevel.filter((t) => t.list_id === activeListId) : topLevel),
+    [topLevel, activeListId]
+  )
+
+  const visibleIncomplete = useMemo(
+    () => listFilteredTopLevel.filter((t) => t.completed_at === null || recentlyCompletedIds.has(t.id)),
+    [listFilteredTopLevel, recentlyCompletedIds]
+  )
+
+  const sorted = useMemo(() => sortTodos(visibleIncomplete, todayDateKey), [visibleIncomplete, todayDateKey])
+
+  const completedTodos = useMemo(
+    () => todos.filter((t) => t.completed_at !== null && (!activeListId || t.list_id === activeListId)),
+    [todos, activeListId]
+  )
+
+  // Keeps the detail modal showing fresh data (e.g. a just-added subtask)
+  // instead of the stale snapshot captured when it was opened.
+  const viewing = viewingTodo ? (todos.find((t) => t.id === viewingTodo.id) ?? null) : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,84 +157,145 @@ export default function TodosBoard() {
         </Button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setActiveListId(null)}
+          className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+            activeListId === null
+              ? 'border-primary-container/50 bg-primary-container/10 text-primary-container'
+              : 'border-outline-variant text-on-surface-variant hover:border-outline'
+          }`}
+        >
+          All
+        </button>
+        {lists.map((list) => {
+          const active = activeListId === list.id
+          return (
+            <div
+              key={list.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveListId(active ? null : list.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setActiveListId(active ? null : list.id)
+                }
+              }}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                active
+                  ? 'border-outline bg-surface-container-high text-on-surface'
+                  : 'border-outline-variant text-on-surface-variant hover:border-outline'
+              }`}
+            >
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: list.color }} />
+              {list.name}
+              {active && (
+                <span className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setEditingList(list)
+                    }}
+                    aria-label={`Rename ${list.name}`}
+                    className="rounded p-0.5 hover:text-on-surface"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setDeletingList(list)
+                    }}
+                    aria-label={`Delete ${list.name}`}
+                    className="rounded p-0.5 hover:text-error"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+            </div>
+          )
+        })}
+        <button
+          type="button"
+          onClick={() => setIsAddListOpen(true)}
+          className="flex items-center gap-1 rounded-full border border-dashed border-outline-variant px-2.5 py-1 text-xs text-on-surface-variant hover:border-outline hover:text-on-surface"
+        >
+          <Plus className="h-3 w-3" />
+          New list
+        </button>
+      </div>
+
       <ModuleGlassCard accent="neutral">
         <GlassCardHeader>
-          <h2 className="font-display text-sm font-semibold text-foreground">
-            {loading ? 'Loading…' : `${sorted.length} todo${sorted.length === 1 ? '' : 's'}`}
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-sm font-semibold text-foreground">
+              {loading
+                ? 'Loading…'
+                : viewMode === 'completed'
+                  ? `${completedTodos.length} completed`
+                  : `${sorted.length} todo${sorted.length === 1 ? '' : 's'}`}
+            </h2>
+            <div className="flex items-center gap-1 rounded-lg bg-surface-container p-0.5">
+              {VIEW_MODES.map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setViewMode(id)}
+                  className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                    viewMode === id
+                      ? 'bg-surface-container-high text-on-surface'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </GlassCardHeader>
         <GlassCardContent>
           {error && <p className="pb-2 text-xs text-academic-orange">{error}</p>}
           {loading ? (
             <p className="text-sm text-on-surface-variant">Loading…</p>
+          ) : viewMode === 'completed' ? (
+            <CompletedTodosList
+              todos={completedTodos}
+              todayDateKey={todayDateKey}
+              onToggle={handleToggle}
+              onOpen={setViewingTodo}
+              onEdit={setEditingTodo}
+              onDelete={setDeletingTodo}
+            />
+          ) : viewMode === 'extended' ? (
+            <TodosExtendedView
+              todos={sorted}
+              todayDateKey={todayDateKey}
+              onToggle={handleToggle}
+              onOpen={setViewingTodo}
+              onEdit={setEditingTodo}
+              onDelete={setDeletingTodo}
+            />
           ) : sorted.length === 0 ? (
             <p className="text-sm text-on-surface-variant">No todos yet — add one to get started.</p>
           ) : (
             <ul className="flex flex-col divide-y divide-outline-variant/40">
-              {sorted.map((todo) => {
-                const completed = todo.completed_at !== null
-                const overdue = !completed && todo.due_date !== null && todo.due_date < todayDateKey
-                const inputId = `todos-page-${todo.id}`
-                return (
-                  <li key={todo.id} className="flex items-center gap-3 py-2.5">
-                    <input
-                      id={inputId}
-                      type="checkbox"
-                      checked={completed}
-                      onChange={() => toggleTodo(todo.id)}
-                      className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border border-outline-variant bg-transparent checked:border-primary-container checked:bg-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-container/50"
-                    />
-                    <label htmlFor={inputId} className="min-w-0 flex-1 cursor-pointer">
-                      <span className="flex items-center gap-1.5">
-                        {todo.caldav_uid && (
-                          <Bell
-                            className="h-3 w-3 shrink-0 text-on-surface-variant"
-                            aria-label="Synced from Apple Reminders"
-                          />
-                        )}
-                        <span
-                          className={`block truncate text-sm ${
-                            completed ? 'text-on-surface-variant line-through' : 'text-on-surface'
-                          }`}
-                        >
-                          {todo.title}
-                        </span>
-                      </span>
-                      {todo.notes && (
-                        <span className="block truncate text-xs text-on-surface-variant">
-                          {todo.notes}
-                        </span>
-                      )}
-                    </label>
-                    {todo.due_date && (
-                      <span
-                        className={`shrink-0 text-xs font-medium ${
-                          overdue ? 'text-academic-orange' : 'text-on-surface-variant'
-                        }`}
-                      >
-                        {overdue ? 'Overdue · ' : ''}
-                        {todo.due_date}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setEditingTodo(todo)}
-                      aria-label={`Edit ${todo.title}`}
-                      className="shrink-0 rounded p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeletingTodo(todo)}
-                      aria-label={`Delete ${todo.title}`}
-                      className="shrink-0 rounded p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-error"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                )
-              })}
+              {sorted.map((todo) => (
+                <TodoRow
+                  key={todo.id}
+                  todo={todo}
+                  todayDateKey={todayDateKey}
+                  subtaskCount={childrenByParent[todo.id]?.length ?? 0}
+                  onToggle={() => handleToggle(todo.id)}
+                  onOpen={() => setViewingTodo(todo)}
+                  onEdit={() => setEditingTodo(todo)}
+                  onDelete={() => setDeletingTodo(todo)}
+                />
+              ))}
             </ul>
           )}
         </GlassCardContent>
@@ -166,7 +306,7 @@ export default function TodosBoard() {
         heading="New todo"
         onClose={() => setIsAddOpen(false)}
         onSave={(values: TodoFormValues) => {
-          addTodo(values.title, { due_date: values.due_date, notes: values.notes })
+          addTodo(values.title, { due_date: values.due_date, notes: values.notes, list_id: values.list_id })
           setIsAddOpen(false)
         }}
       />
@@ -183,6 +323,27 @@ export default function TodosBoard() {
         }}
       />
 
+      {viewing && (
+        <TodoDetailModal
+          todo={viewing}
+          todos={todos}
+          lists={lists}
+          onToggle={handleToggle}
+          onAddSubtask={(title) => {
+            addTodo(title, { parent_id: viewing.id, list_id: viewing.list_id })
+          }}
+          onEdit={() => {
+            setEditingTodo(viewing)
+            setViewingTodo(null)
+          }}
+          onDelete={() => {
+            setDeletingTodo(viewing)
+            setViewingTodo(null)
+          }}
+          onClose={() => setViewingTodo(null)}
+        />
+      )}
+
       <ConfirmDialog
         isOpen={deletingTodo !== null}
         message={`Delete "${deletingTodo?.title}"? This can't be undone.`}
@@ -191,6 +352,40 @@ export default function TodosBoard() {
           if (!deletingTodo) return
           deleteTodo(deletingTodo.id)
           setDeletingTodo(null)
+        }}
+      />
+
+      <TodoListFormModal
+        isOpen={isAddListOpen}
+        heading="New list"
+        onClose={() => setIsAddListOpen(false)}
+        onSave={(values) => {
+          createList(values.name, values.color)
+          setIsAddListOpen(false)
+        }}
+      />
+
+      <TodoListFormModal
+        isOpen={editingList !== null}
+        heading="Rename list"
+        initialValues={editingList}
+        onClose={() => setEditingList(null)}
+        onSave={(values) => {
+          if (!editingList) return
+          updateList(editingList.id, values)
+          setEditingList(null)
+        }}
+      />
+
+      <ConfirmDialog
+        isOpen={deletingList !== null}
+        message={`Delete "${deletingList?.name}"? Todos in this list become unlisted, not deleted.`}
+        onCancel={() => setDeletingList(null)}
+        onConfirm={() => {
+          if (!deletingList) return
+          if (activeListId === deletingList.id) setActiveListId(null)
+          deleteList(deletingList.id)
+          setDeletingList(null)
         }}
       />
     </div>

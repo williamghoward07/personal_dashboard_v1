@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useScrollDirection } from '@/lib/use-scroll-direction'
 
 export default function TopAppBar() {
   const router = useRouter()
@@ -11,6 +12,7 @@ export default function TopAppBar() {
   const [username, setUsername] = useState<string | null>(null)
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const scrollDirection = useScrollDirection()
 
   useEffect(() => {
     const supabase = createClient()
@@ -41,7 +43,11 @@ export default function TopAppBar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-outline-variant bg-surface/80 px-8 backdrop-blur-xl">
+    <header
+      className={`fixed top-0 z-30 flex h-16 w-full items-center justify-between border-b border-outline-variant bg-surface/80 px-8 backdrop-blur-xl transition-transform duration-200 md:sticky md:translate-y-0 ${
+        scrollDirection === 'down' ? '-translate-y-full' : 'translate-y-0'
+      }`}
+    >
       <span className="font-display text-headline-md font-bold tracking-wide text-secondary-container">
         STUDY COPILOT
       </span>

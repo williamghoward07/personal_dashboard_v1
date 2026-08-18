@@ -4,11 +4,12 @@ import { parseStatementText } from './parser'
 const YEAR = 2026
 
 describe('parseStatementText', () => {
-  it('parses a slash-formatted date and a plain amount, defaulting to outgoing', () => {
+  it('parses a slash-formatted date and a plain amount, defaulting to income', () => {
     const [candidate] = parseStatementText('05/08/2026 TESCO STORES 45.00', YEAR)
     expect(candidate.date).toBe('2026-08-05')
     expect(candidate.amount).toBe(45)
-    expect(candidate.type).toBe('outgoing')
+    expect(candidate.type).toBe('income')
+    expect(candidate.category).toBe('Other')
     expect(candidate.description).toBe('TESCO STORES')
   })
 
@@ -88,5 +89,66 @@ describe('parseStatementText', () => {
   it('falls back to a placeholder description when nothing is left after stripping tokens', () => {
     const [candidate] = parseStatementText('05/08/2026 45.00', YEAR)
     expect(candidate.description).toBe('Statement transaction')
+  })
+
+  describe('multi-year year tracking', () => {
+    it('lets a bare month-name line inherit the year from a preceding explicit-year line', () => {
+      const text = ['05/08/2025 TESCO STORES -45.00', '6 Aug SALARY +1500.00'].join('\n')
+      const candidates = parseStatementText(text, YEAR)
+      expect(candidates[0].date).toBe('2025-08-05')
+      expect(candidates[1].date).toBe('2025-08-06')
+    })
+
+    it('rolls the year forward on a Dec -> Jan jump once ascending order is established', () => {
+      const text = [
+        '01 Aug SALARY 1500.00',
+        '15 Sep RENT -800.00',
+        '20 Dec BONUS 500.00',
+        '02 Jan COFFEE -3.50',
+      ].join('\n')
+      const candidates = parseStatementText(text, 2024)
+      expect(candidates.map((c) => c.date)).toEqual([
+        '2024-08-01',
+        '2024-09-15',
+        '2024-12-20',
+        '2025-01-02',
+      ])
+    })
+
+    it('rolls the year backward on a Jan -> Dec jump once descending order is established', () => {
+      const text = [
+        '20 Mar TAX 200.00',
+        '15 Feb RENT -800.00',
+        '02 Jan COFFEE -3.50',
+        '20 Dec BONUS 500.00',
+        '15 Sep RENT -800.00',
+        '01 Aug SALARY 1500.00',
+      ].join('\n')
+      const candidates = parseStatementText(text, 2025)
+      expect(candidates.map((c) => c.date)).toEqual([
+        '2025-03-20',
+        '2025-02-15',
+        '2025-01-02',
+        '2024-12-20',
+        '2024-09-15',
+        '2024-08-01',
+      ])
+    })
+
+    it('follows explicit-year lines across a year boundary without needing rollover detection', () => {
+      const text = [
+        '05/08/2024 TESCO STORES -45.00',
+        '10/09/2024 SALARY +1500.00',
+        '05/01/2025 RENT -800.00',
+        '10/02/2025 COFFEE -3.50',
+      ].join('\n')
+      const candidates = parseStatementText(text, YEAR)
+      expect(candidates.map((c) => c.date)).toEqual([
+        '2024-08-05',
+        '2024-09-10',
+        '2025-01-05',
+        '2025-02-10',
+      ])
+    })
   })
 })

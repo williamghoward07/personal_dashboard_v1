@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { minorUnitsOf } from '@/lib/money'
+import type { Transaction } from '@/lib/types'
+
+function dedupeKey(date: string, minorUnits: number, description: string | null): string {
+  return `${date}|${minorUnits}|${(description ?? '').trim().toLowerCase()}`
+}
 
 interface CommitRow {
   date: string
@@ -46,24 +52,54 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'account_not_found' }, { status: 404 })
   }
 
-  const insertRows = rows.map((row) => ({
+  // Skip rows that exactly match a transaction already on this account
+  // (date + amount + description) — protects against re-importing an
+  // overlapping statement (e.g. two monthly PDFs sharing a few days at
+  // the boundary) without blocking the rest of an otherwise-new batch.
+  const dates = rows.map((r) => r.date)
+  const minDate = dates.reduce((min, d) => (d < min ? d : min))
+  const maxDate = dates.reduce((max, d) => (d > max ? d : max))
+
+  const { data: existingRows } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('account_id', accountId)
+    .gte('date', minDate)
+    .lte('date', maxDate)
+
+  const existingKeys = new Set(
+    ((existingRows ?? []) as Transaction[]).map((t) => dedupeKey(t.date, minorUnitsOf(t), t.description))
+  )
+
+  const toInsert = rows.filter(
+    (row) => !existingKeys.has(dedupeKey(row.date, Math.round(row.amount * 100), row.description))
+  )
+  const skippedDuplicates = rows.length - toInsert.length
+
+  const insertRows = toInsert.map((row) => ({
     user_id: user.id,
     account_id: accountId,
     source: 'manual',
     date: row.date,
     amount: row.amount,
     type: row.type,
-    category: row.category,
+    // Coalesced, not passed through raw — a bulk insert where some rows
+    // have this key and others don't (e.g. one row's category left
+    // undefined) is rejected by PostgREST for inconsistent object keys,
+    // which is exactly what surfaced as "Failed to save transactions".
+    category: row.category || 'Other',
     description: row.description,
     raw: { imported_via: 'pdf_statement', original_filename: originalFilename ?? null },
   }))
 
-  const { error } = await supabase.from('transactions').insert(insertRows)
+  if (insertRows.length > 0) {
+    const { error } = await supabase.from('transactions').insert(insertRows)
 
-  if (error) {
-    console.error('Statement import commit failed:', error)
-    return NextResponse.json({ error: 'commit_failed' }, { status: 502 })
+    if (error) {
+      console.error('Statement import commit failed:', error)
+      return NextResponse.json({ error: 'commit_failed' }, { status: 502 })
+    }
   }
 
-  return NextResponse.json({ committed: insertRows.length })
+  return NextResponse.json({ committed: insertRows.length, skippedDuplicates })
 }

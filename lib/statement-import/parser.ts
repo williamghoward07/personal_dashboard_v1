@@ -5,18 +5,21 @@
 // first one — reading left to right — is taken as the amount, matching
 // how most statement exports order those two columns.
 //
-// Direction (income vs outgoing) is a best-effort guess, not a claim:
-// an explicit sign or parenthesised negative is trusted, but an unsigned
-// amount defaults to "outgoing" (statistically the more common line on a
-// personal current account) rather than "income". Getting this wrong for
-// some rows is expected — the review step this feeds is the real
-// correctness guarantee, not this heuristic.
+// Direction (income vs outgoing) follows standard UK bank-statement
+// convention (Monzo, Starling, etc.): outgoings are signed negative
+// (leading "-" or parenthesised) and incoming amounts are left unsigned.
+// So a negative/parenthesised amount is "outgoing"; anything else —
+// unsigned or explicitly "+" — is "income". Getting this wrong for some
+// rows is expected on statements that don't follow the convention — the
+// review step this feeds is the real correctness guarantee, not this
+// heuristic.
 
 export interface StatementLineCandidate {
   raw: string
   date: string
   amount: number
   type: 'income' | 'outgoing'
+  category: string
   description: string
 }
 
@@ -45,27 +48,74 @@ const MONTH_NAME_DATE_RE = /\b(\d{1,2})\s+([A-Za-z]{3,9})\.?\s*(\d{4})?\b/
 // out of the middle of "1500.00" instead of the whole thing.
 const AMOUNT_RE = /[-+]?\(?£?\s?\d+(?:,\d{3})*\.\d{2}\)?/g
 
-function toIsoDate(day: number, month: number, year: number): string | null {
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null
-  const fullYear = year < 100 ? 2000 + year : year
-  return `${fullYear}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+function expandYear(year: number): number {
+  return year < 100 ? 2000 + year : year
 }
 
-function matchDate(line: string, statementYear: number): { date: string; matchText: string } | null {
+function toIsoDate(day: number, month: number, year: number): string | null {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+// Tracks the year across a multi-year document. Numeric dates always carry
+// their own year and resync this directly; a bare month-name date ("5 Aug")
+// has none, so it's resolved against `currentYear` with rollover detection
+// (below) instead of a single fixed year for the whole file.
+interface YearCursor {
+  currentYear: number
+  lastMonth: number | null
+  direction: 'asc' | 'desc' | null
+}
+
+// A bare month-name line has no year of its own. Direction (ascending vs.
+// descending statement order) is inferred from the first month-to-month
+// change seen; once established, a jump of 6+ months against that
+// direction (Dec -> Jan while ascending, Jan -> Dec while descending) is
+// treated as a year rollover. Small moves — same month, or forward within
+// the established direction — never trigger one, so ordinary day-level
+// reordering within a month can't false-trigger it.
+function resolveTrackedYear(cursor: YearCursor, month: number): number {
+  if (cursor.lastMonth !== null) {
+    const diff = month - cursor.lastMonth
+    if (cursor.direction === null) {
+      if (diff !== 0) cursor.direction = diff > 0 ? 'asc' : 'desc'
+    } else if (cursor.direction === 'asc' && diff <= -6) {
+      cursor.currentYear += 1
+    } else if (cursor.direction === 'desc' && diff >= 6) {
+      cursor.currentYear -= 1
+    }
+  }
+  cursor.lastMonth = month
+  return cursor.currentYear
+}
+
+function matchDate(line: string, cursor: YearCursor): { date: string; matchText: string } | null {
   const numeric = NUMERIC_DATE_RE.exec(line)
   if (numeric) {
-    const [matchText, day, month, year] = numeric
-    const iso = toIsoDate(Number(day), Number(month), Number(year))
-    if (iso) return { date: iso, matchText }
+    const [matchText, day, month, rawYear] = numeric
+    const year = expandYear(Number(rawYear))
+    const iso = toIsoDate(Number(day), Number(month), year)
+    if (iso) {
+      cursor.currentYear = year
+      cursor.lastMonth = Number(month)
+      return { date: iso, matchText }
+    }
   }
 
   const named = MONTH_NAME_DATE_RE.exec(line)
   if (named) {
-    const [matchText, day, monthName, year] = named
+    const [matchText, day, monthName, rawYear] = named
     const month = MONTHS[monthName.slice(0, 3).toLowerCase()]
     if (month) {
-      const iso = toIsoDate(Number(day), month, year ? Number(year) : statementYear)
-      if (iso) return { date: iso, matchText }
+      const year = rawYear ? expandYear(Number(rawYear)) : resolveTrackedYear(cursor, month)
+      const iso = toIsoDate(Number(day), month, year)
+      if (iso) {
+        if (rawYear) {
+          cursor.currentYear = year
+          cursor.lastMonth = month
+        }
+        return { date: iso, matchText }
+      }
     }
   }
 
@@ -79,30 +129,33 @@ function matchAmount(line: string): { amount: number; type: 'income' | 'outgoing
   const matchText = matches[0][0]
   const trimmed = matchText.trim()
   const isNegative = trimmed.startsWith('-') || (trimmed.startsWith('(') && trimmed.endsWith(')'))
-  const isExplicitlyPositive = trimmed.startsWith('+')
 
   const amount = Number(trimmed.replace(/[^\d.]/g, ''))
   if (Number.isNaN(amount) || amount === 0) return null
 
   return {
     amount,
-    type: isNegative ? 'outgoing' : isExplicitlyPositive ? 'income' : 'outgoing',
+    type: isNegative ? 'outgoing' : 'income',
     matchText,
   }
 }
 
-// statementYear resolves a bare "05 Aug" line with no year of its own —
-// the caller (the parse API route) decides that, typically from the
-// statement's own period/upload date, so this stays a pure function of
-// its inputs rather than reading the wall clock itself.
+// statementYear seeds the year cursor for whatever comes before the first
+// dated line establishes one of its own — the caller (the parse API route)
+// decides that, typically from the statement's own period/upload date, so
+// this stays a pure function of its inputs rather than reading the wall
+// clock itself. From there, explicit-year lines resync the cursor and bare
+// month-name lines are resolved against it (see YearCursor / matchDate),
+// so a single multi-year document doesn't need every line to carry a year.
 export function parseStatementText(text: string, statementYear: number): StatementLineCandidate[] {
   const candidates: StatementLineCandidate[] = []
+  const cursor: YearCursor = { currentYear: statementYear, lastMonth: null, direction: null }
 
   for (const rawLine of text.split('\n')) {
     const line = rawLine.trim()
     if (!line) continue
 
-    const dateMatch = matchDate(line, statementYear)
+    const dateMatch = matchDate(line, cursor)
     if (!dateMatch) continue
 
     const amountMatch = matchAmount(line)
@@ -122,6 +175,11 @@ export function parseStatementText(text: string, statementYear: number): Stateme
       date: dateMatch.date,
       amount: amountMatch.amount,
       type: amountMatch.type,
+      // Matches the transactions.category column's own default — every
+      // candidate always carries a category so review-table edits stay
+      // uniform across rows (a bulk insert with some rows missing the key
+      // and others not is rejected by PostgREST as inconsistent keys).
+      category: 'Other',
       description: description || 'Statement transaction',
     })
   }

@@ -33,6 +33,7 @@ export default function StatementImportBoard() {
   const [parseError, setParseError] = useState<string | null>(null)
   const [committing, setCommitting] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)
+  const [commitSummary, setCommitSummary] = useState<string | null>(null)
 
   const handleParse = async () => {
     if (!accountId || !file) return
@@ -98,6 +99,7 @@ export default function StatementImportBoard() {
 
     setCommitting(true)
     setCommitError(null)
+    setCommitSummary(null)
 
     try {
       const res = await fetch('/api/money/statement-import/commit', {
@@ -118,6 +120,15 @@ export default function StatementImportBoard() {
 
       if (!res.ok) {
         setCommitError('Failed to save transactions — nothing was committed.')
+        return
+      }
+
+      const data = (await res.json()) as { committed: number; skippedDuplicates: number }
+
+      if (data.skippedDuplicates > 0) {
+        setCommitSummary(
+          `Saved ${data.committed}, skipped ${data.skippedDuplicates} already on this account.`
+        )
         return
       }
 
@@ -171,7 +182,7 @@ export default function StatementImportBoard() {
             </Button>
 
             <label className="flex flex-col gap-1 text-xs text-on-surface-variant">
-              Statement year (for dates with no year of their own)
+              Starting year (used until the statement itself establishes a year)
               <input
                 type="number"
                 value={statementYear}
@@ -207,11 +218,18 @@ export default function StatementImportBoard() {
           <StatementReviewTable rows={rows} onChange={setRows} />
 
           {commitError && <p className="text-xs text-error">{commitError}</p>}
+          {commitSummary && <p className="text-xs text-on-surface-variant">{commitSummary}</p>}
 
           <div className="flex items-center gap-2">
-            <Button type="button" disabled={committing || includedCount === 0} onClick={handleCommit}>
-              {committing ? 'Saving…' : `Commit ${includedCount} transaction${includedCount === 1 ? '' : 's'}`}
-            </Button>
+            {commitSummary ? (
+              <Button type="button" onClick={() => router.push(`/money/accounts/${accountId}`)}>
+                Continue to account
+              </Button>
+            ) : (
+              <Button type="button" disabled={committing || includedCount === 0} onClick={handleCommit}>
+                {committing ? 'Saving…' : `Commit ${includedCount} transaction${includedCount === 1 ? '' : 's'}`}
+              </Button>
+            )}
             <Button type="button" variant="ghost" onClick={() => setRows(null)}>
               Start over
             </Button>

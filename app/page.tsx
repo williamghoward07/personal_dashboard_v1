@@ -2,11 +2,11 @@ import AiQueryBar from './components/AiQueryBar'
 import CalendarModule from './components/modules/CalendarModule'
 import EducationGlance from './components/widgets/home/EducationGlance'
 import MoneyGlance from './components/widgets/home/MoneyGlance'
-import HealthGlance from './components/widgets/home/HealthGlance'
 import ResearchGlance from './components/widgets/home/ResearchGlance'
 import HabitsGlance from './components/widgets/home/HabitsGlance'
 import DailyGoals from './components/widgets/home/DailyGoals'
 import PeopleGlance from './components/widgets/home/PeopleGlance'
+import AiUsageGlance from './components/widgets/home/AiUsageGlance'
 
 export default function Home() {
   return (
@@ -17,7 +17,7 @@ export default function Home() {
         <DailyGoals />
         <EducationGlance />
         <MoneyGlance />
-        <HealthGlance />
+        <AiUsageGlance />
         <ResearchGlance />
         <HabitsGlance />
         <PeopleGlance />

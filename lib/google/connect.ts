@@ -1,6 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { GOOGLE_CALENDAR_SCOPE } from './calendar-scope'
 
 // Both queryParams below are required — without access_type=offline and
 // prompt=consent, Google will not return a provider_refresh_token, and
@@ -13,7 +14,7 @@ export async function connectGoogleCalendar(next = '/') {
     provider: 'google',
     options: {
       redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
-      scopes: 'https://www.googleapis.com/auth/calendar.readonly',
+      scopes: GOOGLE_CALENDAR_SCOPE,
       queryParams: {
         access_type: 'offline',
         prompt: 'consent',

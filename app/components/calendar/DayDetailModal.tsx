@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import type { Task } from '@/lib/types'
+import type { RoutineInstance, Task } from '@/lib/types'
 import Modal from '../Modal'
 import type { DayItem } from './calendarItems'
 import DayItemsList from './DayItemsList'
@@ -20,11 +20,13 @@ export default function DayDetailModal({
   items,
   onClose,
   onSelectTask,
+  onSelectRoutineInstance,
 }: {
   dateKey: string
   items: DayItem[]
   onClose: () => void
   onSelectTask: (task: Task) => void
+  onSelectRoutineInstance: (instance: RoutineInstance) => void
 }) {
   return (
     <Modal onClose={onClose}>
@@ -41,7 +43,7 @@ export default function DayDetailModal({
           </button>
         </div>
 
-        <DayItemsList items={items} onSelectTask={onSelectTask} />
+        <DayItemsList items={items} onSelectTask={onSelectTask} onSelectRoutineInstance={onSelectRoutineInstance} />
       </div>
     </Modal>
   )

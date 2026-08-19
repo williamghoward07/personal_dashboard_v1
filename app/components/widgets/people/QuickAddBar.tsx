@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Sparkles, Send } from 'lucide-react'
+import { Sparkles, Send, Square } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Interaction, Person, Place } from '@/lib/types'
 import type { NlExtractResult, NlExtractedPerson } from '@/lib/people/nl-extract'
@@ -69,22 +69,27 @@ export default function QuickAddBar({
   places,
   runMutation,
   onChange,
+  pushToGoogle,
 }: {
   people: Person[]
   places: Place[]
   runMutation: RunMutation
   onChange: () => void
+  pushToGoogle: (personId: string) => void
 }) {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingAction | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     const trimmed = text.trim()
     if (!trimmed || loading) return
 
+    const controller = new AbortController()
+    abortRef.current = controller
     setLoading(true)
     setError(null)
 
@@ -93,6 +98,7 @@ export default function QuickAddBar({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: trimmed }),
+        signal: controller.signal,
       })
 
       if (!res.ok) {
@@ -125,12 +131,20 @@ export default function QuickAddBar({
       }
 
       setText('')
-    } catch {
+    } catch (err) {
+      // Aborted by the stop button — reset quietly, this isn't an error.
+      // Note this only stops the client from waiting: the route handler and
+      // its Gemini call keep running server-side, the result is just
+      // discarded here.
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setError("Couldn't reach the AI service — try again in a moment, or add it manually below.")
     } finally {
       setLoading(false)
+      abortRef.current = null
     }
   }
+
+  const handleStop = () => abortRef.current?.abort()
 
   const savePerson = async (values: PersonFormValues) => {
     if (pending?.kind !== 'person') return
@@ -143,6 +157,7 @@ export default function QuickAddBar({
         )
       : await runMutation(() => supabase.from('people').insert(values))
     if (ok) {
+      if (pending.matchedPerson?.google_resource_name) pushToGoogle(pending.matchedPerson.id)
       setPending(null)
       onChange()
     }
@@ -198,25 +213,38 @@ export default function QuickAddBar({
         accent="amber"
         className="sm:col-span-2 xl:col-span-4"
       >
-        <form onSubmit={handleSubmit} className="flex items-center gap-2">
-          <input
-            type="text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="e.g. Had coffee with Alice, she just started at Deloitte..."
-            disabled={loading}
-            aria-label="Describe a person or something that happened"
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3.5 py-2.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant focus:border-people-amber disabled:opacity-60"
-          />
-          <button
-            type="submit"
-            disabled={loading || !text.trim()}
-            aria-label="Extract"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-people-amber hover:bg-surface-container-high disabled:opacity-40"
-          >
-            <Send className="h-4 w-4" />
-          </button>
-        </form>
+        <div className={`relative rounded-lg ${loading ? 'rainbow-ring' : ''}`}>
+          <form onSubmit={handleSubmit} className="flex items-center gap-2">
+            <input
+              type="text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="e.g. Had coffee with Alice, she just started at Deloitte..."
+              disabled={loading}
+              aria-label="Describe a person or something that happened"
+              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3.5 py-2.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant focus:border-people-amber disabled:opacity-60"
+            />
+            {loading ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                aria-label="Stop"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-people-amber hover:bg-surface-container-high"
+              >
+                <Square className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!text.trim()}
+                aria-label="Extract"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-people-amber hover:bg-surface-container-high disabled:opacity-40"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            )}
+          </form>
+        </div>
         {loading && <p className="mt-2 text-xs text-on-surface-variant">Reading that…</p>}
         {error && <p className="mt-2 text-xs text-error">{error}</p>}
       </WidgetCard>

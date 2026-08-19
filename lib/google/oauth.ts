@@ -2,8 +2,13 @@
 // Server-only: GOOGLE_CLIENT_SECRET must never reach the browser.
 
 export const GOOGLE_CONTACTS_PROVIDER = 'google_contacts'
+// Full write scope — needed so contact-card edits made in the app (name,
+// email, phone, company, LinkedIn) can be pushed back to Google, not just
+// pulled from it. Anyone connected under the old .readonly scope needs to
+// hit Reconnect once to re-consent; prompt=consent below makes sure that
+// consent screen actually shows the new permission.
 export const GOOGLE_CONTACTS_SCOPES = [
-  'https://www.googleapis.com/auth/contacts.readonly',
+  'https://www.googleapis.com/auth/contacts',
   'https://www.googleapis.com/auth/userinfo.email',
 ]
 

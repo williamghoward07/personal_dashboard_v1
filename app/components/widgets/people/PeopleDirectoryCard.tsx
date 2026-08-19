@@ -20,6 +20,7 @@ export default function PeopleDirectoryCard({
   loading,
   runMutation,
   onChange,
+  pushToGoogle,
 }: {
   people: Person[]
   places: Place[]
@@ -28,6 +29,7 @@ export default function PeopleDirectoryCard({
   loading: boolean
   runMutation: RunMutation
   onChange: () => void
+  pushToGoogle: (personId: string) => void
 }) {
   const [query, setQuery] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -190,6 +192,7 @@ export default function PeopleDirectoryCard({
               .eq('id', editingPerson.id),
           )
           if (ok) {
+            if (editingPerson.google_resource_name) pushToGoogle(editingPerson.id)
             setEditingPerson(null)
             onChange()
           }

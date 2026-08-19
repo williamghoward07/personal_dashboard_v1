@@ -9,6 +9,11 @@ export interface Module {
   id: string
   year_id: string
   name: string
+  // Set when this module is linked to a OneNote section for in-app
+  // browsing (see lib/microsoft/graph.ts). section_name is cached for
+  // display only, refreshed whenever the link is (re)picked.
+  onenote_section_id: string | null
+  onenote_section_name: string | null
   created_at: string
 }
 
@@ -183,6 +188,43 @@ export interface DailyGoalHabitCompletion {
   habit_id: string
   completed_on: string
   value: number | null
+  created_at: string
+}
+
+// Calendar page > Routines tab: a reusable, named stack of timed steps that
+// can be dragged onto a specific day/time to create a real Google Calendar
+// event (see RoutineInstance below). Deliberately separate from
+// DailyGoalHabit — routines have no "done today" tracking, just ordered
+// timed steps and calendar placements.
+export interface Routine {
+  id: string
+  name: string
+  colour: string
+  created_at: string
+}
+
+export interface RoutineItem {
+  id: string
+  routine_id: string
+  name: string
+  description: string
+  duration_minutes: number
+  sort_order: number
+  created_at: string
+}
+
+// One scheduled placement of a routine onto the real calendar. routine_name/
+// routine_colour/duration_minutes are snapshotted at schedule-time so a
+// later-deleted routine template still renders correctly (routine_id is
+// nulled, not cascaded, when its template is deleted).
+export interface RoutineInstance {
+  id: string
+  routine_id: string | null
+  routine_name: string
+  routine_colour: string
+  start_at: string
+  duration_minutes: number
+  google_event_id: string
   created_at: string
 }
 

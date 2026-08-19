@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { googleVaultSecretName, upsertGoogleVaultTokens } from '@/lib/google/vault'
+import { GOOGLE_CALENDAR_SCOPE } from '@/lib/google/calendar-scope'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -58,7 +59,7 @@ async function storeGoogleCalendarTokens(
       provider: 'google',
       connected_at: new Date().toISOString(),
       expires_at: new Date().toISOString(),
-      scopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+      scopes: [GOOGLE_CALENDAR_SCOPE],
       vault_secret_name: secretName,
       last_error: null,
     },

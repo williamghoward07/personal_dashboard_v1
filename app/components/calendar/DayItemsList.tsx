@@ -1,4 +1,4 @@
-import type { Task } from '@/lib/types'
+import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from './calendarItems'
 import { DOT_CLASS, formatTime } from './calendarItems'
 
@@ -13,9 +13,11 @@ function formatSpanEnd(endKey: string) {
 export default function DayItemsList({
   items,
   onSelectTask,
+  onSelectRoutineInstance,
 }: {
   items: DayItem[]
   onSelectTask: (task: Task) => void
+  onSelectRoutineInstance: (instance: RoutineInstance) => void
 }) {
   if (items.length === 0) {
     return <p className="text-sm text-on-surface-variant">Nothing on this day.</p>
@@ -45,8 +47,11 @@ export default function DayItemsList({
 
         return (
           <li key={`${item.kind}-${item.id}`} className="flex items-center gap-2">
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT_CLASS[item.kind]}`} />
-            {item.kind === 'calendar' && item.start && (
+            <span
+              className={item.kind === 'routine' ? 'h-1.5 w-1.5 shrink-0 rounded-full' : `h-1.5 w-1.5 shrink-0 rounded-full ${DOT_CLASS[item.kind]}`}
+              style={item.kind === 'routine' ? { backgroundColor: item.colour } : undefined}
+            />
+            {(item.kind === 'calendar' || item.kind === 'routine') && item.start && (
               <span className="shrink-0 text-xs tabular-nums text-on-surface-variant">
                 {formatTime(item.start)}
               </span>
@@ -55,6 +60,14 @@ export default function DayItemsList({
               <button
                 type="button"
                 onClick={() => onSelectTask(item.task)}
+                className="truncate text-left text-on-surface hover:underline"
+              >
+                {item.title}
+              </button>
+            ) : item.kind === 'routine' ? (
+              <button
+                type="button"
+                onClick={() => onSelectRoutineInstance(item.instance)}
                 className="truncate text-left text-on-surface hover:underline"
               >
                 {item.title}

@@ -123,5 +123,5 @@ Note: "${text}"
 
 Decide the intent, whether this refers to one of the existing people above, and extract whatever fields the note actually states. Never guess a field that isn't stated or clearly implied.`
 
-  return generateStructured<NlExtractResult>({ prompt, schema: SCHEMA })
+  return generateStructured<NlExtractResult>({ prompt, schema: SCHEMA, feature: 'people_quick_add' })
 }

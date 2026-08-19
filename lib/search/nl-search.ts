@@ -11,6 +11,59 @@ export interface NlSearchExtraction {
   targetModules: SearchModule[]
 }
 
+// Bare module names / a leading module word — resolved locally with zero
+// API calls (see the AI Search & Token Budget plan's "Regex fast path"
+// token-saving measure).
+const MODULE_ALIASES: Record<string, SearchModule> = {
+  people: 'people',
+  contacts: 'people',
+  tasks: 'tasks',
+  task: 'tasks',
+  education: 'tasks',
+  module: 'tasks',
+  modules: 'tasks',
+  todos: 'todos',
+  todo: 'todos',
+  transactions: 'transactions',
+  transaction: 'transactions',
+  money: 'transactions',
+  spending: 'transactions',
+  habits: 'habits',
+  habit: 'habits',
+  prompts: 'prompts',
+  prompt: 'prompts',
+  research: 'prompts',
+}
+
+function localFastPath(query: string): NlSearchExtraction | null {
+  const trimmed = query.trim().toLowerCase()
+  if (!trimmed) return null
+
+  const bareModule = MODULE_ALIASES[trimmed]
+  if (bareModule) return { keywords: [], targetModules: [bareModule] }
+
+  const [firstWord, ...rest] = trimmed.split(/\s+/)
+  const prefixModule = MODULE_ALIASES[firstWord]
+  if (prefixModule && rest.length > 0) {
+    return { keywords: [rest.join(' ')], targetModules: [prefixModule] }
+  }
+
+  return null
+}
+
+const QUESTION_WORDS = ['how', 'what', 'when', 'where', 'why', 'who', 'which', 'is', 'are', 'does', 'do', 'did', 'can', 'should', 'was', 'were']
+
+// Local heuristic gating Search mode 2 (Answer) — never trigger the extra
+// smart-tier call on a plain keyword search, only on something that reads
+// as an actual question about the user's own data.
+export function isQuestion(query: string): boolean {
+  const trimmed = query.trim().toLowerCase()
+  if (!trimmed) return false
+  if (trimmed.endsWith('?')) return true
+  const firstWord = trimmed.split(/\s+/)[0]
+  return QUESTION_WORDS.includes(firstWord)
+}
+
 const SCHEMA: AiSchema = {
   type: 'object',
   required: ['keywords', 'targetModules'],
@@ -35,13 +88,16 @@ const SCHEMA: AiSchema = {
 // as inputs, which is what makes "no AI in the query-execution path"
 // literally true rather than just a description.
 export async function extractSearchQuery(query: string): Promise<NlSearchExtraction> {
+  const fastPath = localFastPath(query)
+  if (fastPath) return fastPath
+
   const prompt = `Extract search keywords and relevant modules from this query for a personal dashboard search.
 
 Query: "${query}"
 
 Return only keywords and module names — you are not writing a database query, just identifying what to search for and where.`
 
-  const result = await generateStructured<NlSearchExtraction>({ prompt, schema: SCHEMA })
+  const result = await generateStructured<NlSearchExtraction>({ prompt, schema: SCHEMA, feature: 'search' })
 
   // Defensive re-filter even though the schema already enums this — a
   // model response that ever drifts from the enum shouldn't be able to

@@ -44,20 +44,20 @@ export default function TopAppBar() {
 
   return (
     <header
-      className={`fixed top-0 z-30 flex h-16 w-full items-center justify-between border-b border-outline-variant bg-surface/80 px-8 backdrop-blur-xl transition-transform duration-200 md:sticky md:translate-y-0 ${
+      className={`fixed top-0 z-30 flex h-16 w-full items-center justify-between border-b border-outline-variant bg-surface/80 px-4 backdrop-blur-xl transition-transform duration-200 md:sticky md:translate-y-0 md:px-8 ${
         scrollDirection === 'down' ? '-translate-y-full' : 'translate-y-0'
       }`}
     >
-      <span className="font-display text-headline-md font-bold tracking-wide text-secondary-container">
+      <span className="font-display text-base font-bold tracking-wide text-secondary-container md:text-headline-md">
         STUDY COPILOT
       </span>
-      <div className="flex items-center gap-4">
-        <span className="font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-on-surface-variant">
+      <div className="flex items-center gap-2 md:gap-4">
+        <span className="hidden font-display text-[11px] font-semibold uppercase tracking-[0.16em] text-on-surface-variant md:inline">
           {username ? `${username}'s Dashboard` : 'Personal Dashboard'}
         </span>
         {error && <span className="text-xs text-error">{error}</span>}
         {email && (
-          <span className="text-xs text-on-surface-variant">{email}</span>
+          <span className="hidden text-xs text-on-surface-variant md:inline">{email}</span>
         )}
         <button
           type="button"
@@ -65,10 +65,10 @@ export default function TopAppBar() {
           disabled={signingOut}
           title="Sign out"
           aria-label="Sign out"
-          className="flex items-center gap-2 rounded-xl border border-outline-variant bg-surface px-3 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors duration-200 hover:bg-surface-container hover:text-on-surface disabled:opacity-60"
+          className="flex items-center gap-2 rounded-xl border border-outline-variant bg-surface px-2 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors duration-200 hover:bg-surface-container hover:text-on-surface disabled:opacity-60 md:px-3"
         >
           <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
-          {signingOut ? 'Signing out…' : 'Sign out'}
+          <span className="hidden md:inline">{signingOut ? 'Signing out…' : 'Sign out'}</span>
         </button>
       </div>
     </header>

@@ -1,10 +1,15 @@
-// Google People API — read-only fetch of your contacts, plus the mapping onto
-// the `people` table.
+// Google People API — fetches your contacts and maps them onto the `people`
+// table, and pushes local contact-card edits back to Google.
 //
 // Conflict rule: Google owns the contact card, the app owns the CRM fields.
-// A sync writes only the columns in GOOGLE_OWNED_FIELDS. It never touches
-// notes, tags, how_we_met, archived, or any interaction. People added by hand
-// have a null google_resource_name and are skipped entirely.
+// A pull sync writes only the columns in GOOGLE_OWNED_FIELDS. It never
+// touches notes, tags, how_we_met, archived, or any interaction. People
+// added by hand have a null google_resource_name and are skipped entirely.
+//
+// The contact card is now bidirectional: editing a synced person's name,
+// email, phone, company/role or LinkedIn in the app pushes that change to
+// Google via updateContact() below, so the next pull sync reads back what
+// was just written instead of silently reverting the edit.
 
 const CONNECTIONS_ENDPOINT = 'https://people.googleapis.com/v1/people/me/connections'
 
@@ -108,6 +113,84 @@ export function mapGooglePerson(person: GooglePerson): MappedPerson | null {
     linkedin_url: linkedInFrom(person.urls),
     birthday: birthdayFrom(person.birthdays),
   }
+}
+
+/**
+ * Pushes a local contact-card edit back to Google. Only the fields Google
+ * models cleanly are sent — birthday is skipped because the pull mapper
+ * fabricates a placeholder year (1900) when Google didn't supply one, and
+ * pushing that back would assert a false birth year; photo is skipped
+ * because it needs a separate base64 upload endpoint.
+ *
+ * Google's contact fields (emailAddresses, phoneNumbers, organizations,
+ * urls) are arrays; the app only tracks one value each, and
+ * updatePersonFields replaces the whole array, so a contact with e.g. two
+ * phone numbers in Google loses the second one on push. Acceptable for a
+ * single-user app — the pull side already only ever surfaces one value per
+ * field anyway (see `primary()` above).
+ *
+ * names[] has no free-text field (displayName is output-only), so full_name
+ * is split into givenName/familyName on the first space. Lossy for
+ * multi-word surnames or non-Western name order, but a reasonable default.
+ */
+export async function updateContact({
+  accessToken,
+  resourceName,
+  full_name,
+  email,
+  phone,
+  company,
+  job_title,
+  linkedin_url,
+}: {
+  accessToken: string
+  resourceName: string
+  full_name: string
+  email: string | null
+  phone: string | null
+  company: string | null
+  job_title: string | null
+  linkedin_url: string | null
+}): Promise<{ etag: string | null }> {
+  // The People API's optimistic-concurrency etag lives on the top-level
+  // Person, a different value from the per-source etag stored in
+  // google_etag — re-fetch it fresh right before writing rather than trying
+  // to reconcile the two.
+  const getRes = await fetch(`https://people.googleapis.com/v1/${resourceName}?personFields=metadata`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!getRes.ok) {
+    throw new Error(`Couldn't read the contact before updating (${getRes.status}): ${await getRes.text()}`)
+  }
+  const current = (await getRes.json()) as { etag?: string }
+  if (!current.etag) throw new Error("Google didn't return an etag for this contact")
+
+  const [givenName, ...rest] = full_name.trim().split(/\s+/)
+  const familyName = rest.length > 0 ? rest.join(' ') : undefined
+
+  const updatePersonFields = ['names', 'emailAddresses', 'phoneNumbers', 'organizations', 'urls'].join(',')
+  const body = {
+    etag: current.etag,
+    names: [{ givenName, familyName }],
+    emailAddresses: email ? [{ value: email }] : [],
+    phoneNumbers: phone ? [{ value: phone }] : [],
+    organizations: company || job_title ? [{ name: company ?? undefined, title: job_title ?? undefined }] : [],
+    urls: linkedin_url ? [{ value: linkedin_url, type: 'other' }] : [],
+  }
+
+  const patchRes = await fetch(
+    `https://people.googleapis.com/v1/${resourceName}:updateContact?updatePersonFields=${updatePersonFields}`,
+    {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  )
+  if (!patchRes.ok) {
+    throw new Error(`Google People API update failed (${patchRes.status}): ${await patchRes.text()}`)
+  }
+  const updated = (await patchRes.json()) as GooglePerson
+  return { etag: updated.metadata?.sources?.[0]?.etag ?? null }
 }
 
 /** Raised when Google rejects a stored syncToken; caller should full-resync. */

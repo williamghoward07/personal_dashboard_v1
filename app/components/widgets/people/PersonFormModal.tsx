@@ -89,8 +89,9 @@ export default function PersonFormModal({
 
         {isGoogleContact && (
           <p className="rounded-md border border-people-amber/30 bg-people-amber/10 px-2 py-1.5 text-xs text-people-amber">
-            Synced from Google Contacts. Name, email, phone, company and LinkedIn are
-            overwritten on the next sync — your notes and tags are not.
+            Synced from Google Contacts. Saving here also updates the contact in Google
+            (name, email, phone, company and LinkedIn) — birthday, notes and tags stay
+            app-only.
           </p>
         )}
 

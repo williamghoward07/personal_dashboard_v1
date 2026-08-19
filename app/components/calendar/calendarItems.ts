@@ -1,4 +1,4 @@
-import type { Task, ActivitySession } from '@/lib/types'
+import type { Task, ActivitySession, RoutineInstance } from '@/lib/types'
 import { londonDateKey } from '@/lib/google/london-day'
 
 export interface CalendarEvent {
@@ -24,6 +24,16 @@ export type DayItem =
     }
   | { kind: 'task'; id: string; title: string; task: Task }
   | { kind: 'activity'; id: string; title: string }
+  | {
+      kind: 'routine'
+      id: string
+      title: string
+      start: string
+      durationMinutes: number
+      colour: string
+      routineId: string | null
+      instance: RoutineInstance
+    }
 
 export interface EventSpan {
   id: string
@@ -33,11 +43,14 @@ export interface EventSpan {
 }
 
 // Same source → colour mapping as CalendarModule's home-page widget, so the
-// dedicated page reads as the same system.
+// dedicated page reads as the same system. 'routine' isn't actually rendered
+// via this map — each routine has its own user-picked colour, applied
+// inline by the caller — this entry only exists so the Record stays total.
 export const DOT_CLASS: Record<DayItem['kind'], string> = {
   calendar: 'bg-on-surface-variant',
   task: 'bg-academic-orange',
   activity: 'bg-primary-container',
+  routine: 'bg-habit-purple',
 }
 
 export function formatTime(iso: string) {
@@ -81,19 +94,26 @@ function resolveEventSpan(event: CalendarEvent): { startKey: string; endKey: str
   return { startKey, endKey: adjustedEndKey < startKey ? startKey : adjustedEndKey }
 }
 
-// Buckets Google Calendar events, tasks (by due date), and activity
-// sessions into one map keyed by 'YYYY-MM-DD'. A multi-day event appears
-// under every date it spans (annotated with spanStartKey/spanEndKey) so
-// day/agenda views can show it wherever it's relevant; month/week grid
-// views instead render it once as a spanning bar (see
-// getMultiDayEventSpans) and filter these per-day entries out to avoid
+// Buckets Google Calendar events, tasks (by due date), activity sessions,
+// and scheduled routine instances into one map keyed by 'YYYY-MM-DD'. A
+// multi-day event appears under every date it spans (annotated with
+// spanStartKey/spanEndKey) so day/agenda views can show it wherever it's
+// relevant; month/week grid views instead render it once as a spanning bar
+// (see getMultiDayEventSpans) and filter these per-day entries out to avoid
 // showing it twice.
+//
+// A scheduled routine writes both a routine_instances row AND a real Google
+// Calendar event (see app/api/routines/schedule) — Google events whose id
+// matches a routine instance's google_event_id are dropped here so the same
+// block never renders twice (once generic, once routine-specific).
 export function groupItemsByDate(
   events: CalendarEvent[],
   tasks: Task[],
-  sessions: ActivitySession[]
+  sessions: ActivitySession[],
+  routineInstances: RoutineInstance[]
 ): Map<string, DayItem[]> {
   const byDate = new Map<string, DayItem[]>()
+  const routineEventIds = new Set(routineInstances.map((i) => i.google_event_id))
 
   const push = (key: string, item: DayItem) => {
     const existing = byDate.get(key)
@@ -102,6 +122,8 @@ export function groupItemsByDate(
   }
 
   for (const event of events) {
+    if (routineEventIds.has(event.id)) continue
+
     const { startKey, endKey } = resolveEventSpan(event)
     for (const key of keysBetween(startKey, endKey)) {
       push(key, {
@@ -131,10 +153,23 @@ export function groupItemsByDate(
     })
   }
 
+  for (const instance of routineInstances) {
+    push(londonDateKey(instance.start_at), {
+      kind: 'routine',
+      id: instance.id,
+      title: instance.routine_name,
+      start: instance.start_at,
+      durationMinutes: instance.duration_minutes,
+      colour: instance.routine_colour,
+      routineId: instance.routine_id,
+      instance,
+    })
+  }
+
   for (const items of byDate.values()) {
     items.sort((a, b) => {
-      const aStart = a.kind === 'calendar' ? a.start : null
-      const bStart = b.kind === 'calendar' ? b.start : null
+      const aStart = a.kind === 'calendar' || a.kind === 'routine' ? a.start : null
+      const bStart = b.kind === 'calendar' || b.kind === 'routine' ? b.start : null
       if (!aStart && !bStart) return 0
       if (!aStart) return -1
       if (!bStart) return 1

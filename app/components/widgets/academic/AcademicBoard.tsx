@@ -6,6 +6,10 @@ import type { Year, Module } from '@/lib/types'
 import YearSelect from './YearSelect'
 import ModuleTabs from './ModuleTabs'
 import ModuleDetail from './ModuleDetail'
+import ViewToggle, { type AcademicView } from './ViewToggle'
+import TasksFlatView from './TasksFlatView'
+import AtRiskTasks from './AtRiskTasks'
+import MicrosoftOneNoteCard from './MicrosoftOneNoteCard'
 
 export default function AcademicBoard() {
   const [years, setYears] = useState<Year[]>([])
@@ -13,6 +17,7 @@ export default function AcademicBoard() {
   const [selectedYearId, setSelectedYearId] = useState<string | null>(null)
   const [modules, setModules] = useState<Module[]>([])
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null)
+  const [view, setView] = useState<AcademicView>('modules')
 
   useEffect(() => {
     supabase
@@ -64,6 +69,8 @@ export default function AcademicBoard() {
 
   return (
     <div className="flex flex-col gap-4 sm:col-span-2 xl:col-span-4">
+      <MicrosoftOneNoteCard />
+
       <YearSelect
         years={years}
         selectedYearId={selectedYearId}
@@ -72,15 +79,32 @@ export default function AcademicBoard() {
 
       {selectedYearId && (
         <div className="flex flex-col gap-4">
-          <ModuleTabs
-            yearId={selectedYearId}
-            modules={modules}
-            selectedModuleId={selectedModuleId}
-            onSelect={setSelectedModuleId}
-            onChange={() => refreshModules(selectedYearId)}
-          />
+          <div className="flex items-center justify-between">
+            <ViewToggle view={view} onChange={setView} />
+          </div>
 
-          {selectedModuleId && <ModuleDetail moduleId={selectedModuleId} />}
+          <AtRiskTasks modules={modules} />
+
+          {view === 'modules' ? (
+            <>
+              <ModuleTabs
+                yearId={selectedYearId}
+                modules={modules}
+                selectedModuleId={selectedModuleId}
+                onSelect={setSelectedModuleId}
+                onChange={() => refreshModules(selectedYearId)}
+              />
+
+              {selectedModuleId && (
+                <ModuleDetail
+                  moduleId={selectedModuleId}
+                  module={modules.find((m) => m.id === selectedModuleId) ?? null}
+                />
+              )}
+            </>
+          ) : (
+            <TasksFlatView modules={modules} />
+          )}
         </div>
       )}
     </div>

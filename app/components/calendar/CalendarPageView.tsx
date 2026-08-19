@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { Task } from '@/lib/types'
+import type { RoutineInstance, Task } from '@/lib/types'
 import { connectGoogleCalendar } from '@/lib/google/connect'
 import { londonDayBoundsUTC, londonWeekBoundsUTC, londonMonthBoundsUTC } from '@/lib/google/london-day'
 import type { LondonDateRange } from '@/lib/google/london-day'
@@ -13,10 +13,12 @@ import MonthView from './MonthView'
 import WeekView from './WeekView'
 import DayItemsList from './DayItemsList'
 import DayDetailModal from './DayDetailModal'
+import RoutinesPanel from './routines/RoutinesPanel'
+import RoutineInstanceModal from './routines/RoutineInstanceModal'
 import type { CalendarEvent, DayItem, EventSpan } from './calendarItems'
 import { groupItemsByDate, getAllDayEventSpans, addDaysToKey } from './calendarItems'
 
-type ViewMode = 'month' | 'week' | 'day'
+type ViewMode = 'month' | 'week' | 'day' | 'routines'
 
 function pad(n: number) {
   return String(n).padStart(2, '0')
@@ -24,6 +26,31 @@ function pad(n: number) {
 
 function todayKeyLondon(): string {
   return londonDayBoundsUTC().startDateKey
+}
+
+function ordinalSuffix(day: number): string {
+  if (day >= 11 && day <= 13) return 'th'
+  switch (day % 10) {
+    case 1:
+      return 'st'
+    case 2:
+      return 'nd'
+    case 3:
+      return 'rd'
+    default:
+      return 'th'
+  }
+}
+
+// "Today" button label — a short "Wed 19th" is more useful at a glance than
+// the static word "Today", since it doubles as a reminder of today's date.
+function formatTodayLabel(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  const weekday = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    timeZone: 'UTC',
+  })
+  return `${weekday} ${d}${ordinalSuffix(d)}`
 }
 
 function addMonthsToKey(key: string, delta: number): string {
@@ -88,6 +115,7 @@ const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
   { value: 'month', label: 'Month' },
   { value: 'week', label: 'Week' },
   { value: 'day', label: 'Day' },
+  { value: 'routines', label: 'Routines' },
 ]
 
 export default function CalendarPageView() {
@@ -99,6 +127,9 @@ export default function CalendarPageView() {
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [detailDateKey, setDetailDateKey] = useState<string | null>(null)
+  const [selectedRoutineInstance, setSelectedRoutineInstance] = useState<RoutineInstance | null>(null)
+  const [refreshToken, setRefreshToken] = useState(0)
+  const refetch = () => setRefreshToken((t) => t + 1)
 
   useEffect(() => {
     let cancelled = false
@@ -121,9 +152,20 @@ export default function CalendarPageView() {
         .catch(() => []),
       supabase.from('tasks').select('*').gte('due_date', range.startDateKey).lt('due_date', range.endDateKey),
       supabase.from('activity_sessions').select('*').gte('occurred_at', range.timeMin).lt('occurred_at', range.timeMax),
-    ]).then(([events, tasksRes, sessionsRes]) => {
+      // Fetched for every view, not just 'routines' — Month/Week/Day all
+      // need the dedup-against-Google + distinct-colour + click-to-open
+      // treatment for scheduled routines, not just the Routines tab itself.
+      supabase.from('routine_instances').select('*').gte('start_at', range.timeMin).lt('start_at', range.timeMax),
+    ]).then(([events, tasksRes, sessionsRes, routineInstancesRes]) => {
       if (cancelled) return
-      setItemsByDate(groupItemsByDate(events, tasksRes.data ?? [], sessionsRes.data ?? []))
+      setItemsByDate(
+        groupItemsByDate(
+          events,
+          tasksRes.data ?? [],
+          sessionsRes.data ?? [],
+          (routineInstancesRes.data ?? []) as RoutineInstance[]
+        )
+      )
       setSpans(getAllDayEventSpans(events))
       setLoading(false)
     })
@@ -131,7 +173,7 @@ export default function CalendarPageView() {
     return () => {
       cancelled = true
     }
-  }, [view, selectedDateKey])
+  }, [view, selectedDateKey, refreshToken])
 
   const goPrev = () => {
     if (view === 'month') setSelectedDateKey((k) => addMonthsToKey(k, -1))
@@ -187,9 +229,11 @@ export default function CalendarPageView() {
               <button
                 type="button"
                 onClick={goToday}
-                className="rounded-md px-2 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                aria-label="Jump to today"
+                title="Jump to today"
+                className="rounded-md px-2 py-1 text-xs font-semibold tabular-nums text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
               >
-                Today
+                {formatTodayLabel(todayKey)}
               </button>
               <button
                 type="button"
@@ -200,6 +244,18 @@ export default function CalendarPageView() {
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
+            {/* Always available, not just on a 409 — lets you re-consent
+                for a newly added scope (e.g. calendar write) even while
+                the old token still works fine for reads. */}
+            <button
+              type="button"
+              onClick={() => connectGoogleCalendar('/calendar')}
+              aria-label="Reconnect Google Calendar"
+              title="Reconnect Google Calendar"
+              className="rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
           </div>
         )
       }
@@ -241,10 +297,19 @@ export default function CalendarPageView() {
               todayKey={todayKey}
               onSelectDate={setDetailDateKey}
             />
+          ) : view === 'routines' ? (
+            <RoutinesPanel
+              dateKey={selectedDateKey}
+              items={itemsByDate.get(selectedDateKey) ?? []}
+              onScheduled={refetch}
+              onSelectRoutineInstance={setSelectedRoutineInstance}
+              onSelectTask={setSelectedTask}
+            />
           ) : (
             <DayItemsList
               items={itemsByDate.get(selectedDateKey) ?? []}
               onSelectTask={setSelectedTask}
+              onSelectRoutineInstance={setSelectedRoutineInstance}
             />
           )}
         </div>
@@ -259,10 +324,22 @@ export default function CalendarPageView() {
             setDetailDateKey(null)
             setSelectedTask(task)
           }}
+          onSelectRoutineInstance={(instance) => {
+            setDetailDateKey(null)
+            setSelectedRoutineInstance(instance)
+          }}
         />
       )}
 
       {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} />}
+
+      {selectedRoutineInstance && (
+        <RoutineInstanceModal
+          instance={selectedRoutineInstance}
+          onClose={() => setSelectedRoutineInstance(null)}
+          onChanged={refetch}
+        />
+      )}
     </WidgetCard>
   )
 }

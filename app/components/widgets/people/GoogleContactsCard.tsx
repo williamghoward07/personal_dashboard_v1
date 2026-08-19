@@ -154,8 +154,9 @@ export default function GoogleContactsCard({ onChange }: { onChange: () => void 
           ) : (
             <>
               <p className="text-xs text-on-surface-variant">
-                Import your contacts read-only. Google fills in names, emails, phones, company
-                and LinkedIn; your notes, tags and history stay yours.
+                Import your contacts, and push edits back. Google fills in names, emails,
+                phones, company and LinkedIn — edit any of those in the app and it updates
+                Google too. Your notes, tags and history stay yours.
               </p>
               <a
                 href="/api/google/connect"

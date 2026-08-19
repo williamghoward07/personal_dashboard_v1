@@ -94,3 +94,13 @@ export function londonMonthBoundsUTC(year: number, month: number): LondonDateRan
 export function londonDateKey(value: string): string {
   return dateKey(londonYMD(new Date(value)))
 }
+
+// UTC ISO instant for a specific Europe/London wall-clock date + time — used
+// by the Routines tab to turn a day-timeline drop slot ('YYYY-MM-DD' +
+// 'HH:mm') into a real timestamptz for routine_instances.start_at.
+export function londonDateTimeToUTCISO(dateKeyValue: string, time: string): string {
+  const [year, month, day] = dateKeyValue.split('-').map(Number)
+  const [hours, minutes] = time.split(':').map(Number)
+  const offsetMinutes = londonOffsetMinutes(new Date(Date.UTC(year, month - 1, day)))
+  return new Date(Date.UTC(year, month - 1, day, hours, minutes) - offsetMinutes * 60_000).toISOString()
+}

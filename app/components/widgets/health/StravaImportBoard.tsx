@@ -112,9 +112,14 @@ export default function StravaImportBoard() {
         </Link>
         <h1 className="mt-1 font-display text-headline-lg font-bold text-on-surface">Import Strava data</h1>
         <p className="mt-1 text-sm text-on-surface-variant">
-          Upload the activities.csv from a Strava bulk export (Settings → My Account → Download or Delete Your
-          Account), review what was found, then commit the ones you want to keep. Re-uploading the same file
-          later updates matching activities in place rather than duplicating them.
+          Upload just the activities.csv file from a Strava bulk export (Settings → My Account →
+          Download or Delete Your Account) — the export bundle has other files too, but only
+          activities.csv is read, everything else is ignored. Column matching is a best-effort
+          mapping of Strava&apos;s CSV headers, not an official spec, so a header Strava renames
+          later could stop being recognised. Review what was found, then commit the ones you want
+          to keep; re-uploading the same file later updates matching activities in place rather
+          than duplicating them. (This is unrelated to gym-session/Hevy import, which isn&apos;t
+          built yet.)
         </p>
       </div>
 

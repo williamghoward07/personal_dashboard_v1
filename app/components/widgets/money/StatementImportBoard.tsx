@@ -154,7 +154,13 @@ export default function StatementImportBoard() {
         </Link>
         <h1 className="mt-1 font-display text-headline-lg font-bold text-on-surface">Import bank statement</h1>
         <p className="mt-1 text-sm text-on-surface-variant">
-          Upload a PDF statement, review what was found, then commit the ones you want to keep.
+          Upload any bank or card statement PDF — parsing isn&apos;t tied to a specific bank, it
+          looks for a date and a signed amount on each line using a generic UK-statement layout.
+          Scanned or image-only PDFs won&apos;t work since there&apos;s no text to read.
+          &ldquo;Starting year&rdquo; just seeds the year for statements that don&apos;t print one
+          on every line — it&apos;s a starting point, later dated lines can roll it forward.
+          Re-uploading a statement that overlaps one you&apos;ve already imported is safe;
+          matching rows are skipped rather than duplicated.
         </p>
       </div>
 

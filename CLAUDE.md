@@ -86,6 +86,11 @@ Seven widgets on the bento grid, each self-contained:
 - Shared `<ProgressRing />` component — used by Habits, Health, and the
   Daily Goals roll-up. Build once, reuse; don't let each widget grow
   its own ring implementation.
+- `ai_usage` — append-only log, one row per `generateStructured()` call
+  (real token counts, tier, model, an estimated USD cost). Backs the daily
+  call cap and the AI Usage bento widget. See the AI Search & Token Budget
+  plan (2026-08-18, `lib/ai/`) for the two-tier (`fast`/`smart`) model
+  policy this all sits under.
 
 ## Tech stack
 - Frontend: Next.js (App Router), TypeScript, Tailwind CSS
@@ -137,6 +142,11 @@ actual values.
   `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`
 - **Google Contacts (People module)**: `GOOGLE_CLIENT_ID`,
   `GOOGLE_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`
+- **Microsoft OneNote (Education module, read-only in-app browsing)**:
+  `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (Azure app registration,
+  "Personal Microsoft accounts only"; reuses `INTEGRATION_ENCRYPTION_KEY`
+  above). No indexing/reindexing — every Graph call is made on demand when
+  a section or page is actually opened in the app.
 - **Starling**: `STARLING_ACCESS_TOKEN`
 - **Apple Reminders (Todos page, via CalDAV)**: `ICLOUD_CALDAV_USERNAME`,
   `ICLOUD_CALDAV_APP_PASSWORD` (an app-specific password from
@@ -145,4 +155,4 @@ actual values.
   list name, or a comma-separated list of names to sync multiple lists
   into the same flat pool)
 - **Gemini (home search, People quick-add)**: `GEMINI_API_KEY` from
-  aistudio.google.com (free tier)
+  aistudio.google.com (free tier), optional `AI_ENABLED=false` kill switch

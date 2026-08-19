@@ -44,8 +44,8 @@ export default function PersonDetailModal({
   const openFollowUps = theirs.filter((i) => i.follow_up && !i.follow_up_done)
 
   return (
-    <Modal onClose={onClose}>
-      <div className="flex max-h-[80vh] flex-col gap-4 overflow-y-auto">
+    <Modal onClose={onClose} size="lg">
+      <div className="flex flex-col gap-4">
         <div className="flex items-start gap-3">
           <PersonAvatar fullName={person.full_name} photoUrl={person.photo_url} size="lg" />
           <div className="min-w-0 flex-1">
@@ -88,7 +88,7 @@ export default function PersonDetailModal({
           </div>
         </div>
 
-        <ul className="flex flex-col gap-1.5 text-sm">
+        <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
           {person.email && (
             <li className="flex items-center gap-2 text-on-surface-variant">
               <Mail className="h-3.5 w-3.5 shrink-0" />

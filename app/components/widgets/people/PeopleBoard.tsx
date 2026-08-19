@@ -53,6 +53,23 @@ export default function PeopleBoard() {
     return true
   }
 
+  /**
+   * Best-effort push of a Google-linked person's contact-card edit back to
+   * Google. Never rolls back the (already-successful) local save on
+   * failure — just surfaces a non-blocking note in the banner.
+   */
+  const pushToGoogle = async (personId: string) => {
+    const res = await fetch('/api/google/contacts/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ personId }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      setError(`Saved locally — couldn't sync the change to Google Contacts. ${body?.error ?? ''}`.trim())
+    }
+  }
+
   return (
     <>
       {error && (
@@ -61,7 +78,13 @@ export default function PeopleBoard() {
         </div>
       )}
 
-      <QuickAddBar people={people} places={places} runMutation={runMutation} onChange={refresh} />
+      <QuickAddBar
+        people={people}
+        places={places}
+        runMutation={runMutation}
+        onChange={refresh}
+        pushToGoogle={pushToGoogle}
+      />
 
       <PeopleDirectoryCard
         people={people}
@@ -71,6 +94,7 @@ export default function PeopleBoard() {
         loading={loading}
         runMutation={runMutation}
         onChange={refresh}
+        pushToGoogle={pushToGoogle}
       />
 
       <FollowUpsCard

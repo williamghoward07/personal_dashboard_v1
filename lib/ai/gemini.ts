@@ -1,13 +1,18 @@
 import 'server-only'
 import { GoogleGenAI, Type, type Schema } from '@google/genai'
 import type { AiSchema } from './schema'
+import { assertUnderDailyBudget, recordUsage, AiDisabledError } from './usage'
 
-// Stable (not preview) Flash-tier model, free-tier eligible — see
-// ai.google.dev/gemini-api/docs/models for the current lineup if this
-// ever needs bumping. Deliberately not the newest release at the time
-// this was written (3.7 Flash, days old) — a few months of track record
-// matters more than being on the bleeding edge for a personal app.
-const MODEL = 'gemini-3.5-flash'
+export type Tier = 'fast' | 'smart'
+
+// Two tiers, one key — see the AI Search & Token Budget plan (2026-08-18).
+// fast: cheap extraction (search keywords, quick-add parsing). smart:
+// judgement calls worth paying more for (answers over your own data,
+// transaction categorisation, essay breakdowns).
+const MODELS: Record<Tier, string> = {
+  fast: 'gemini-3.5-flash-lite',
+  smart: 'gemini-3.5-flash',
+}
 
 const TYPE_MAP: Record<AiSchema['type'], Type> = {
   object: Type.OBJECT,
@@ -43,21 +48,59 @@ function getClient(): GoogleGenAI {
   return client
 }
 
-// The one narrow entry point every AI feature in this app calls through
-// — People quick-add and NL search both only ever import this function,
-// never the provider SDK directly. If the provider ever switches (e.g.
-// to Claude), this is the only file that changes.
-export async function generateStructured<T>({ prompt, schema }: { prompt: string; schema: AiSchema }): Promise<T> {
+// The one narrow entry point every AI feature in this app calls through —
+// every call site imports only this function, never the provider SDK
+// directly. If the provider ever switches (e.g. to Claude), this is the
+// only file that changes.
+export async function generateStructured<T>({
+  prompt,
+  schema,
+  feature,
+  tier = 'fast',
+  maxOutputTokens = 150,
+  thinking = false,
+}: {
+  prompt: string
+  schema: AiSchema
+  // Short slug identifying the call site ('search', 'people_quick_add', …)
+  // — stored on ai_usage so the AI Usage widget can break spend down by
+  // feature.
+  feature: string
+  tier?: Tier
+  maxOutputTokens?: number
+  // Gemini 3.x bills reasoning tokens at the output rate — pure waste for
+  // extraction, so thinking stays off unless a caller explicitly opts in
+  // for a judgement task worth paying more for.
+  thinking?: boolean
+}): Promise<T> {
+  if (process.env.AI_ENABLED === 'false') throw new AiDisabledError()
+  await assertUnderDailyBudget()
+
+  const model = MODELS[tier]
   const ai = getClient()
 
+  // gemini-3.5-flash-lite (the fast tier) rejects thinkingConfig outright —
+  // 400 INVALID_ARGUMENT even for { thinkingBudget: 0 } — unlike the old
+  // 2.5-flash-lite. It never reasons anyway, so there's nothing to turn
+  // off; only send this to models that actually support it.
   const response = await ai.models.generateContent({
-    model: MODEL,
+    model,
     contents: prompt,
     config: {
       responseMimeType: 'application/json',
       responseSchema: toGeminiSchema(schema),
+      maxOutputTokens,
+      ...(tier === 'smart' ? { thinkingConfig: thinking ? undefined : { thinkingBudget: 0 } } : {}),
     },
   })
+
+  await recordUsage({
+    feature,
+    tier,
+    model,
+    inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
+    outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
+  }).catch((err) => console.error('AI usage recording failed:', err))
 
   const text = response.text
   if (!text) {

@@ -84,6 +84,8 @@ export default function AiUsageGlance() {
         <p>Loading...</p>
       ) : error ? (
         <p className="text-xs text-on-surface-variant">Couldn&apos;t load AI usage.</p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-on-surface-variant">No AI calls yet this month.</p>
       ) : (
         <div className="flex flex-col items-center gap-2 py-1">
           <ProgressRing accent="neutral" value={ringPercent} size="md" showValue={false} />

@@ -2,11 +2,22 @@
 
 import { useCallback, useEffect, useState } from 'react'
 
-export interface StarlingAccountBalance {
+export interface StarlingSpaceBalance {
   externalId: string
   name: string
   minorUnits: number
   currency: string
+  spaceType: 'savings_goal' | 'spending_space'
+}
+
+export interface StarlingAccountBalance {
+  externalId: string
+  name: string
+  // Includes money held in this account's Spaces (see `spaces` below) —
+  // Spaces are a breakdown of this figure, not additional to it.
+  minorUnits: number
+  currency: string
+  spaces: StarlingSpaceBalance[]
 }
 
 export type StarlingBalancesState =

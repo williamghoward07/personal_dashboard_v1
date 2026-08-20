@@ -110,8 +110,9 @@ export default function MicrosoftOneNoteCard() {
           ) : (
             <>
               <p className="text-xs text-on-surface-variant">
-                Connect a personal Microsoft account to browse a module&apos;s linked OneNote
-                section in-app — read-only, fetched only when you open it, never indexed.
+                Connect a personal Microsoft account to see a module&apos;s linked OneNote
+                pages and open them straight in OneNote — read-only, fetched only when you
+                open it, never indexed.
               </p>
               <a
                 href="/api/microsoft/connect"

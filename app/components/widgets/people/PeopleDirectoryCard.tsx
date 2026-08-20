@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { Contact, Plus, Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { Interaction, InteractionPerson, Person, Place } from '@/lib/types'
+import type { FollowUp, Interaction, InteractionPerson, Person, Place } from '@/lib/types'
 import WidgetCard from '../../WidgetCard'
 import ConfirmDialog from '../../ConfirmDialog'
 import PersonAvatar from './PersonAvatar'
@@ -17,6 +17,7 @@ export default function PeopleDirectoryCard({
   places,
   interactions,
   links,
+  followUps,
   loading,
   runMutation,
   onChange,
@@ -26,6 +27,7 @@ export default function PeopleDirectoryCard({
   places: Place[]
   interactions: Interaction[]
   links: InteractionPerson[]
+  followUps: FollowUp[]
   loading: boolean
   runMutation: RunMutation
   onChange: () => void
@@ -154,6 +156,7 @@ export default function PeopleDirectoryCard({
         places={places}
         interactions={interactions}
         links={links}
+        followUps={followUps}
         onEdit={() => {
           setEditingPerson(viewing)
           setViewingPerson(null)

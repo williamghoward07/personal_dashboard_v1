@@ -3,15 +3,17 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Landmark, Pencil, Pin, Trash2 } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Landmark, Pencil, Pin, Trash2 } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardContent } from '@/components/ui/glass-card'
 import LiquidSwitch from '../../LiquidSwitch'
 import ConfirmDialog from '../../ConfirmDialog'
+import SpacesStrip from './SpacesStrip'
 import { useAccounts } from '@/lib/money/use-accounts'
 import { useTransactions } from '@/lib/money/use-transactions'
 import { useStarlingBalances } from '@/lib/money/use-starling-balances'
-import { resolveAccountBalance, accountNetChangeMinorUnits } from '@/lib/money/accounts'
+import { useSpacePreferences } from '@/lib/money/use-space-preferences'
+import { resolveAccountBalance, resolveAccountSpaces, accountNetChangeMinorUnits } from '@/lib/money/accounts'
 import { formatPounds, CHANGE_PERIOD_OPTIONS, type ChangePeriod } from '@/lib/money'
 import TransactionsList from '../transactions/TransactionsList'
 import AccountFormModal, { type AccountFormValues } from './AccountFormModal'
@@ -21,9 +23,22 @@ const actionButtonClass =
 
 export default function AccountDetailBoard({ accountId }: { accountId: string }) {
   const router = useRouter()
-  const { accounts, loading: accountsLoading, updateManualAccount, deleteAccount, togglePin } = useAccounts()
-  const { transactions, loading: transactionsLoading, refresh: refreshTransactions } = useTransactions(accountId)
+  const {
+    accounts,
+    loading: accountsLoading,
+    updateManualAccount,
+    deleteAccount,
+    togglePin,
+    toggleHidden,
+  } = useAccounts()
+  const {
+    transactions,
+    displayTransactions,
+    loading: transactionsLoading,
+    refresh: refreshTransactions,
+  } = useTransactions(accountId)
   const { state: starlingState } = useStarlingBalances()
+  const { isHidden: isSpaceHidden, toggleHidden: toggleSpaceHidden } = useSpacePreferences()
 
   const [period, setPeriod] = useState<ChangePeriod>('month')
   const [editOpen, setEditOpen] = useState(false)
@@ -57,6 +72,7 @@ export default function AccountDetailBoard({ accountId }: { accountId: string })
         ? 'loading'
         : 'unavailable'
   const balance = resolveAccountBalance(account, transactions, starlingBalances)
+  const spaces = resolveAccountSpaces(account, starlingBalances)
   const changeMinorUnits = accountNetChangeMinorUnits(account, transactions, period)
   const isPositive = changeMinorUnits >= 0
 
@@ -76,6 +92,16 @@ export default function AccountDetailBoard({ accountId }: { accountId: string })
             {account.name}
           </h1>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => toggleHidden(account.id)}
+              aria-pressed={account.is_hidden}
+              aria-label={account.is_hidden ? 'Unhide account' : 'Hide account'}
+              className={`${actionButtonClass} ${account.is_hidden ? 'text-secondary-container' : 'text-on-surface'}`}
+            >
+              {account.is_hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {account.is_hidden ? 'Hidden' : 'Hide'}
+            </button>
             <button
               type="button"
               onClick={() => togglePin(account.id)}
@@ -135,8 +161,22 @@ export default function AccountDetailBoard({ accountId }: { accountId: string })
         </GlassCardContent>
       </ModuleGlassCard>
 
+      {Array.isArray(spaces) && spaces.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="font-display text-sm font-semibold text-foreground">
+            Spaces <span className="font-normal text-on-surface-variant">— part of the balance above</span>
+          </h2>
+          <SpacesStrip
+            spaces={spaces}
+            isHidden={(spaceExternalId) => isSpaceHidden(account.id, spaceExternalId)}
+            onToggleHidden={(spaceExternalId) => toggleSpaceHidden(account.id, spaceExternalId)}
+            defaultExpanded
+          />
+        </div>
+      )}
+
       <TransactionsList
-        transactions={transactions}
+        transactions={displayTransactions}
         loading={transactionsLoading}
         onChange={refreshTransactions}
         accounts={accounts}
@@ -157,8 +197,8 @@ export default function AccountDetailBoard({ accountId }: { accountId: string })
           />
           <ConfirmDialog
             isOpen={deleteOpen}
-            message={`Delete "${account.name}"? This will also delete its ${transactions.length} transaction${
-              transactions.length === 1 ? '' : 's'
+            message={`Delete "${account.name}"? This will also delete its ${displayTransactions.length} transaction${
+              displayTransactions.length === 1 ? '' : 's'
             }. This can't be undone.`}
             onCancel={() => setDeleteOpen(false)}
             onConfirm={() => {

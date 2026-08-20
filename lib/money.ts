@@ -1,28 +1,54 @@
 import type { Transaction, TransactionSource } from './types'
 
 // Starling's feed includes items that never actually moved money — a
-// declined card auth, a reversed/retracted payment, a $0 account check, or
-// a standing order that hasn't fired yet. Only count/display statuses that
-// mean the money genuinely moved (or is in the process of moving).
-const UNSUCCESSFUL_STARLING_STATUSES = new Set([
+// declined card auth, a reversed/retracted payment, or a $0 account check.
+// These did happen (in the sense of being a real feed event), just not
+// successfully, so they're excluded from balance/spending math but still
+// shown in the transactions list, styled to flag they failed/were zero.
+const FAILED_OR_ZERO_STARLING_STATUSES = new Set([
   'DECLINED',
   'REVERSED',
   'RETRACTED',
   'ACCOUNT_CHECK',
-  'UPCOMING',
+])
+
+// A standing order that hasn't fired yet — not a failure, just not a real
+// event yet, so it's excluded outright rather than shown.
+const PENDING_STARLING_STATUSES = new Set(['UPCOMING'])
+
+const UNSUCCESSFUL_STARLING_STATUSES = new Set([
+  ...FAILED_OR_ZERO_STARLING_STATUSES,
+  ...PENDING_STARLING_STATUSES,
 ])
 
 export function isSuccessfulStarlingStatus(status: string | null | undefined): boolean {
   return typeof status !== 'string' || !UNSUCCESSFUL_STARLING_STATUSES.has(status)
 }
 
+export function isPendingStarlingStatus(status: string | null | undefined): boolean {
+  return typeof status === 'string' && PENDING_STARLING_STATUSES.has(status)
+}
+
+function starlingStatusOf(transaction: Transaction): string | null {
+  const raw = transaction.raw
+  const status = raw && typeof raw === 'object' ? (raw as { status?: unknown }).status : undefined
+  return typeof status === 'string' ? status : null
+}
+
 // Manual entries have no external status to check, so they're always kept —
 // this only filters out bank-synced rows that never actually happened.
 export function isSuccessfulTransaction(transaction: Transaction): boolean {
   if (transaction.source !== 'starling') return true
-  const raw = transaction.raw
-  const status = raw && typeof raw === 'object' ? (raw as { status?: unknown }).status : undefined
-  return isSuccessfulStarlingStatus(typeof status === 'string' ? status : null)
+  return isSuccessfulStarlingStatus(starlingStatusOf(transaction))
+}
+
+// Declined card auths, reversed/retracted payments, and $0 account checks —
+// real feed events that never (successfully) moved money. Used to flag
+// these rows red in the transactions list rather than hiding them.
+export function isFailedOrZeroTransaction(transaction: Transaction): boolean {
+  if (transaction.source !== 'starling') return false
+  const status = starlingStatusOf(transaction)
+  return status !== null && FAILED_OR_ZERO_STARLING_STATUSES.has(status)
 }
 
 export type ChangePeriod = 'day' | 'week' | 'month' | '3month'

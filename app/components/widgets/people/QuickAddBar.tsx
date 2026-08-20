@@ -11,8 +11,11 @@ import PersonFormModal from './PersonFormModal'
 import type { PersonFormValues } from './PersonFormModal'
 import InteractionFormModal from './InteractionFormModal'
 import type { InteractionFormValues } from './InteractionFormModal'
+import FollowUpFormModal from './FollowUpFormModal'
+import type { FollowUpFormValues } from './FollowUpFormModal'
 import type { PlaceFormValues } from './PlaceFormModal'
 import type { RunMutation } from './shared'
+import { insertFollowUpsForInteraction } from './shared'
 
 // Below this, a candidate match is treated the same as no match at all —
 // the form opens blank rather than guessing wrong. Disambiguation is
@@ -21,7 +24,12 @@ const MATCH_CONFIDENCE_THRESHOLD = 0.6
 
 type PendingAction =
   | { kind: 'person'; matchedPerson: Person | null; initialValues: Partial<Person> }
-  | { kind: 'interaction'; initialValues: Partial<Interaction>; initialPersonIds: string[] }
+  | {
+      kind: 'interaction'
+      initialValues: Partial<Interaction> & { follow_up?: string | null }
+      initialPersonIds: string[]
+    }
+  | { kind: 'follow_up'; initialValues: Partial<FollowUpFormValues> }
 
 function mergeExtractedPerson(existing: Person, extracted: NlExtractedPerson | null): Partial<Person> {
   if (!extracted) return existing
@@ -124,6 +132,15 @@ export default function QuickAddBar({
           },
           initialPersonIds: matched ? [matched.id] : [],
         })
+      } else if (result.intent === 'add_follow_up') {
+        setPending({
+          kind: 'follow_up',
+          initialValues: {
+            person_id: matched?.id ?? '',
+            note: result.follow_up?.note ?? '',
+            due_date: result.follow_up?.due_date ?? null,
+          },
+        })
       } else if (result.intent === 'update_person' && matched) {
         setPending({ kind: 'person', matchedPerson: matched, initialValues: mergeExtractedPerson(matched, result.person) })
       } else {
@@ -172,7 +189,6 @@ export default function QuickAddBar({
         summary: values.summary,
         channel: values.channel,
         place_id: values.place_id,
-        follow_up: values.follow_up,
       })
       .select('id')
       .single()
@@ -191,8 +207,21 @@ export default function QuickAddBar({
       if (!ok) return
     }
 
+    const followUpOk = await runMutation(() =>
+      insertFollowUpsForInteraction(data.id, values.personIds, values.follow_up),
+    )
+    if (!followUpOk) return
+
     setPending(null)
     onChange()
+  }
+
+  const saveFollowUp = async (values: FollowUpFormValues) => {
+    const ok = await runMutation(() => supabase.from('follow_ups').insert(values))
+    if (ok) {
+      setPending(null)
+      onChange()
+    }
   }
 
   const createPlace = async (values: PlaceFormValues) => {
@@ -267,6 +296,15 @@ export default function QuickAddBar({
         onCreatePlace={createPlace}
         onClose={() => setPending(null)}
         onSave={saveInteraction}
+      />
+
+      <FollowUpFormModal
+        isOpen={pending?.kind === 'follow_up'}
+        heading="Set a reminder"
+        people={people}
+        initialValues={pending?.kind === 'follow_up' ? pending.initialValues : null}
+        onClose={() => setPending(null)}
+        onSave={saveFollowUp}
       />
     </>
   )

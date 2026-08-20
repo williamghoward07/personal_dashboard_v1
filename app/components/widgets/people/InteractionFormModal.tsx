@@ -40,7 +40,10 @@ export default function InteractionFormModal({
   heading: string
   people: Person[]
   places: Place[]
-  initialValues?: Partial<Interaction> | null
+  // follow_up isn't a column on Interaction any more (it's its own table),
+  // but the form still edits it as one field alongside the interaction —
+  // callers thread the current note in here separately.
+  initialValues?: (Partial<Interaction> & { follow_up?: string | null }) | null
   initialPersonIds?: string[]
   onSave: (values: InteractionFormValues) => void
   onClose: () => void

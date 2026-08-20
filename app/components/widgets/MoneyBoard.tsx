@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { FileUp, Plus } from 'lucide-react'
+import { EyeOff, FileUp, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAccounts } from '@/lib/money/use-accounts'
 import { useTransactions } from '@/lib/money/use-transactions'
 import { useStarlingBalances } from '@/lib/money/use-starling-balances'
-import { resolveAccountBalance, sortAccounts } from '@/lib/money/accounts'
+import { useSpacePreferences } from '@/lib/money/use-space-preferences'
+import { resolveAccountBalance, resolveAccountSpaces, sortAccounts } from '@/lib/money/accounts'
 import AccountCard from './money/AccountCard'
 import OverallBalanceCard from './money/OverallBalanceCard'
 import AccountFormModal, { type AccountFormValues } from './money/AccountFormModal'
@@ -20,12 +21,20 @@ export default function MoneyBoard() {
     loading: accountsLoading,
     createManualAccount,
     togglePin,
+    toggleHidden,
     refresh: refreshAccounts,
   } = useAccounts()
-  const { transactions, loading: transactionsLoading, refresh: refreshTransactions } = useTransactions()
+  const {
+    transactions,
+    displayTransactions,
+    loading: transactionsLoading,
+    refresh: refreshTransactions,
+  } = useTransactions()
   const { state: starlingState, refresh: refreshStarlingBalances } = useStarlingBalances()
+  const { isHidden: isSpaceHidden, toggleHidden: toggleSpaceHidden } = useSpacePreferences()
 
   const [addAccountOpen, setAddAccountOpen] = useState(false)
+  const [showHiddenAccounts, setShowHiddenAccounts] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null)
@@ -40,6 +49,7 @@ export default function MoneyBoard() {
   }, [])
 
   const sortedAccounts = useMemo(() => sortAccounts(accounts), [accounts])
+  const hiddenAccountsCount = useMemo(() => accounts.filter((a) => a.is_hidden).length, [accounts])
 
   const starlingBalances =
     starlingState.status === 'ready'
@@ -53,6 +63,7 @@ export default function MoneyBoard() {
       sortedAccounts.map((account) => ({
         account,
         balance: resolveAccountBalance(account, transactions, starlingBalances),
+        spaces: resolveAccountSpaces(account, starlingBalances),
       })),
     [sortedAccounts, transactions, starlingBalances]
   )
@@ -101,15 +112,36 @@ export default function MoneyBoard() {
           ))}
         </>
       ) : (
-        accountsWithBalances.map(({ account, balance }) => (
-          <AccountCard
-            key={account.id}
-            account={account}
-            balance={balance}
-            transactions={transactions}
-            onTogglePin={togglePin}
-          />
-        ))
+        <>
+          {accountsWithBalances
+            .filter(({ account }) => !account.is_hidden || showHiddenAccounts)
+            .map(({ account, balance, spaces }) => (
+              <div key={account.id} className={`h-full ${account.is_hidden ? 'opacity-50' : ''}`}>
+                <AccountCard
+                  account={account}
+                  balance={balance}
+                  spaces={spaces}
+                  transactions={transactions}
+                  onTogglePin={togglePin}
+                  onToggleHidden={toggleHidden}
+                  isSpaceHidden={(spaceExternalId) => isSpaceHidden(account.id, spaceExternalId)}
+                  onToggleSpaceHidden={(spaceExternalId) => toggleSpaceHidden(account.id, spaceExternalId)}
+                />
+              </div>
+            ))}
+
+          {hiddenAccountsCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowHiddenAccounts((v) => !v)}
+              className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-outline-variant text-xs font-medium text-on-surface-variant transition-colors hover:border-secondary-container hover:text-secondary-container"
+            >
+              <EyeOff className="h-4 w-4" />
+              {hiddenAccountsCount} hidden account{hiddenAccountsCount === 1 ? '' : 's'} ·{' '}
+              {showHiddenAccounts ? 'hide' : 'show'}
+            </button>
+          )}
+        </>
       )}
 
       <button
@@ -131,7 +163,7 @@ export default function MoneyBoard() {
 
       <SpendingBreakdownChart transactions={transactions} />
       <TransactionsList
-        transactions={transactions}
+        transactions={displayTransactions}
         loading={transactionsLoading}
         onChange={refreshTransactions}
         accounts={accounts}

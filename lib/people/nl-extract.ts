@@ -3,7 +3,7 @@ import { generateStructured } from '@/lib/ai/gemini'
 import type { AiSchema } from '@/lib/ai/schema'
 import type { InteractionChannel } from '@/lib/types'
 
-export type NlExtractIntent = 'new_person' | 'update_person' | 'log_interaction'
+export type NlExtractIntent = 'new_person' | 'update_person' | 'log_interaction' | 'add_follow_up'
 
 export interface NlPersonMatch {
   id: string
@@ -28,11 +28,21 @@ export interface NlExtractedInteraction {
   follow_up: string | null
 }
 
+export interface NlExtractedFollowUp {
+  note: string
+  due_date: string | null
+}
+
 export interface NlExtractResult {
   intent: NlExtractIntent
   person_match: NlPersonMatch | null
   person: NlExtractedPerson | null
   interaction: NlExtractedInteraction | null
+  // Set only when intent is add_follow_up — a reminder with no
+  // conversation being logged now. (log_interaction can also carry a
+  // "bring up next time" note, but that one nests inside `interaction`
+  // above since it belongs to the conversation just logged.)
+  follow_up: NlExtractedFollowUp | null
 }
 
 export interface PersonCandidate {
@@ -42,13 +52,13 @@ export interface PersonCandidate {
 
 const SCHEMA: AiSchema = {
   type: 'object',
-  required: ['intent', 'person_match', 'person', 'interaction'],
+  required: ['intent', 'person_match', 'person', 'interaction', 'follow_up'],
   properties: {
     intent: {
       type: 'string',
-      enum: ['new_person', 'update_person', 'log_interaction'],
+      enum: ['new_person', 'update_person', 'log_interaction', 'add_follow_up'],
       description:
-        'new_person: introduces someone not in the candidate list. update_person: gives new or changed info about someone already in the candidate list (job change, contact details, notes). log_interaction: describes something that happened — a conversation, meeting, or call.',
+        'new_person: introduces someone not in the candidate list. update_person: gives new or changed info about someone already in the candidate list (job change, contact details, notes). log_interaction: describes something that happened — a conversation, meeting, or call. add_follow_up: a reminder to bring something up with someone later, with no conversation happening now — e.g. "remind me to ask Abbie how her shift went".',
     },
     person_match: {
       type: 'object',
@@ -97,6 +107,21 @@ const SCHEMA: AiSchema = {
         follow_up: { type: 'string', nullable: true, description: 'Something to bring up next time, if mentioned.' },
       },
     },
+    follow_up: {
+      type: 'object',
+      nullable: true,
+      description: 'Only set when intent is add_follow_up.',
+      required: ['note'],
+      properties: {
+        note: { type: 'string', description: 'What to bring up or ask about.' },
+        due_date: {
+          type: 'string',
+          nullable: true,
+          description:
+            'ISO date (YYYY-MM-DD) this should be brought up by/on, resolved against the current date/time given below if implied ("Sunday", "next week"). Null if no timing is implied.',
+        },
+      },
+    },
   },
 }
 
@@ -123,5 +148,13 @@ Note: "${text}"
 
 Decide the intent, whether this refers to one of the existing people above, and extract whatever fields the note actually states. Never guess a field that isn't stated or clearly implied.`
 
-  return generateStructured<NlExtractResult>({ prompt, schema: SCHEMA, feature: 'people_quick_add' })
+  return generateStructured<NlExtractResult>({
+    prompt,
+    schema: SCHEMA,
+    feature: 'people_quick_add',
+    // Default 150-token cap is enough for search's smaller schemas but
+    // truncates this one's mid-object once person/interaction free-text
+    // fields (summary, follow_up, notes) are populated.
+    maxOutputTokens: 500,
+  })
 }

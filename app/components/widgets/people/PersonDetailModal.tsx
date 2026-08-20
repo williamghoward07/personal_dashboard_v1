@@ -3,7 +3,7 @@
 import { Cake, Building2, Link, Mail, MapPin, Pencil, Phone, Trash2 } from 'lucide-react'
 import Modal from '../../Modal'
 import PersonAvatar from './PersonAvatar'
-import type { Interaction, InteractionPerson, Person, Place } from '@/lib/types'
+import type { FollowUp, Interaction, InteractionPerson, Person, Place } from '@/lib/types'
 import { mapUrl } from '@/lib/places'
 import { channelLabel, formatDate, interactionsForPerson } from './shared'
 
@@ -16,6 +16,7 @@ export default function PersonDetailModal({
   places,
   interactions,
   links,
+  followUps,
   onEdit,
   onDelete,
   onClose,
@@ -24,6 +25,7 @@ export default function PersonDetailModal({
   places: Place[]
   interactions: Interaction[]
   links: InteractionPerson[]
+  followUps: FollowUp[]
   onEdit: () => void
   onDelete: () => void
   onClose: () => void
@@ -41,7 +43,7 @@ export default function PersonDetailModal({
     if (place && !metAt.some((p) => p.id === place.id)) metAt.push(place)
   }
 
-  const openFollowUps = theirs.filter((i) => i.follow_up && !i.follow_up_done)
+  const openFollowUps = followUps.filter((f) => f.person_id === person.id && !f.done)
 
   return (
     <Modal onClose={onClose} size="lg">
@@ -145,12 +147,13 @@ export default function PersonDetailModal({
               Bring up next time
             </h3>
             <ul className="flex flex-col gap-1.5">
-              {openFollowUps.map((i) => (
+              {openFollowUps.map((f) => (
                 <li
-                  key={i.id}
+                  key={f.id}
                   className="rounded-lg border border-people-amber/30 bg-people-amber/5 px-2 py-1.5 text-xs text-on-surface"
                 >
-                  {i.follow_up}
+                  {f.note}
+                  {f.due_date && <span className="text-on-surface-variant"> · Due {formatDate(f.due_date)}</span>}
                 </li>
               ))}
             </ul>

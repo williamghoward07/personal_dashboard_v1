@@ -4,19 +4,20 @@ import { useState } from 'react'
 import type { ComponentProps } from 'react'
 import { MapPin, MessagesSquare, Pencil, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { Interaction, InteractionPerson, Person, Place } from '@/lib/types'
+import type { FollowUp, Interaction, InteractionPerson, Person, Place } from '@/lib/types'
 import WidgetCard from '../../WidgetCard'
 import ConfirmDialog from '../../ConfirmDialog'
 import InteractionFormModal from './InteractionFormModal'
 import type { InteractionFormValues } from './InteractionFormModal'
 import type { RunMutation } from './shared'
-import { attendeeNames, channelLabel, formatDate } from './shared'
+import { attendeeNames, channelLabel, formatDate, insertFollowUpsForInteraction } from './shared'
 
 export default function InteractionsCard({
   people,
   places,
   interactions,
   links,
+  followUps,
   loading,
   runMutation,
   onChange,
@@ -25,6 +26,7 @@ export default function InteractionsCard({
   places: Place[]
   interactions: Interaction[]
   links: InteractionPerson[]
+  followUps: FollowUp[]
   loading: boolean
   runMutation: RunMutation
   onChange: () => void
@@ -57,8 +59,40 @@ export default function InteractionsCard({
     summary: values.summary,
     channel: values.channel,
     place_id: values.place_id,
-    follow_up: values.follow_up,
   })
+
+  /**
+   * Reconciles an edited interaction's "bring up next time" note against
+   * its follow_ups rows — updates the note for attendees who already had
+   * one (preserving their done state), adds rows for newly-added
+   * attendees, and drops rows for attendees removed from the interaction
+   * or once the note is cleared entirely.
+   */
+  const syncInteractionFollowUp = async (interactionId: string, personIds: string[], note: string | null) => {
+    const { data: existing } = await supabase
+      .from('follow_ups')
+      .select('id, person_id')
+      .eq('interaction_id', interactionId)
+    const existingByPerson = new Map((existing ?? []).map((f) => [f.person_id, f.id]))
+    const wanted = note ? personIds : []
+
+    const stale = (existing ?? []).filter((f) => !wanted.includes(f.person_id)).map((f) => f.id)
+    if (stale.length > 0) {
+      const ok = await runMutation(() => supabase.from('follow_ups').delete().in('id', stale))
+      if (!ok) return false
+    }
+
+    for (const personId of wanted) {
+      const existingId = existingByPerson.get(personId)
+      const ok = await runMutation(() =>
+        existingId
+          ? supabase.from('follow_ups').update({ note }).eq('id', existingId)
+          : supabase.from('follow_ups').insert({ interaction_id: interactionId, person_id: personId, note }),
+      )
+      if (!ok) return false
+    }
+    return true
+  }
 
   /** Inline "new place" escape hatch for the interaction form's place dropdown. */
   const createPlace: ComponentProps<typeof InteractionFormModal>['onCreatePlace'] = async (
@@ -147,11 +181,16 @@ export default function InteractionsCard({
                       {interaction.summary}
                     </p>
                   )}
-                  {interaction.follow_up && !interaction.follow_up_done && (
-                    <p className="mt-1 truncate text-xs text-people-amber">
-                      Next time: {interaction.follow_up}
-                    </p>
-                  )}
+                  {(() => {
+                    const openNote = followUps.find((f) => f.interaction_id === interaction.id && !f.done)
+                    return (
+                      openNote && (
+                        <p className="mt-1 truncate text-xs text-people-amber">
+                          Next time: {openNote.note}
+                        </p>
+                      )
+                    )
+                  })()}
                 </li>
               )
             })}
@@ -177,6 +216,7 @@ export default function InteractionsCard({
             return
           }
           await syncAttendees(data.id, values.personIds)
+          await runMutation(() => insertFollowUpsForInteraction(data.id, values.personIds, values.follow_up))
           setIsAddOpen(false)
           onChange()
         }}
@@ -187,7 +227,11 @@ export default function InteractionsCard({
         heading="Edit conversation"
         people={people}
         places={places}
-        initialValues={editing}
+        initialValues={
+          editing
+            ? { ...editing, follow_up: followUps.find((f) => f.interaction_id === editing.id)?.note ?? null }
+            : null
+        }
         initialPersonIds={
           editing
             ? links.filter((l) => l.interaction_id === editing.id).map((l) => l.person_id)
@@ -202,6 +246,7 @@ export default function InteractionsCard({
           )
           if (!ok) return
           await syncAttendees(editing.id, values.personIds)
+          await syncInteractionFollowUp(editing.id, values.personIds, values.follow_up)
           setEditing(null)
           onChange()
         }}

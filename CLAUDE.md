@@ -142,11 +142,14 @@ actual values.
   `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`
 - **Google Contacts (People module)**: `GOOGLE_CLIENT_ID`,
   `GOOGLE_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`
-- **Microsoft OneNote (Education module, read-only in-app browsing)**:
+- **Microsoft OneNote (Education module, section/page browsing)**:
   `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (Azure app registration,
   "Personal Microsoft accounts only"; reuses `INTEGRATION_ENCRYPTION_KEY`
-  above). No indexing/reindexing — every Graph call is made on demand when
-  a section or page is actually opened in the app.
+  above). Links a module to a section and lists its pages, which open
+  directly in OneNote rather than being read in-app (tried and dropped —
+  Graph never returns handwriting, and the beta ink fallback wasn't
+  reliable either). No indexing/reindexing — every Graph call is made on
+  demand when a section is actually opened in the app.
 - **Starling**: `STARLING_ACCESS_TOKEN`
 - **Apple Reminders (Todos page, via CalDAV)**: `ICLOUD_CALDAV_USERNAME`,
   `ICLOUD_CALDAV_APP_PASSWORD` (an app-specific password from

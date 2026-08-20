@@ -1,3 +1,4 @@
+import { supabase } from '@/lib/supabase'
 import type { Interaction, InteractionChannel, InteractionPerson, Person } from '@/lib/types'
 
 /** Write wrapper provided by PeopleBoard so card-level failures reach the banner. */
@@ -80,4 +81,20 @@ export function attendeeNames(
   return peopleForInteraction(interactionId, links, people)
     .map((p) => p.full_name)
     .join(', ')
+}
+
+/**
+ * Fans a "bring up next time" note out to every attendee of a freshly
+ * logged interaction — one follow_ups row per person, so each can be
+ * ticked off independently. No-op if there's no note or no attendees.
+ */
+export async function insertFollowUpsForInteraction(
+  interactionId: string,
+  personIds: string[],
+  note: string | null,
+) {
+  if (!note || personIds.length === 0) return { error: null }
+  return supabase
+    .from('follow_ups')
+    .insert(personIds.map((personId) => ({ interaction_id: interactionId, person_id: personId, note })))
 }

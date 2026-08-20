@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Interaction, InteractionPerson, Person, Place } from '@/lib/types'
+import type { FollowUp, Interaction, InteractionPerson, Person, Place } from '@/lib/types'
 import PeopleDirectoryCard from './PeopleDirectoryCard'
 import FollowUpsCard from './FollowUpsCard'
 import InteractionsCard from './InteractionsCard'
@@ -18,6 +18,7 @@ export default function PeopleBoard() {
   const [places, setPlaces] = useState<Place[]>([])
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [links, setLinks] = useState<InteractionPerson[]>([])
+  const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,13 +28,15 @@ export default function PeopleBoard() {
       supabase.from('places').select('*').order('name', { ascending: true }),
       supabase.from('interactions').select('*').order('occurred_at', { ascending: false }),
       supabase.from('interaction_people').select('*'),
-    ]).then(([peopleRes, placesRes, interactionsRes, linksRes]) => {
-      const failed = [peopleRes, placesRes, interactionsRes, linksRes].find((r) => r.error)
+      supabase.from('follow_ups').select('*').order('created_at', { ascending: false }),
+    ]).then(([peopleRes, placesRes, interactionsRes, linksRes, followUpsRes]) => {
+      const failed = [peopleRes, placesRes, interactionsRes, linksRes, followUpsRes].find((r) => r.error)
       setError(failed?.error ? `Couldn't load People: ${failed.error.message}. ${MIGRATION_HINT}` : null)
       setPeople(peopleRes.data ?? [])
       setPlaces(placesRes.data ?? [])
       setInteractions(interactionsRes.data ?? [])
       setLinks(linksRes.data ?? [])
+      setFollowUps(followUpsRes.data ?? [])
       setLoading(false)
     })
   }
@@ -91,6 +94,7 @@ export default function PeopleBoard() {
         places={places}
         interactions={interactions}
         links={links}
+        followUps={followUps}
         loading={loading}
         runMutation={runMutation}
         onChange={refresh}
@@ -99,8 +103,7 @@ export default function PeopleBoard() {
 
       <FollowUpsCard
         people={people}
-        interactions={interactions}
-        links={links}
+        followUps={followUps}
         loading={loading}
         runMutation={runMutation}
         onChange={refresh}
@@ -111,6 +114,7 @@ export default function PeopleBoard() {
         places={places}
         interactions={interactions}
         links={links}
+        followUps={followUps}
         loading={loading}
         runMutation={runMutation}
         onChange={refresh}

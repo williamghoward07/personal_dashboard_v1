@@ -1,5 +1,6 @@
 import type { Account, Transaction } from '@/lib/types'
 import { minorUnitsOf, netChangeMinorUnits, type ChangePeriod } from '@/lib/money'
+import type { StarlingSpaceBalance } from './use-starling-balances'
 
 export interface AccountBalance {
   account: Account
@@ -32,6 +33,22 @@ export function resolveAccountBalance(
 
   const match = starlingBalances.find((b) => b.externalId === account.external_id)
   return match ? { minorUnits: match.minorUnits, currency: match.currency } : 'unavailable'
+}
+
+// Companion to resolveAccountBalance — the Spaces nested inside this
+// account, purely for display as a breakdown of the balance above (never
+// summed again elsewhere, since that balance already includes them).
+// Manual accounts never have Spaces.
+export function resolveAccountSpaces(
+  account: Account,
+  starlingBalances: 'loading' | 'unavailable' | { externalId: string; spaces: StarlingSpaceBalance[] }[]
+): 'loading' | 'unavailable' | StarlingSpaceBalance[] {
+  if (account.source === 'manual') return []
+  if (starlingBalances === 'loading') return 'loading'
+  if (starlingBalances === 'unavailable') return 'unavailable'
+
+  const match = starlingBalances.find((b) => b.externalId === account.external_id)
+  return match ? match.spaces : 'unavailable'
 }
 
 // Manual accounts only — opening balance + the signed sum of that

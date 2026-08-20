@@ -23,6 +23,7 @@ function makeAccount(overrides: Partial<Account> & Pick<Account, 'id'>): Account
     currency: 'GBP',
     opening_balance_minor_units: 0,
     is_pinned: false,
+    is_hidden: false,
     created_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
   }

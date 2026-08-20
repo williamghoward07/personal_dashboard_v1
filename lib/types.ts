@@ -260,6 +260,7 @@ export interface Account {
   // for Starling accounts, whose balance is always fetched live.
   opening_balance_minor_units: number
   is_pinned: boolean
+  is_hidden: boolean
   created_at: string
 }
 
@@ -321,8 +322,6 @@ export interface Interaction {
   summary: string
   channel: InteractionChannel
   place_id: string | null
-  follow_up: string | null
-  follow_up_done: boolean
   created_at: string
 }
 
@@ -330,6 +329,16 @@ export interface InteractionPerson {
   id: string
   interaction_id: string
   person_id: string
+  created_at: string
+}
+
+export interface FollowUp {
+  id: string
+  person_id: string
+  note: string
+  due_date: string | null
+  done: boolean
+  interaction_id: string | null
   created_at: string
 }
 

@@ -19,6 +19,7 @@ export interface UseAccountsResult {
   updateManualAccount: (id: string, patch: Partial<NewManualAccountValues & { name: string }>) => Promise<void>
   deleteAccount: (id: string) => Promise<void>
   togglePin: (id: string) => Promise<void>
+  toggleHidden: (id: string) => Promise<void>
 }
 
 // Every account (Starling and manual) for the signed-in user — Starling
@@ -132,6 +133,28 @@ export function useAccounts(): UseAccountsResult {
     [accounts]
   )
 
+  const toggleHidden = useCallback(
+    async (id: string) => {
+      const target = accounts.find((a) => a.id === id)
+      if (!target) return
+      const nextHidden = !target.is_hidden
+
+      setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, is_hidden: nextHidden } : a)))
+      setError(null)
+
+      const { error: updateError } = await supabase
+        .from('accounts')
+        .update({ is_hidden: nextHidden })
+        .eq('id', id)
+
+      if (updateError) {
+        setAccounts((prev) => prev.map((a) => (a.id === id ? target : a)))
+        setError(updateError.message)
+      }
+    },
+    [accounts]
+  )
+
   return {
     accounts,
     loading,
@@ -141,5 +164,6 @@ export function useAccounts(): UseAccountsResult {
     updateManualAccount,
     deleteAccount,
     togglePin,
+    toggleHidden,
   }
 }

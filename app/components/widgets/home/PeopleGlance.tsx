@@ -3,20 +3,19 @@
 import { useEffect, useState } from 'react'
 import { Contact } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { Interaction } from '@/lib/types'
+import type { FollowUp } from '@/lib/types'
 import HomeSectionCard from './HomeSectionCard'
 
 export default function PeopleGlance() {
-  const [followUps, setFollowUps] = useState<Interaction[]>([])
+  const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     supabase
-      .from('interactions')
+      .from('follow_ups')
       .select('*')
-      .eq('follow_up_done', false)
-      .not('follow_up', 'is', null)
-      .order('occurred_at', { ascending: false })
+      .eq('done', false)
+      .order('due_date', { ascending: true, nullsFirst: false })
       .limit(3)
       .then(({ data }) => {
         setFollowUps(data ?? [])
@@ -37,9 +36,9 @@ export default function PeopleGlance() {
         <p>Nothing to follow up.</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {followUps.map((i) => (
-            <li key={i.id} className="truncate text-on-surface">
-              {i.follow_up}
+          {followUps.map((f) => (
+            <li key={f.id} className="truncate text-on-surface">
+              {f.note}
             </li>
           ))}
         </ul>

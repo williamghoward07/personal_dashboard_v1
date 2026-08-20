@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAccounts, getTransactionsBetween, type StarlingAccount, type StarlingFeedItem } from '@/lib/starling/client'
-import { isSuccessfulStarlingStatus } from '@/lib/money'
+import {
+  getAccounts,
+  getSpaces,
+  getTransactionsBetween,
+  type StarlingAccount,
+  type StarlingFeedItem,
+} from '@/lib/starling/client'
+import { isPendingStarlingStatus } from '@/lib/money'
 
 const FIRST_SYNC_LOOKBACK_MS = 90 * 24 * 60 * 60 * 1000
 
@@ -134,8 +140,12 @@ export async function POST() {
             maxTransactionTimestamp
           )
 
+          // Standing orders that haven't fired yet are skipped outright;
+          // declined/reversed/retracted/zero-value items are still stored
+          // so the transactions list can show them (styled red) rather
+          // than silently dropping them.
           return feedItems
-            .filter((item) => isSuccessfulStarlingStatus(item.status))
+            .filter((item) => !isPendingStarlingStatus(item.status))
             .map((item) => ({
               user_id: user.id,
               source: 'starling',
@@ -157,6 +167,34 @@ export async function POST() {
     if (rows.length > 0) {
       const { error: upsertError } = await admin.rpc('upsert_synced_transactions', { rows })
       if (upsertError) throw upsertError
+    }
+
+    // Purely for future history — app/api/starling/balance/route.ts fetches
+    // Spaces live for what's actually displayed, so a failure/delay here
+    // never affects what the user sees, just how much history accumulates.
+    const spaceSnapshotRows = (
+      await Promise.all(
+        accounts.map(async (account, i) => {
+          const spaces = await getSpaces(account.accountUid)
+          return spaces
+            .filter((s) => s.state === 'ACTIVE')
+            .map((s) => ({
+              user_id: user.id,
+              account_id: accountIds[i],
+              space_external_id: s.spaceUid,
+              space_type: s.spaceType,
+              name: s.name,
+              currency: s.amount.currency,
+              minor_units: s.amount.minorUnits,
+              state: s.state,
+            }))
+        })
+      )
+    ).flat()
+
+    if (spaceSnapshotRows.length > 0) {
+      const { error: spaceSnapshotError } = await admin.from('starling_space_snapshots').insert(spaceSnapshotRows)
+      if (spaceSnapshotError) throw spaceSnapshotError
     }
 
     await admin.from('integrations').upsert(

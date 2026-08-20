@@ -13,6 +13,7 @@ import type { PersonFormValues } from '../people/PersonFormModal'
 import InteractionFormModal from '../people/InteractionFormModal'
 import type { InteractionFormValues } from '../people/InteractionFormModal'
 import type { PlaceFormValues } from '../people/PlaceFormModal'
+import { insertFollowUpsForInteraction } from '../people/shared'
 import DraftCard from './DraftCard'
 import type { LocalDraft } from './DraftCard'
 
@@ -22,7 +23,12 @@ const MATCH_CONFIDENCE_THRESHOLD = 0.6
 
 type PendingReview =
   | { kind: 'person'; clientId: string; matchedPerson: Person | null; initialValues: Partial<Person> }
-  | { kind: 'interaction'; clientId: string; initialValues: Partial<Interaction>; initialPersonIds: string[] }
+  | {
+      kind: 'interaction'
+      clientId: string
+      initialValues: Partial<Interaction> & { follow_up?: string | null }
+      initialPersonIds: string[]
+    }
 
 function nlPersonToPartial(extracted: NlExtractedPerson | null): Partial<Person> {
   if (!extracted) return {}
@@ -237,7 +243,6 @@ export default function BrainDumpBoard() {
         summary: values.summary,
         channel: values.channel,
         place_id: values.place_id,
-        follow_up: values.follow_up,
       })
       .select('id')
       .single()
@@ -255,6 +260,12 @@ export default function BrainDumpBoard() {
         setError(`Couldn't link attendees: ${linkError.message}`)
         return
       }
+    }
+
+    const { error: followUpError } = await insertFollowUpsForInteraction(data.id, values.personIds, values.follow_up)
+    if (followUpError) {
+      setError(`Couldn't save follow-up: ${followUpError.message}`)
+      return
     }
 
     setDraftStatus(pending.clientId, 'accepted')

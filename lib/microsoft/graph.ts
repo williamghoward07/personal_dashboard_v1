@@ -94,14 +94,3 @@ export async function listPages(accessToken: string, sectionId: string): Promise
   )
   return data.value
 }
-
-export async function getPageContentHtml(accessToken: string, pageId: string): Promise<string> {
-  const res = await fetch(`${GRAPH_BASE}/me/onenote/pages/${pageId}/content`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  if (!res.ok) {
-    const detail = await res.text()
-    throw new GraphApiError(`Graph request failed (${res.status}): ${detail}`)
-  }
-  return res.text()
-}

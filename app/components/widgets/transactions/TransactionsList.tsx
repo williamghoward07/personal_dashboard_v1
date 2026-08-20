@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Account, Transaction } from '@/lib/types'
-import { minorUnitsOf, formatPounds } from '@/lib/money'
+import { minorUnitsOf, formatPounds, isFailedOrZeroTransaction } from '@/lib/money'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
 import ConfirmDialog from '../../ConfirmDialog'
@@ -64,7 +64,11 @@ export default function TransactionsList({
                   className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant p-2"
                 >
                   <div className="flex min-w-0 flex-col">
-                    <span className="text-sm font-medium text-on-surface">
+                    <span
+                      className={`text-sm font-medium ${
+                        isFailedOrZeroTransaction(t) ? 'text-error' : 'text-on-surface'
+                      }`}
+                    >
                       {t.category}
                       {t.description || t.merchant_name ? ` — ${t.description ?? t.merchant_name}` : ''}
                     </span>

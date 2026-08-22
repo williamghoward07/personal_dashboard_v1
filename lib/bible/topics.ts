@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { BibleTopic, BibleTopicPassage } from './types'
+import type { BiblePassage, BibleTopic, BibleTopicPassage } from './types'
 
 // The topical index's tap 1: the fixed list of struggles (anxiety, grief,
 // doubt, ...). Seeded structurally in
@@ -24,4 +24,22 @@ export async function listTopicPassages(topicId: string): Promise<BibleTopicPass
 
   if (error) throw new Error(error.message)
   return (data ?? []) as BibleTopicPassage[]
+}
+
+export interface BibleTopicPassageWithPassage extends BibleTopicPassage {
+  passage: BiblePassage
+}
+
+// Same rows as listTopicPassages(), joined with the referenced passage —
+// TopicPassageList needs book/chapter/verse to render each row's
+// reference, which the bare bible_topic_passages row doesn't carry.
+export async function listTopicPassagesWithPassage(topicId: string): Promise<BibleTopicPassageWithPassage[]> {
+  const { data, error } = await supabase
+    .from('bible_topic_passages')
+    .select('*, passage:bible_passages(*)')
+    .eq('topic_id', topicId)
+    .order('sort_order', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return (data ?? []) as unknown as BibleTopicPassageWithPassage[]
 }

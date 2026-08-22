@@ -40,20 +40,23 @@ describe('computeDailyGoalsRollup', () => {
     const rollup = computeDailyGoalsRollup({
       todosDueToday: [],
       educationTasksDueToday: [],
+      followUpsDueToday: [],
       habitSchedule: [],
     })
     expect(rollup).toEqual({ completed: 0, total: 0, extraCompletions: 0 })
   })
 
-  it('sums completed/total across todos, education tasks and scheduled habits', () => {
+  it('sums completed/total across todos, education tasks, follow-ups and scheduled habits', () => {
     const h = habit({ frequency_type: 'daily' })
     const rollup = computeDailyGoalsRollup({
       todosDueToday: [{ completed_at: '2026-08-05T09:00:00.000Z' }, { completed_at: null }],
       educationTasksDueToday: [{ completed_at: null }],
+      followUpsDueToday: [{ completed_at: '2026-08-05T09:00:00.000Z' }, { completed_at: null }],
       habitSchedule: computeHabitSchedule([h], [completion({ habit_id: h.id, completed_on: '2026-08-05' })], '2026-08-05'),
     })
-    // 1 todo done + 1 habit done = 2 completed; 2 todos + 1 education task + 1 habit = 4 total.
-    expect(rollup).toEqual({ completed: 2, total: 4, extraCompletions: 0 })
+    // 1 todo done + 1 follow-up done + 1 habit done = 3 completed;
+    // 2 todos + 1 education task + 2 follow-ups + 1 habit = 6 total.
+    expect(rollup).toEqual({ completed: 3, total: 6, extraCompletions: 0 })
   })
 
   it('an extra-credit completion does not alter the denominator and never pushes past 100%', () => {
@@ -68,6 +71,7 @@ describe('computeDailyGoalsRollup', () => {
     const rollup = computeDailyGoalsRollup({
       todosDueToday: [],
       educationTasksDueToday: [],
+      followUpsDueToday: [],
       habitSchedule: schedule,
     })
 

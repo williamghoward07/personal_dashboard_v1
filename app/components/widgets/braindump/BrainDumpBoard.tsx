@@ -1,12 +1,21 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { FormEvent } from 'react'
 import { Brain, Send, Square } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Interaction, Person, Place } from '@/lib/types'
 import type { ActEntity } from '@/lib/search/act'
-import type { BrainDumpDraft, BrainDumpExtractResult } from '@/lib/braindump/extract'
+import type { BrainDumpDraft } from '@/lib/braindump/extract'
+import {
+  subscribeBrainDump,
+  getBrainDumpSnapshot,
+  setBrainDumpText,
+  setBrainDumpError,
+  setBrainDumpDraftStatus,
+  stopBrainDumpExtraction,
+  submitBrainDump,
+} from '@/lib/braindump/store'
 import type { NlExtractedPerson } from '@/lib/people/nl-extract'
 import PersonFormModal from '../people/PersonFormModal'
 import type { PersonFormValues } from '../people/PersonFormModal'
@@ -14,6 +23,7 @@ import InteractionFormModal from '../people/InteractionFormModal'
 import type { InteractionFormValues } from '../people/InteractionFormModal'
 import type { PlaceFormValues } from '../people/PlaceFormModal'
 import { insertFollowUpsForInteraction } from '../people/shared'
+import LoadingGlowBorder from '../../LoadingGlowBorder'
 import DraftCard from './DraftCard'
 import type { LocalDraft } from './DraftCard'
 
@@ -76,16 +86,16 @@ function toActPayload(draft: LocalDraft): { entity: ActEntity; title: string; du
 }
 
 export default function BrainDumpBoard() {
-  const [text, setText] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [drafts, setDrafts] = useState<LocalDraft[]>([])
+  const { text, loading, error, drafts } = useSyncExternalStore(
+    subscribeBrainDump,
+    getBrainDumpSnapshot,
+    getBrainDumpSnapshot
+  )
   const [busyId, setBusyId] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingReview | null>(null)
 
   const [people, setPeople] = useState<Person[]>([])
   const [places, setPlaces] = useState<Place[]>([])
-  const abortRef = useRef<AbortController | null>(null)
 
   const refreshPeople = () => {
     Promise.all([
@@ -104,63 +114,18 @@ export default function BrainDumpBoard() {
     return people.find((p) => p.id === draft.person_match!.id) ?? null
   }
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
-    const trimmed = text.trim()
-    if (!trimmed || loading) return
-
-    const controller = new AbortController()
-    abortRef.current = controller
-    setLoading(true)
-    setError(null)
-
-    try {
-      const res = await fetch('/api/brain-dump/extract', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: trimmed }),
-        signal: controller.signal,
-      })
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        setError(body?.error ?? "Couldn't read that — try rephrasing.")
-        return
-      }
-
-      const result = (await res.json()) as BrainDumpExtractResult
-      if (result.drafts.length === 0) {
-        setError("Didn't find anything actionable in that.")
-        return
-      }
-
-      const newDrafts: LocalDraft[] = result.drafts.map((d, i) => ({
-        ...d,
-        clientId: `${Date.now()}-${i}`,
-        status: 'pending',
-      }))
-      setDrafts((current) => [...newDrafts, ...current])
-      setText('')
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      setError("Couldn't reach the AI service — try again in a moment.")
-    } finally {
-      setLoading(false)
-      abortRef.current = null
-    }
+    void submitBrainDump(text)
   }
 
-  const handleStop = () => abortRef.current?.abort()
-
-  const setDraftStatus = (clientId: string, status: LocalDraft['status']) => {
-    setDrafts((current) => current.map((d) => (d.clientId === clientId ? { ...d, status } : d)))
-  }
+  const handleStop = () => stopBrainDumpExtraction()
 
   const confirmAct = async (draft: LocalDraft) => {
     const payload = toActPayload(draft)
     if (!payload || !payload.title.trim()) return
     setBusyId(draft.clientId)
-    setError(null)
+    setBrainDumpError(null)
     try {
       const res = await fetch('/api/search/act/confirm', {
         method: 'POST',
@@ -169,12 +134,12 @@ export default function BrainDumpBoard() {
       })
       const body = await res.json().catch(() => null)
       if (!res.ok) {
-        setError(body?.message ?? body?.error ?? "Couldn't create that.")
+        setBrainDumpError(body?.message ?? body?.error ?? "Couldn't create that.")
         return
       }
-      setDraftStatus(draft.clientId, 'accepted')
+      setBrainDumpDraftStatus(draft.clientId, 'accepted')
     } catch {
-      setError("Couldn't reach the server — try again in a moment.")
+      setBrainDumpError("Couldn't reach the server — try again in a moment.")
     } finally {
       setBusyId(null)
     }
@@ -225,10 +190,10 @@ export default function BrainDumpBoard() {
       : await supabase.from('people').insert(values)
 
     if (dbError) {
-      setError(`Couldn't save: ${dbError.message}`)
+      setBrainDumpError(`Couldn't save: ${dbError.message}`)
       return
     }
-    setDraftStatus(pending.clientId, 'accepted')
+    setBrainDumpDraftStatus(pending.clientId, 'accepted')
     setPending(null)
     refreshPeople()
   }
@@ -248,7 +213,7 @@ export default function BrainDumpBoard() {
       .single()
 
     if (insertError || !data) {
-      setError(`Couldn't save: ${insertError?.message ?? 'unknown error'}`)
+      setBrainDumpError(`Couldn't save: ${insertError?.message ?? 'unknown error'}`)
       return
     }
 
@@ -257,25 +222,25 @@ export default function BrainDumpBoard() {
         .from('interaction_people')
         .insert(values.personIds.map((personId) => ({ interaction_id: data.id, person_id: personId })))
       if (linkError) {
-        setError(`Couldn't link attendees: ${linkError.message}`)
+        setBrainDumpError(`Couldn't link attendees: ${linkError.message}`)
         return
       }
     }
 
     const { error: followUpError } = await insertFollowUpsForInteraction(data.id, values.personIds, values.follow_up)
     if (followUpError) {
-      setError(`Couldn't save follow-up: ${followUpError.message}`)
+      setBrainDumpError(`Couldn't save follow-up: ${followUpError.message}`)
       return
     }
 
-    setDraftStatus(pending.clientId, 'accepted')
+    setBrainDumpDraftStatus(pending.clientId, 'accepted')
     setPending(null)
   }
 
   const createPlace = async (values: PlaceFormValues) => {
     const { data, error: insertError } = await supabase.from('places').insert(values).select().single()
     if (insertError || !data) {
-      setError(`Couldn't create place: ${insertError?.message ?? 'unknown error'}`)
+      setBrainDumpError(`Couldn't create place: ${insertError?.message ?? 'unknown error'}`)
       return null
     }
     refreshPeople()
@@ -284,7 +249,7 @@ export default function BrainDumpBoard() {
 
   return (
     <div className="flex flex-col gap-4 sm:col-span-2 xl:col-span-4">
-      <div className={`relative rounded-xl border border-outline-variant bg-surface-container-low p-4 ${loading ? 'rainbow-ring' : ''}`}>
+      <LoadingGlowBorder loading={loading} className="rounded-xl border border-outline-variant bg-surface-container-low p-4">
         <div className="mb-3 flex items-center gap-2">
           <Brain className="h-4 w-4 text-habit-purple" />
           <h2 className="font-display text-sm font-semibold text-on-surface">Daily brain dump</h2>
@@ -292,7 +257,7 @@ export default function BrainDumpBoard() {
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
           <textarea
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => setBrainDumpText(e.target.value)}
             rows={5}
             disabled={loading}
             placeholder="Write out whatever's on your mind — todos, deadlines, people you talked to, things you need to remember. It'll be split into separate items below for you to review."
@@ -323,7 +288,7 @@ export default function BrainDumpBoard() {
         </form>
         {loading && <p className="mt-1 text-xs text-on-surface-variant">Reading that…</p>}
         {error && <p className="mt-1 text-xs text-error">{error}</p>}
-      </div>
+      </LoadingGlowBorder>
 
       {drafts.length > 0 && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -335,7 +300,7 @@ export default function BrainDumpBoard() {
               busy={busyId === draft.clientId}
               onConfirmAct={() => confirmAct(draft)}
               onReview={() => openReview(draft)}
-              onDismiss={() => setDraftStatus(draft.clientId, 'rejected')}
+              onDismiss={() => setBrainDumpDraftStatus(draft.clientId, 'rejected')}
             />
           ))}
         </div>

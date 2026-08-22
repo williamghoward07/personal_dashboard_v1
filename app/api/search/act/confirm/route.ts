@@ -53,11 +53,12 @@ export async function POST(request: Request) {
   }
 
   const table = draft.entity === 'todo' ? 'todos' : 'education_tasks'
-  const { data, error } = await supabase
-    .from(table)
-    .insert({ title: draft.title.trim(), due_date: draft.due_date, notes: draft.notes })
-    .select('id')
-    .single()
+  const row: Record<string, unknown> = { title: draft.title.trim(), due_date: draft.due_date, notes: draft.notes }
+  // due_time only exists on the todos table — education_tasks has no
+  // equivalent column.
+  if (draft.entity === 'todo') row.due_time = draft.due_time
+
+  const { data, error } = await supabase.from(table).insert(row).select('id').single()
 
   if (error) {
     console.error(`Search act confirm insert into ${table} failed:`, error)

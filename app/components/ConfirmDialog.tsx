@@ -5,11 +5,13 @@ import Modal from './Modal'
 export default function ConfirmDialog({
   isOpen,
   message,
+  confirmLabel = 'Delete',
   onConfirm,
   onCancel,
 }: {
   isOpen: boolean
   message: string
+  confirmLabel?: string
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -32,7 +34,7 @@ export default function ConfirmDialog({
             onClick={onConfirm}
             className="rounded-lg bg-error-container px-3 py-1.5 text-sm text-on-error-container hover:brightness-110"
           >
-            Delete
+            {confirmLabel}
           </button>
         </div>
       </div>

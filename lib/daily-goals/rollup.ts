@@ -10,6 +10,7 @@ export type { HabitScheduleResult }
 export interface DailyGoalsRollupInput {
   todosDueToday: { completed_at: string | null }[]
   educationTasksDueToday: { completed_at: string | null }[]
+  followUpsDueToday: { completed_at: string | null }[]
   habitSchedule: HabitScheduleResult[]
 }
 
@@ -30,10 +31,15 @@ export function computeDailyGoalsRollup(input: DailyGoalsRollupInput): DailyGoal
   const scheduledHabits = input.habitSchedule.filter((h) => h.scheduledToday)
   const extraCompletions = input.habitSchedule.filter((h) => h.isExtraCompletion).length
 
-  const total = input.todosDueToday.length + input.educationTasksDueToday.length + scheduledHabits.length
+  const total =
+    input.todosDueToday.length +
+    input.educationTasksDueToday.length +
+    input.followUpsDueToday.length +
+    scheduledHabits.length
   const completed =
     input.todosDueToday.filter((t) => t.completed_at !== null).length +
     input.educationTasksDueToday.filter((t) => t.completed_at !== null).length +
+    input.followUpsDueToday.filter((f) => f.completed_at !== null).length +
     scheduledHabits.filter((h) => h.completedToday).length
 
   return { completed, total, extraCompletions }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Wand2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { RoutineInstance, Task } from '@/lib/types'
 import { connectGoogleCalendar } from '@/lib/google/connect'
@@ -15,6 +15,7 @@ import DayItemsList from './DayItemsList'
 import DayDetailModal from './DayDetailModal'
 import RoutinesPanel from './routines/RoutinesPanel'
 import RoutineInstanceModal from './routines/RoutineInstanceModal'
+import TimeBlockWizardModal from './timeblock/TimeBlockWizardModal'
 import type { CalendarEvent, DayItem, EventSpan } from './calendarItems'
 import { groupItemsByDate, getAllDayEventSpans, addDaysToKey } from './calendarItems'
 
@@ -42,8 +43,9 @@ function ordinalSuffix(day: number): string {
   }
 }
 
-// "Today" button label — a short "Wed 19th" is more useful at a glance than
-// the static word "Today", since it doubles as a reminder of today's date.
+// Jump-to-today button label — shows the SELECTED day, not always today:
+// relative names ("Today"/"Tomorrow"/"Yesterday") when they apply, otherwise
+// a short "Wed 19th" format.
 function formatTodayLabel(dateKey: string): string {
   const [y, m, d] = dateKey.split('-').map(Number)
   const weekday = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
@@ -51,6 +53,13 @@ function formatTodayLabel(dateKey: string): string {
     timeZone: 'UTC',
   })
   return `${weekday} ${d}${ordinalSuffix(d)}`
+}
+
+function formatSelectedDayLabel(selectedDateKey: string, todayKey: string): string {
+  if (selectedDateKey === todayKey) return 'Today'
+  if (selectedDateKey === addDaysToKey(todayKey, 1)) return 'Tomorrow'
+  if (selectedDateKey === addDaysToKey(todayKey, -1)) return 'Yesterday'
+  return formatTodayLabel(selectedDateKey)
 }
 
 function addMonthsToKey(key: string, delta: number): string {
@@ -128,6 +137,7 @@ export default function CalendarPageView() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [detailDateKey, setDetailDateKey] = useState<string | null>(null)
   const [selectedRoutineInstance, setSelectedRoutineInstance] = useState<RoutineInstance | null>(null)
+  const [timeBlockOpen, setTimeBlockOpen] = useState(false)
   const [refreshToken, setRefreshToken] = useState(0)
   const refetch = () => setRefreshToken((t) => t + 1)
 
@@ -233,7 +243,7 @@ export default function CalendarPageView() {
                 title="Jump to today"
                 className="rounded-md px-2 py-1 text-xs font-semibold tabular-nums text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
               >
-                {formatTodayLabel(todayKey)}
+                {formatSelectedDayLabel(selectedDateKey, todayKey)}
               </button>
               <button
                 type="button"
@@ -306,11 +316,25 @@ export default function CalendarPageView() {
               onSelectTask={setSelectedTask}
             />
           ) : (
-            <DayItemsList
-              items={itemsByDate.get(selectedDateKey) ?? []}
-              onSelectTask={setSelectedTask}
-              onSelectRoutineInstance={setSelectedRoutineInstance}
-            />
+            <div className="flex flex-col gap-3">
+              {selectedDateKey === todayKey && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setTimeBlockOpen(true)}
+                    className="flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-1.5 text-xs font-semibold text-on-surface hover:bg-surface-container-high"
+                  >
+                    <Wand2 className="h-3.5 w-3.5" />
+                    Auto time-block today
+                  </button>
+                </div>
+              )}
+              <DayItemsList
+                items={itemsByDate.get(selectedDateKey) ?? []}
+                onSelectTask={setSelectedTask}
+                onSelectRoutineInstance={setSelectedRoutineInstance}
+              />
+            </div>
           )}
         </div>
       )}
@@ -338,6 +362,14 @@ export default function CalendarPageView() {
           instance={selectedRoutineInstance}
           onClose={() => setSelectedRoutineInstance(null)}
           onChanged={refetch}
+        />
+      )}
+
+      {timeBlockOpen && (
+        <TimeBlockWizardModal
+          todayDateKey={todayKey}
+          onClose={() => setTimeBlockOpen(false)}
+          onScheduled={refetch}
         />
       )}
     </WidgetCard>

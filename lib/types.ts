@@ -133,6 +133,9 @@ export interface Todo {
   title: string
   notes: string | null
   due_date: string | null
+  // 24h HH:mm, only meaningful alongside a due_date — null for an
+  // all-day/undated todo.
+  due_time: string | null
   completed_at: string | null
   created_at: string
   // Set only for a todo pulled from Apple Reminders via CalDAV — null for
@@ -337,7 +340,7 @@ export interface FollowUp {
   person_id: string
   note: string
   due_date: string | null
-  done: boolean
+  completed_at: string | null
   interaction_id: string | null
   created_at: string
 }

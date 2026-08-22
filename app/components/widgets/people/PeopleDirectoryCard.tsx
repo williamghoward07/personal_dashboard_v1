@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Contact, Plus, Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { FollowUp, Interaction, InteractionPerson, Person, Place } from '@/lib/types'
@@ -33,12 +34,29 @@ export default function PeopleDirectoryCard({
   onChange: () => void
   pushToGoogle: (personId: string) => void
 }) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const [query, setQuery] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [viewingPerson, setViewingPerson] = useState<Person | null>(null)
   const [editingPerson, setEditingPerson] = useState<Person | null>(null)
   const [deletingPerson, setDeletingPerson] = useState<Person | null>(null)
+
+  // Deep-link support: a follow-up elsewhere in the app (home glance,
+  // FollowUpsCard) links to /people?person=<id> so clicking it jumps
+  // straight into that person's detail view instead of just the page.
+  useEffect(() => {
+    const personId = searchParams.get('person')
+    if (!personId) return
+    const match = people.find((p) => p.id === personId)
+    if (match) setViewingPerson(match)
+  }, [searchParams, people])
+
+  const closeViewingPerson = () => {
+    setViewingPerson(null)
+    if (searchParams.get('person')) router.replace('/people', { scroll: false })
+  }
 
   const allTags = useMemo(
     () => [...new Set(people.flatMap((p) => p.tags))].sort(),
@@ -157,6 +175,9 @@ export default function PeopleDirectoryCard({
         interactions={interactions}
         links={links}
         followUps={followUps}
+        people={people}
+        runMutation={runMutation}
+        onChange={onChange}
         onEdit={() => {
           setEditingPerson(viewing)
           setViewingPerson(null)
@@ -165,7 +186,7 @@ export default function PeopleDirectoryCard({
           setDeletingPerson(viewing)
           setViewingPerson(null)
         }}
-        onClose={() => setViewingPerson(null)}
+        onClose={closeViewingPerson}
       />
 
       <PersonFormModal

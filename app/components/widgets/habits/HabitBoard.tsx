@@ -303,6 +303,7 @@ export default function HabitBoard() {
         message={`Mark "${confirmingCell?.habit.name}" ${
           confirmingWasCompleted ? 'not done' : 'done'
         } on ${confirmingCell?.date}?`}
+        confirmLabel={confirmingWasCompleted ? 'Mark not done' : 'Mark done'}
         onCancel={() => setConfirmingCell(null)}
         onConfirm={() => {
           if (!confirmingCell) return

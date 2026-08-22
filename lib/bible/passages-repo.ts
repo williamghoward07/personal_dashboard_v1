@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import type { BiblePassage } from './types'
 
 export interface PassageInput {
   book: string
@@ -24,4 +25,14 @@ export async function getOrCreatePassageId(input: PassageInput): Promise<string>
 
   if (error) throw new Error(error.message)
   return data as string
+}
+
+// Fetches a passage row by id — needed wherever a page only has a
+// passage_id on hand (a session's fixed passage, a topic-passage link) and
+// has to render its book/chapter/verse reference via formatReference().
+export async function getPassageById(id: string): Promise<BiblePassage | null> {
+  const { data, error } = await supabase.from('bible_passages').select('*').eq('id', id).maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data as BiblePassage | null
 }

@@ -70,13 +70,6 @@ export interface BibleTopicPassage {
   created_at: string
 }
 
-export interface BibleDailyVerse {
-  id: string
-  passage_id: string
-  sort_order: number
-  created_at: string
-}
-
 // Shape of the JSON pasted into the study-import textarea. See
 // import_bible_study() in 20260822000100_bible_functions.sql for the
 // server-side contract this must match.

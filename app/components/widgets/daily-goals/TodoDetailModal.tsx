@@ -49,7 +49,12 @@ export default function TodoDetailModal({
         </div>
 
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-surface-variant">
-          {todo.due_date && <span>Due: {todo.due_date}</span>}
+          {todo.due_date && (
+            <span>
+              Due: {todo.due_date}
+              {todo.due_time ? ` · ${todo.due_time}` : ''}
+            </span>
+          )}
           {list && <span>List: {list.name}</span>}
         </div>
 

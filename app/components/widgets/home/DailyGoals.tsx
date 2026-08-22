@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Target, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { DailyGoalHabit, DailyGoalHabitCompletion, EducationTask } from '@/lib/types'
+import type { DailyGoalHabit, DailyGoalHabitCompletion, EducationTask, FollowUp } from '@/lib/types'
 import { londonDayBoundsUTC, londonWeekBoundsUTC } from '@/lib/google/london-day'
 import { computeHabitSchedule, computeDailyGoalsRollup } from '@/lib/daily-goals/rollup'
 import { selectChecklistTodos } from '@/lib/daily-goals/checklist'
@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 
 interface DomainData {
   educationTasksDueToday: EducationTask[]
+  followUpsDueToday: FollowUp[]
   habits: DailyGoalHabit[]
   completionsThisWeek: DailyGoalHabitCompletion[]
 }
@@ -47,16 +48,17 @@ export default function DailyGoals() {
 
     Promise.all([
       supabase.from('education_tasks').select('*').eq('due_date', todayDateKey),
+      supabase.from('follow_ups').select('*').eq('due_date', todayDateKey),
       supabase.from('daily_goal_habits').select('*').eq('is_active', true),
       supabase
         .from('daily_goal_habit_completions')
         .select('*')
         .gte('completed_on', weekStartKey)
         .lt('completed_on', weekEndKeyExclusive),
-    ]).then(([educationRes, habitsRes, completionsRes]) => {
+    ]).then(([educationRes, followUpsRes, habitsRes, completionsRes]) => {
       if (cancelled) return
 
-      const firstError = educationRes.error ?? habitsRes.error ?? completionsRes.error
+      const firstError = educationRes.error ?? followUpsRes.error ?? habitsRes.error ?? completionsRes.error
       if (firstError) {
         setDomainError(firstError.message)
         setDomainLoading(false)
@@ -66,6 +68,7 @@ export default function DailyGoals() {
       setDomainError(null)
       setDomain({
         educationTasksDueToday: (educationRes.data ?? []) as EducationTask[],
+        followUpsDueToday: (followUpsRes.data ?? []) as FollowUp[],
         habits: (habitsRes.data ?? []) as DailyGoalHabit[],
         completionsThisWeek: (completionsRes.data ?? []) as DailyGoalHabitCompletion[],
       })
@@ -89,6 +92,7 @@ export default function DailyGoals() {
       computeDailyGoalsRollup({
         todosDueToday,
         educationTasksDueToday: domain?.educationTasksDueToday ?? [],
+        followUpsDueToday: domain?.followUpsDueToday ?? [],
         habitSchedule,
       }),
     [todosDueToday, domain, habitSchedule]

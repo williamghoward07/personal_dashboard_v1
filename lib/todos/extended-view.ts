@@ -33,7 +33,11 @@ function endOfWeekKey(todayDateKey: string): string {
 }
 
 function sortByDueThenCreated(a: Todo, b: Todo): number {
-  return (a.due_date ?? '').localeCompare(b.due_date ?? '') || a.created_at.localeCompare(b.created_at)
+  return (
+    (a.due_date ?? '').localeCompare(b.due_date ?? '') ||
+    (a.due_time ?? '').localeCompare(b.due_time ?? '') ||
+    a.created_at.localeCompare(b.created_at)
+  )
 }
 
 // From the full todo list, buckets by due date into the sections the

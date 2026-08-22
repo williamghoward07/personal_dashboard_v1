@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 
 const SIZE_CLASS: Record<'sm' | 'lg', string> = {
@@ -25,7 +26,7 @@ export default function Modal({
     return () => document.removeEventListener('keydown', handleKey)
   }, [onClose])
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={(e) => {
@@ -44,6 +45,7 @@ export default function Modal({
       >
         {size === 'lg' ? <div className="flex max-h-[80vh] flex-col overflow-y-auto">{children}</div> : children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

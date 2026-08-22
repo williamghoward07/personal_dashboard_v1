@@ -8,6 +8,7 @@ import type { Todo } from '@/lib/types'
 export interface TodoFormValues {
   title: string
   due_date: string | null
+  due_time: string | null
   notes: string | null
   list_id: string | null
 }
@@ -15,6 +16,7 @@ export interface TodoFormValues {
 const EMPTY: TodoFormValues = {
   title: '',
   due_date: '',
+  due_time: '',
   notes: '',
   list_id: null,
 }
@@ -44,6 +46,7 @@ export default function TodoFormModal({
       setValues({
         title: initialValues?.title ?? '',
         due_date: initialValues?.due_date ?? '',
+        due_time: initialValues?.due_time ?? '',
         notes: initialValues?.notes ?? '',
         list_id: initialValues?.list_id ?? null,
       })
@@ -61,6 +64,7 @@ export default function TodoFormModal({
           onSave({
             title: values.title.trim(),
             due_date: values.due_date || null,
+            due_time: values.due_date ? values.due_time || null : null,
             notes: values.notes || null,
             list_id: values.list_id,
           })
@@ -79,15 +83,28 @@ export default function TodoFormModal({
           />
         </label>
 
-        <label className={labelClass}>
-          Due date
-          <input
-            type="date"
-            value={values.due_date ?? ''}
-            onChange={(e) => setValues((v) => ({ ...v, due_date: e.target.value }))}
-            className={inputClass}
-          />
-        </label>
+        <div className="flex gap-3">
+          <label className={labelClass}>
+            Due date
+            <input
+              type="date"
+              value={values.due_date ?? ''}
+              onChange={(e) => setValues((v) => ({ ...v, due_date: e.target.value, due_time: e.target.value ? v.due_time : '' }))}
+              className={inputClass}
+            />
+          </label>
+
+          <label className={labelClass}>
+            Time
+            <input
+              type="time"
+              value={values.due_time ?? ''}
+              onChange={(e) => setValues((v) => ({ ...v, due_time: e.target.value }))}
+              disabled={!values.due_date}
+              className={`${inputClass} disabled:opacity-40`}
+            />
+          </label>
+        </div>
 
         <label className={labelClass}>
           List

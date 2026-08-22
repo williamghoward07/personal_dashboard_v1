@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import type { Interaction, Person, Place } from '@/lib/types'
 import type { NlExtractResult, NlExtractedPerson } from '@/lib/people/nl-extract'
 import WidgetCard from '../../WidgetCard'
+import LoadingGlowBorder from '../../LoadingGlowBorder'
 import PersonFormModal from './PersonFormModal'
 import type { PersonFormValues } from './PersonFormModal'
 import InteractionFormModal from './InteractionFormModal'
@@ -242,7 +243,7 @@ export default function QuickAddBar({
         accent="amber"
         className="sm:col-span-2 xl:col-span-4"
       >
-        <div className={`relative rounded-lg ${loading ? 'rainbow-ring' : ''}`}>
+        <LoadingGlowBorder loading={loading} className="rounded-lg">
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
             <input
               type="text"
@@ -273,7 +274,7 @@ export default function QuickAddBar({
               </button>
             )}
           </form>
-        </div>
+        </LoadingGlowBorder>
         {loading && <p className="mt-2 text-xs text-on-surface-variant">Reading that…</p>}
         {error && <p className="mt-2 text-xs text-error">{error}</p>}
       </WidgetCard>

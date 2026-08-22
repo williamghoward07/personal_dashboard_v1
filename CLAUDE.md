@@ -17,7 +17,7 @@ connects across modules.
   Geist for headings/data, Inter for body text, glassy bento cards with a
   hover glow in the active module's accent color. Per-module accent colors:
   mint = Health, electric blue = Money, orange = Education, pink = Research,
-  purple = Habits. Tokens live in `app/globals.css` (`@theme`) and
+  purple = Habits, crimson = Bible. Tokens live in `app/globals.css` (`@theme`) and
   `lib/theme.ts` (accent → class maps). Icons stay on `lucide-react`
   (not the reference mockups' Material Symbols) to avoid a second icon
   system — reskin new UI to match this rather than reverting to the old
@@ -41,7 +41,7 @@ connects across modules.
   Features below)
 
 ## Home page widgets (v1 layout, decided)
-Seven widgets on the bento grid, each self-contained:
+Six widgets on the bento grid, each self-contained:
 - **Habits** — rings only (circle + title underneath). Daily / specific-day
   habits only; health-specific habits live in the Health widget instead.
 - **Health** — progress rings for Running and Gym (see habit model below),
@@ -66,11 +66,10 @@ Seven widgets on the bento grid, each self-contained:
   On the full calendar page, clicking an event opens an anchored
   popover (desktop) or bottom sheet (mobile) — never a full-screen
   blocking modal.
-- **Daily Verse** — separate small card, date-stable per Europe/London,
-  curated selection (not random). Click opens the full surrounding
-  passage in a reader. See dedicated feature prompt for API/architecture
-  details (source TBD: YouVersion Platform API if it has a suitable
-  public endpoint, else API.Bible).
+
+Daily Verse was planned here but was dropped before build — see the
+standalone Bible module (`bible_*` in Data model conventions below)
+instead, which has no home-grid widget of its own.
 
 ## Data model conventions (decided)
 - `todos` — general to-dos only, separate table from education tasks.
@@ -91,6 +90,16 @@ Seven widgets on the bento grid, each self-contained:
   call cap and the AI Usage bento widget. See the AI Search & Token Budget
   plan (2026-08-18, `lib/ai/`) for the two-tier (`fast`/`smart`) model
   policy this all sits under.
+- `bible_*` — a standalone module (`/bible`, nav-reachable, no home-grid
+  widget), keyed off `bible_passages` (a normalised book/chapter/verse
+  reference — never scripture text itself, and never fetched from a Bible
+  API). `bible_studies` allows only one `status = 'active'` row at a time,
+  DB-enforced via a partial unique index; `bible_study_sessions` +
+  `bible_session_questions` hold a study's fixed, author-imported plan
+  (paste-JSON import only), with per-question `answered_at` making
+  pause/resume work without separate progress bookkeeping. Zero AI calls
+  in this module — the prompt launcher only builds a copyable prompt for a
+  separate Claude Project.
 
 ## Tech stack
 - Frontend: Next.js (App Router), TypeScript, Tailwind CSS
@@ -159,3 +168,60 @@ actual values.
   into the same flat pool)
 - **Gemini (home search, People quick-add)**: `GEMINI_API_KEY` from
   aistudio.google.com (free tier), optional `AI_ENABLED=false` kill switch
+- **Bible module prompt launcher**: `NEXT_PUBLIC_BIBLE_CLAUDE_PROJECT_URL`
+  (optional) — deep-links "Open Claude Project" to a separate Claude
+  Project you paste the copied prompt into. Omitted entirely when unset.
+  Not an AI API call: this module never calls Gemini or any other AI
+  provider itself.
+
+## Bugs (bounded, fix first)
+- Money: hidden accounts are not actually being hidden in the accounts list.
+- Habits: the confirm/action label says "Delete" when updating an existing
+  entry or adding a completion — should reflect the actual operation.
+- Calendar header: the date label always shows the current day ("Thu 20th")
+  regardless of which day is selected. It should show the SELECTED day, using
+  relative names where they apply — "Today", "Tomorrow", "Yesterday" — and
+  fall back to "Thu 20th" format for any other selected day.
+- Calendar routines: clicking a routine causes the panel to jump far up the
+  page while the mouse hovers the tab; it snaps back to the correct centred
+  position only when the window loses focus. Positioning/layout bug.
+- Rainbow loading bar: currently spins the whole element. Intended behaviour is
+  a fixed border that stays in place while the colour and glow travel around
+  the perimeter — an LED-strip effect, like the iOS 26 Apple Intelligence
+  screen-edge glow. Fix the animation, extract it as a shared component, and
+  apply it to every search bar in the app, not just the home one.
+
+## Money module
+- Shrink "Add account", "Hidden accounts" and "Import PDF statement" buttons —
+  currently too large and visually dominant for their importance.
+- Spending tab: breakdown per category.
+- Monthly spending breakdown drill-down: clicking a category opens the
+  individual transactions inside it. Add an equivalent monthly INCOME
+  breakdown, split by sender. From either view, allow moving a transaction to
+  a different category, creating new categories, and assigning a specific
+  sender to a category as a persistent rule.
+
+## Todos & reminders
+- Natural-language add must support "add a reminder", not only "add a todo".
+- Show the time a reminder is set for in the todo/reminder views.
+- Multi-select todos and move the selection to a different or newly created list.
+
+## Calendar
+- Support the basic Google Calendar event options when adding an event
+  (all-day vs timed, etc.) — see open question below.
+
+## Home screen & UI
+- Edit mode for the home screen: drag individual widgets to chosen positions,
+  persisted per user.
+- System query box: the UI is confusing. Make the available modes explicit and
+  explained in-place. See claude/ai-search-architecture.md — the modes are
+  Find / Answer / Act, and only Find is built.
+- Whole-app UI pass referencing the Perplexity home screen as the visual
+  reference. NOTE: this overlaps the existing nine-prompt redesign sequence
+  already specced in CLAUDE.md — reconcile rather than starting a parallel
+  redesign.
+- Widget showing Claude session-limit and weekly-limit usage as percentages.
+  See open question below.
+
+## Platform
+- Web push notifications to the phone (PWA). Approach undecided.

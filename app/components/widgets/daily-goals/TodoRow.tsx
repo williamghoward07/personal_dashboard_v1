@@ -68,6 +68,7 @@ export default function TodoRow({
         >
           {overdue ? 'Overdue · ' : ''}
           {todo.due_date}
+          {todo.due_time ? ` · ${todo.due_time}` : ''}
         </span>
       )}
       <button

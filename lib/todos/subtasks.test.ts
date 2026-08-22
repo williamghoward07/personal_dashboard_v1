@@ -8,6 +8,7 @@ function todo(overrides: Partial<Todo> = {}): Todo {
     title: 'Untitled',
     notes: null,
     due_date: null,
+    due_time: null,
     completed_at: null,
     created_at: '2026-08-01T00:00:00.000Z',
     caldav_uid: null,

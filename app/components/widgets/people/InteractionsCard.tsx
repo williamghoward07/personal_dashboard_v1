@@ -64,7 +64,7 @@ export default function InteractionsCard({
   /**
    * Reconciles an edited interaction's "bring up next time" note against
    * its follow_ups rows — updates the note for attendees who already had
-   * one (preserving their done state), adds rows for newly-added
+   * one (preserving their completed state), adds rows for newly-added
    * attendees, and drops rows for attendees removed from the interaction
    * or once the note is cleared entirely.
    */
@@ -182,7 +182,9 @@ export default function InteractionsCard({
                     </p>
                   )}
                   {(() => {
-                    const openNote = followUps.find((f) => f.interaction_id === interaction.id && !f.done)
+                    const openNote = followUps.find(
+                      (f) => f.interaction_id === interaction.id && f.completed_at === null,
+                    )
                     return (
                       openNote && (
                         <p className="mt-1 truncate text-xs text-people-amber">

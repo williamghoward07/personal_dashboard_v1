@@ -15,6 +15,16 @@ export async function getActiveStudy(): Promise<BibleStudy | null> {
   return data as BibleStudy | null
 }
 
+// Fetches one session by id — the session detail page only has a
+// sessionId (from the route), not the parent studyId, so this is the
+// entry point that loads everything else about that session.
+export async function getSession(sessionId: string): Promise<BibleStudySession | null> {
+  const { data, error } = await supabase.from('bible_study_sessions').select('*').eq('id', sessionId).maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data as BibleStudySession | null
+}
+
 export async function listSessions(studyId: string): Promise<BibleStudySession[]> {
   const { data, error } = await supabase
     .from('bible_study_sessions')

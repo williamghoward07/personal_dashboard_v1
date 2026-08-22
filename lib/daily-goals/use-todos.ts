@@ -10,12 +10,18 @@ export interface UseTodosResult {
   error: string | null
   addTodo: (
     title: string,
-    extra?: { due_date?: string | null; notes?: string | null; list_id?: string | null; parent_id?: string | null }
+    extra?: {
+      due_date?: string | null
+      due_time?: string | null
+      notes?: string | null
+      list_id?: string | null
+      parent_id?: string | null
+    }
   ) => Promise<void>
   toggleTodo: (id: string) => Promise<void>
   updateTodo: (
     id: string,
-    patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date' | 'list_id' | 'parent_id'>>
+    patch: Partial<Pick<Todo, 'title' | 'notes' | 'due_date' | 'due_time' | 'list_id' | 'parent_id'>>
   ) => Promise<void>
   deleteTodo: (id: string) => Promise<void>
   // Pulls from Apple Reminders (see app/api/caldav/reminders/pull) and
@@ -69,12 +75,19 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
   const addTodo = useCallback(
     async (
       title: string,
-      extra?: { due_date?: string | null; notes?: string | null; list_id?: string | null; parent_id?: string | null }
+      extra?: {
+        due_date?: string | null
+        due_time?: string | null
+        notes?: string | null
+        list_id?: string | null
+        parent_id?: string | null
+      }
     ) => {
       const trimmed = title.trim()
       if (!trimmed) return
 
       const dueDate = extra ? (extra.due_date ?? null) : todayDateKey
+      const dueTime = extra?.due_time ?? null
       const notes = extra?.notes ?? null
       const listId = extra?.list_id ?? null
       const parentId = extra?.parent_id ?? null
@@ -85,6 +98,7 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
         title: trimmed,
         notes,
         due_date: dueDate,
+        due_time: dueTime,
         completed_at: null,
         created_at: new Date().toISOString(),
         // Todos added through this function are always app-created —
@@ -98,7 +112,7 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
 
       const { data, error: insertError } = await supabase
         .from('todos')
-        .insert({ title: trimmed, due_date: dueDate, notes, list_id: listId, parent_id: parentId })
+        .insert({ title: trimmed, due_date: dueDate, due_time: dueTime, notes, list_id: listId, parent_id: parentId })
         .select()
         .single()
 

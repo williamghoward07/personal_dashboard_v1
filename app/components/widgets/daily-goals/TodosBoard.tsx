@@ -48,7 +48,11 @@ function sortTodos(todos: Todo[], todayDateKey: string): Todo[] {
     if (a.due_date === null && b.due_date === null) return a.created_at.localeCompare(b.created_at)
     if (a.due_date === null) return 1
     if (b.due_date === null) return -1
-    return a.due_date.localeCompare(b.due_date) || a.created_at.localeCompare(b.created_at)
+    return (
+      a.due_date.localeCompare(b.due_date) ||
+      (a.due_time ?? '').localeCompare(b.due_time ?? '') ||
+      a.created_at.localeCompare(b.created_at)
+    )
   })
 }
 
@@ -306,7 +310,12 @@ export default function TodosBoard() {
         heading="New todo"
         onClose={() => setIsAddOpen(false)}
         onSave={(values: TodoFormValues) => {
-          addTodo(values.title, { due_date: values.due_date, notes: values.notes, list_id: values.list_id })
+          addTodo(values.title, {
+            due_date: values.due_date,
+            due_time: values.due_time,
+            notes: values.notes,
+            list_id: values.list_id,
+          })
           setIsAddOpen(false)
         }}
       />

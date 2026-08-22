@@ -57,6 +57,7 @@
   --color-research-pink: #ff007f;
   --color-habit-purple: #c084fc;
   --color-people-amber: #ffc233;
+  --color-bible-crimson: #ff3b3b;
 
   --font-display: var(--font-geist-sans), "Geist", sans-serif;
   --font-body: var(--font-inter), "Inter", sans-serif;
@@ -153,6 +154,12 @@ body {
   }
 }
 
+@property --rainbow-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
 .rainbow-ring::before {
   content: '';
   position: absolute;
@@ -161,7 +168,7 @@ body {
   border-radius: inherit;
   padding: 2px;
   background: conic-gradient(
-    from 0deg,
+    from var(--rainbow-angle),
     #ff004c,
     #ff8a00,
     #ffe600,
@@ -179,9 +186,13 @@ body {
   pointer-events: none;
 }
 
+/* Animates the gradient's start angle rather than the shape's transform, so
+   the border frame itself stays put and only the colour/glow travels around
+   the fixed perimeter (LED-strip effect) instead of the whole ring spinning
+   like a pinwheel. */
 @keyframes rainbow-spin {
   to {
-    transform: rotate(360deg);
+    --rainbow-angle: 360deg;
   }
 }
 

@@ -17,6 +17,17 @@ export interface Module {
   created_at: string
 }
 
+// A specific OneNote page a todo can be attached to — created lazily the
+// first time a page gains a linked todo (see lib/education/notes-documents.ts).
+// OneNote pages themselves are never persisted; this row is local-only.
+export interface NotesDocument {
+  id: string
+  module_id: string
+  onenote_page_id: string
+  page_title: string
+  created_at: string
+}
+
 export interface Task {
   id: string
   module_id: string
@@ -145,6 +156,9 @@ export interface Todo {
   // Self-referencing, single-level only — a CalDAV-linked todo can never
   // be a parent or a child (enforced by a DB trigger, not just app code).
   parent_id: string | null
+  // Set when this todo is attached to a specific Education notes document
+  // (see NotesDocument) — independent of list_id, a todo can carry both.
+  notes_document_id: string | null
 }
 
 export interface TodoList {

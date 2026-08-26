@@ -18,6 +18,7 @@ function todo(overrides: Partial<Todo> = {}): Todo {
     caldav_uid: null,
     list_id: null,
     parent_id: null,
+    notes_document_id: null,
     ...overrides,
   }
 }

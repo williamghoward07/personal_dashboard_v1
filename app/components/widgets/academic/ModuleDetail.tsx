@@ -52,6 +52,7 @@ export default function ModuleDetail({
     <div className="flex flex-col gap-6 rounded-xl border border-outline-variant bg-surface-container-low p-4">
       {module?.onenote_section_id ? (
         <OneNoteSectionBrowser
+          moduleId={moduleId}
           sectionId={module.onenote_section_id}
           sectionName={module.onenote_section_name ?? 'OneNote section'}
         />

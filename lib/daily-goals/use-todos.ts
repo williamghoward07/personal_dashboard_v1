@@ -106,6 +106,9 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
         caldav_uid: null,
         list_id: listId,
         parent_id: parentId,
+        // Only ever set by the Education notes-document feature, which
+        // writes directly via Supabase rather than through this hook.
+        notes_document_id: null,
       }
       setTodos((prev) => [...prev, optimisticTodo])
       setError(null)

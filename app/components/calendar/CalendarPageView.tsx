@@ -12,6 +12,7 @@ import TaskDetailModal from '../widgets/academic/TaskDetailModal'
 import MonthView from './MonthView'
 import WeekView from './WeekView'
 import DayGridView from './DayGridView'
+import AgendaView from './AgendaView'
 import DayDetailModal from './DayDetailModal'
 import RoutinesPanel from './routines/RoutinesPanel'
 import RoutineInstanceModal from './routines/RoutineInstanceModal'
@@ -127,8 +128,11 @@ const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
   { value: 'routines', label: 'Routines' },
 ]
 
+type GridMode = 'grid' | 'agenda'
+
 export default function CalendarPageView() {
   const [view, setView] = useState<ViewMode>('month')
+  const [gridMode, setGridMode] = useState<GridMode>('grid')
   const [selectedDateKey, setSelectedDateKey] = useState(() => todayKeyLondon())
   const [itemsByDate, setItemsByDate] = useState<Map<string, DayItem[]>>(new Map())
   const [spans, setSpans] = useState<EventSpan[]>([])
@@ -284,9 +288,29 @@ export default function CalendarPageView() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <h3 className="font-display text-sm font-semibold text-on-surface">
-            {formatTitle(view, selectedDateKey)}
-          </h3>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-display text-sm font-semibold text-on-surface">
+              {formatTitle(view, selectedDateKey)}
+            </h3>
+            {(view === 'day' || view === 'week') && (
+              <div className="flex items-center gap-1 rounded-lg bg-surface-container p-0.5">
+                {(['grid', 'agenda'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setGridMode(mode)}
+                    className={`rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors duration-200 ${
+                      gridMode === mode
+                        ? 'bg-surface-container-high text-on-surface'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {loading ? (
             <p>Loading...</p>
@@ -298,6 +322,14 @@ export default function CalendarPageView() {
               spans={spans}
               todayKey={todayKey}
               onSelectDate={setDetailDateKey}
+            />
+          ) : view === 'week' && gridMode === 'agenda' ? (
+            <AgendaView
+              dateKeys={Array.from({ length: 7 }, (_, i) => addDaysToKey(mondayOfWeek(selectedDateKey), i))}
+              itemsByDate={itemsByDate}
+              todayKey={todayKey}
+              onSelectTask={setSelectedTask}
+              onSelectRoutineInstance={setSelectedRoutineInstance}
             />
           ) : view === 'week' ? (
             <WeekView
@@ -334,13 +366,23 @@ export default function CalendarPageView() {
                   </button>
                 </div>
               )}
-              <DayGridView
-                dateKey={selectedDateKey}
-                items={itemsByDate.get(selectedDateKey) ?? []}
-                isToday={selectedDateKey === todayKey}
-                onSelectTask={setSelectedTask}
-                onSelectRoutineInstance={setSelectedRoutineInstance}
-              />
+              {gridMode === 'agenda' ? (
+                <AgendaView
+                  dateKeys={[selectedDateKey]}
+                  itemsByDate={itemsByDate}
+                  todayKey={todayKey}
+                  onSelectTask={setSelectedTask}
+                  onSelectRoutineInstance={setSelectedRoutineInstance}
+                />
+              ) : (
+                <DayGridView
+                  dateKey={selectedDateKey}
+                  items={itemsByDate.get(selectedDateKey) ?? []}
+                  isToday={selectedDateKey === todayKey}
+                  onSelectTask={setSelectedTask}
+                  onSelectRoutineInstance={setSelectedRoutineInstance}
+                />
+              )}
             </div>
           )}
         </div>

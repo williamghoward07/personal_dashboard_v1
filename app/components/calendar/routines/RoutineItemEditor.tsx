@@ -61,7 +61,12 @@ const RoutineItemEditor = forwardRef<
   {
     routineId: string | null
     items: RoutineItem[]
-    onItemsChange: (items: RoutineItem[]) => void
+    // Carries the routine id alongside the items — a caller whose own
+    // "current routine" state is closed over from an earlier render (e.g.
+    // RoutineSidebar, before the routine created by ensureRoutineId() below
+    // has propagated back into that state) would otherwise silently drop
+    // the very first update for a brand-new routine.
+    onItemsChange: (routineId: string, items: RoutineItem[]) => void
     ensureRoutineId: () => Promise<string>
   }
 >(function RoutineItemEditor({ routineId, items, onItemsChange, ensureRoutineId }, ref) {
@@ -101,7 +106,7 @@ const RoutineItemEditor = forwardRef<
         setError(`Couldn't add step: ${insertError?.message ?? 'unknown error'}`)
         return
       }
-      onItemsChange([...items, data as RoutineItem])
+      onItemsChange(id, [...items, data as RoutineItem])
       setDraft(EMPTY_DRAFT)
       setError(null)
     } finally {
@@ -115,7 +120,7 @@ const RoutineItemEditor = forwardRef<
       setError(`Couldn't delete step: ${deleteError.message}`)
       return
     }
-    onItemsChange(items.filter((i) => i.id !== item.id))
+    onItemsChange(item.routine_id, items.filter((i) => i.id !== item.id))
   }
 
   const handleUpdate = async (item: RoutineItem, values: { name: string; description: string; duration_minutes: number }) => {
@@ -129,7 +134,7 @@ const RoutineItemEditor = forwardRef<
       setError(`Couldn't save step: ${updateError?.message ?? 'unknown error'}`)
       return
     }
-    onItemsChange(items.map((i) => (i.id === item.id ? (data as RoutineItem) : i)))
+    onItemsChange(item.routine_id, items.map((i) => (i.id === item.id ? (data as RoutineItem) : i)))
     setEditingId(null)
   }
 
@@ -141,7 +146,7 @@ const RoutineItemEditor = forwardRef<
     if (oldIndex === -1 || newIndex === -1) return
 
     const reordered = arrayMove(items, oldIndex, newIndex)
-    onItemsChange(reordered)
+    onItemsChange(reordered[0].routine_id, reordered)
 
     const results = await Promise.all(
       reordered.map((item, i) => supabase.from('routine_items').update({ sort_order: i }).eq('id', item.id))

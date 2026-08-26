@@ -123,7 +123,7 @@ export default function RoutineInstanceModal({
           <RoutineItemEditor
             routineId={instance.routine_id}
             items={items}
-            onItemsChange={setItems}
+            onItemsChange={(_routineId, items) => setItems(items)}
             ensureRoutineId={async () => instance.routine_id as string}
           />
         )}

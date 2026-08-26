@@ -37,7 +37,7 @@ export default function RoutineBuilderForm({
   items: RoutineItem[]
   onRoutineCreated: (routine: Routine) => void
   onRoutineUpdated: (routine: Routine) => void
-  onItemsChange: (items: RoutineItem[]) => void
+  onItemsChange: (routineId: string, items: RoutineItem[]) => void
   onDone: () => void
 }) {
   const [name, setName] = useState(routine?.name ?? '')

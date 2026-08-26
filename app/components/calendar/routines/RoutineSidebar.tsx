@@ -65,9 +65,15 @@ export default function RoutineSidebar() {
           setRoutines((rs) => rs.map((r) => (r.id === routine.id ? routine : r)))
           setMode({ kind: 'builder', routine })
         }}
-        onItemsChange={(items) => {
-          if (!mode.routine) return
-          setItemsByRoutineId((m) => new Map(m).set(mode.routine!.id, items))
+        // routineId comes from the callback itself, not the closed-over
+        // `mode` — for a brand-new routine, `mode.routine` is still null in
+        // this closure at the moment its first step is added (the routine
+        // row is only created partway through that same add, and this
+        // component doesn't re-render with the new `mode` until after
+        // RoutineItemEditor's handleAdd has already finished calling this),
+        // so gating on `mode.routine` silently dropped that first update.
+        onItemsChange={(routineId, items) => {
+          setItemsByRoutineId((m) => new Map(m).set(routineId, items))
         }}
         onDone={() => {
           setMode({ kind: 'list' })

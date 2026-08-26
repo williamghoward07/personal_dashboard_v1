@@ -16,6 +16,12 @@ export type DayItem =
       title: string
       allDay: boolean
       start: string | null
+      // Only set alongside `start` (the event's first day) — an hour-grid
+      // needs real duration for pill height. A timed event that crosses
+      // midnight has no `start`/`end` on its later day-entries (same
+      // limitation `start` already had), so it falls back to rendering as
+      // untimed there rather than splitting across the day boundary.
+      end: string | null
       // Equal for a single-day event. Multi-day events appear once per day
       // they cover, both keys shared across every one of those entries, so
       // callers can tell "this is part of a longer span" and show the range.
@@ -51,6 +57,14 @@ export const DOT_CLASS: Record<DayItem['kind'], string> = {
   task: 'bg-academic-orange',
   activity: 'bg-primary-container',
   routine: 'bg-habit-purple',
+}
+
+export function formatSpanEnd(endKey: string) {
+  return new Date(`${endKey}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
 }
 
 export function formatTime(iso: string) {
@@ -126,6 +140,7 @@ export function groupItemsByDate(
 
     const { startKey, endKey } = resolveEventSpan(event)
     for (const key of keysBetween(startKey, endKey)) {
+      const isFirstDayTimed = !event.allDay && key === startKey
       push(key, {
         kind: 'calendar',
         id: event.id,
@@ -133,7 +148,8 @@ export function groupItemsByDate(
         allDay: event.allDay,
         // Only the first day carries a real time — later days are just a
         // continuation, nothing "starts" there.
-        start: !event.allDay && key === startKey ? event.start : null,
+        start: isFirstDayTimed ? event.start : null,
+        end: isFirstDayTimed ? event.end : null,
         spanStartKey: startKey,
         spanEndKey: endKey,
       })

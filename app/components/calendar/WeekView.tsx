@@ -1,6 +1,7 @@
+import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem, EventSpan } from './calendarItems'
 import { addDaysToKey } from './calendarItems'
-import WeekRow from './WeekRow'
+import WeekGridView from './WeekGridView'
 
 export default function WeekView({
   mondayKey,
@@ -8,25 +9,28 @@ export default function WeekView({
   spans,
   todayKey,
   onSelectDate,
+  onSelectTask,
+  onSelectRoutineInstance,
 }: {
   mondayKey: string
   itemsByDate: Map<string, DayItem[]>
   spans: EventSpan[]
   todayKey: string
   onSelectDate: (dateKey: string) => void
+  onSelectTask: (task: Task) => void
+  onSelectRoutineInstance: (instance: RoutineInstance) => void
 }) {
   const weekKeys = Array.from({ length: 7 }, (_, i) => addDaysToKey(mondayKey, i))
 
   return (
-    <WeekRow
-      weekCells={weekKeys}
+    <WeekGridView
+      weekKeys={weekKeys}
       itemsByDate={itemsByDate}
       spans={spans}
       todayKey={todayKey}
       onSelectDate={onSelectDate}
-      minHeightClass="min-h-48"
-      maxCompactItems={6}
-      showWeekdayLabel={true}
+      onSelectTask={onSelectTask}
+      onSelectRoutineInstance={onSelectRoutineInstance}
     />
   )
 }

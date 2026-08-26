@@ -11,7 +11,7 @@ import WidgetCard from '../WidgetCard'
 import TaskDetailModal from '../widgets/academic/TaskDetailModal'
 import MonthView from './MonthView'
 import WeekView from './WeekView'
-import DayItemsList from './DayItemsList'
+import DayGridView from './DayGridView'
 import DayDetailModal from './DayDetailModal'
 import RoutinesPanel from './routines/RoutinesPanel'
 import RoutineInstanceModal from './routines/RoutineInstanceModal'
@@ -305,7 +305,12 @@ export default function CalendarPageView() {
               itemsByDate={itemsByDate}
               spans={spans}
               todayKey={todayKey}
-              onSelectDate={setDetailDateKey}
+              onSelectDate={(dateKey) => {
+                setSelectedDateKey(dateKey)
+                setView('day')
+              }}
+              onSelectTask={setSelectedTask}
+              onSelectRoutineInstance={setSelectedRoutineInstance}
             />
           ) : view === 'routines' ? (
             <RoutinesPanel
@@ -329,8 +334,10 @@ export default function CalendarPageView() {
                   </button>
                 </div>
               )}
-              <DayItemsList
+              <DayGridView
+                dateKey={selectedDateKey}
                 items={itemsByDate.get(selectedDateKey) ?? []}
+                isToday={selectedDateKey === todayKey}
                 onSelectTask={setSelectedTask}
                 onSelectRoutineInstance={setSelectedRoutineInstance}
               />

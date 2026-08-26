@@ -1,14 +1,6 @@
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from './calendarItems'
-import { DOT_CLASS, formatTime } from './calendarItems'
-
-function formatSpanEnd(endKey: string) {
-  return new Date(`${endKey}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  })
-}
+import { DOT_CLASS, formatSpanEnd, formatTime } from './calendarItems'
 
 export default function DayItemsList({
   items,

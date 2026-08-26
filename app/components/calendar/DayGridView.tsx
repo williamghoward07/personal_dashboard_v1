@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from './calendarItems'
-import { GRID_HEIGHT_PX, defaultScrollMinutes, minutesToPx } from './time-grid/grid-math'
+import { MAX_GRID_CONTAINER_PX, MIN_PILL_HEIGHT_PX, defaultScrollMinutes, gridHeightPx, minutesToPx } from './time-grid/grid-math'
 import { layoutOverlappingBlocks } from './time-grid/overlap-layout'
 import { resolveTimedRange } from './time-grid/timed-range'
 import TimeGridPill, { isTimedDayItem } from './time-grid/TimeGridPill'
@@ -23,12 +23,14 @@ export default function DayGridView({
   dateKey,
   items,
   isToday,
+  pxPerMin,
   onSelectTask,
   onSelectRoutineInstance,
 }: {
   dateKey: string
   items: DayItem[]
   isToday: boolean
+  pxPerMin: number
   onSelectTask: (task: Task) => void
   onSelectRoutineInstance: (instance: RoutineInstance) => void
 }) {
@@ -45,11 +47,12 @@ export default function DayGridView({
   }, [timed, ranges])
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(isToday, nowMinutes)) })
-    // Only re-run when the visible day changes — the current-time tick
-    // shouldn't yank the user's scroll position back every minute.
+    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(isToday, nowMinutes), pxPerMin) })
+    // Only re-run when the visible day or zoom level changes — the
+    // current-time tick shouldn't yank the user's scroll position back
+    // every minute.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateKey])
+  }, [dateKey, pxPerMin])
 
   return (
     <div className="flex flex-col gap-2">
@@ -64,13 +67,13 @@ export default function DayGridView({
       <div
         ref={scrollRef}
         className="relative overflow-y-auto rounded-lg border border-outline-variant/60"
-        style={{ height: 480 }}
+        style={{ height: Math.min(MAX_GRID_CONTAINER_PX, gridHeightPx(pxPerMin)) }}
       >
-        <div className="relative flex" style={{ height: GRID_HEIGHT_PX }}>
-          <TimeGridHourLabels />
+        <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
+          <TimeGridHourLabels pxPerMin={pxPerMin} />
           <div className="relative flex-1">
-            <TimeGridLines />
-            {isToday && <CurrentTimeLine nowMinutes={nowMinutes} />}
+            <TimeGridLines pxPerMin={pxPerMin} />
+            {isToday && <CurrentTimeLine nowMinutes={nowMinutes} pxPerMin={pxPerMin} />}
             {timed.map((item) => {
               const key = itemKey(item)
               const range = ranges.get(key)
@@ -80,8 +83,8 @@ export default function DayGridView({
                 <TimeGridPill
                   key={key}
                   item={item}
-                  top={minutesToPx(range.startMinutes)}
-                  height={minutesToPx(range.endMinutes - range.startMinutes)}
+                  top={minutesToPx(range.startMinutes, pxPerMin)}
+                  height={Math.max(MIN_PILL_HEIGHT_PX, minutesToPx(range.endMinutes - range.startMinutes, pxPerMin))}
                   column={layout.column}
                   columnCount={layout.columnCount}
                   onSelectRoutineInstance={onSelectRoutineInstance}

@@ -4,7 +4,14 @@ import { useEffect, useMemo, useRef } from 'react'
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem, EventSpan } from './calendarItems'
 import { layoutBarsForWeek, laneCountForWeek } from './weekBarLayout'
-import { GRID_HEIGHT_PX, GUTTER_PX, defaultScrollMinutes, minutesToPx } from './time-grid/grid-math'
+import {
+  GUTTER_PX,
+  MAX_GRID_CONTAINER_PX,
+  MIN_PILL_HEIGHT_PX,
+  defaultScrollMinutes,
+  gridHeightPx,
+  minutesToPx,
+} from './time-grid/grid-math'
 import { layoutOverlappingBlocks } from './time-grid/overlap-layout'
 import { resolveTimedRange } from './time-grid/timed-range'
 import TimeGridPill, { isTimedDayItem } from './time-grid/TimeGridPill'
@@ -28,6 +35,7 @@ export default function WeekGridView({
   itemsByDate,
   spans,
   todayKey,
+  pxPerMin,
   onSelectDate,
   onSelectTask,
   onSelectRoutineInstance,
@@ -36,6 +44,7 @@ export default function WeekGridView({
   itemsByDate: Map<string, DayItem[]>
   spans: EventSpan[]
   todayKey: string
+  pxPerMin: number
   onSelectDate: (dateKey: string) => void
   onSelectTask: (task: Task) => void
   onSelectRoutineInstance: (instance: RoutineInstance) => void
@@ -48,11 +57,12 @@ export default function WeekGridView({
   const laneCount = laneCountForWeek(placedBars)
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(todayInWeek, nowMinutes)) })
-    // Only re-run when the visible week changes — the current-time tick
-    // shouldn't yank the user's scroll position back every minute.
+    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(todayInWeek, nowMinutes), pxPerMin) })
+    // Only re-run when the visible week or zoom level changes — the
+    // current-time tick shouldn't yank the user's scroll position back
+    // every minute.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekKeys[0]])
+  }, [weekKeys[0], pxPerMin])
 
   return (
     <div className="flex flex-col gap-2">
@@ -125,10 +135,10 @@ export default function WeekGridView({
       <div
         ref={scrollRef}
         className="relative overflow-y-auto rounded-lg border border-outline-variant/60"
-        style={{ height: 480 }}
+        style={{ height: Math.min(MAX_GRID_CONTAINER_PX, gridHeightPx(pxPerMin)) }}
       >
-        <div className="relative flex" style={{ height: GRID_HEIGHT_PX }}>
-          <TimeGridHourLabels />
+        <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
+          <TimeGridHourLabels pxPerMin={pxPerMin} />
           <div className="relative flex flex-1">
             {weekKeys.map((dateKey) => {
               const isToday = dateKey === todayKey
@@ -142,8 +152,8 @@ export default function WeekGridView({
 
               return (
                 <div key={dateKey} className="relative flex-1 border-l border-outline-variant/20 first:border-l-0">
-                  <TimeGridLines />
-                  {isToday && <CurrentTimeLine nowMinutes={nowMinutes} />}
+                  <TimeGridLines pxPerMin={pxPerMin} />
+                  {isToday && <CurrentTimeLine nowMinutes={nowMinutes} pxPerMin={pxPerMin} />}
                   {timed.map((item) => {
                     const key = itemKey(item)
                     const range = ranges.get(key)
@@ -153,8 +163,11 @@ export default function WeekGridView({
                       <TimeGridPill
                         key={key}
                         item={item}
-                        top={minutesToPx(range.startMinutes)}
-                        height={minutesToPx(range.endMinutes - range.startMinutes)}
+                        top={minutesToPx(range.startMinutes, pxPerMin)}
+                        height={Math.max(
+                          MIN_PILL_HEIGHT_PX,
+                          minutesToPx(range.endMinutes - range.startMinutes, pxPerMin)
+                        )}
                         column={layout.column}
                         columnCount={layout.columnCount}
                         onSelectRoutineInstance={onSelectRoutineInstance}

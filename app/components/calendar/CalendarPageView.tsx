@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Wand2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Wand2, ZoomIn, ZoomOut } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { RoutineInstance, Task } from '@/lib/types'
 import { connectGoogleCalendar } from '@/lib/google/connect'
@@ -19,6 +19,7 @@ import RoutineInstanceModal from './routines/RoutineInstanceModal'
 import TimeBlockWizardModal from './timeblock/TimeBlockWizardModal'
 import type { CalendarEvent, DayItem, EventSpan } from './calendarItems'
 import { groupItemsByDate, getAllDayEventSpans, addDaysToKey } from './calendarItems'
+import { DEFAULT_PX_PER_MIN, MIN_PX_PER_MIN, MAX_PX_PER_MIN } from './time-grid/grid-math'
 
 type ViewMode = 'month' | 'week' | 'day' | 'routines'
 
@@ -133,6 +134,7 @@ type GridMode = 'grid' | 'agenda'
 export default function CalendarPageView() {
   const [view, setView] = useState<ViewMode>('month')
   const [gridMode, setGridMode] = useState<GridMode>('grid')
+  const [pxPerMin, setPxPerMin] = useState(DEFAULT_PX_PER_MIN)
   const [selectedDateKey, setSelectedDateKey] = useState(() => todayKeyLondon())
   const [itemsByDate, setItemsByDate] = useState<Map<string, DayItem[]>>(new Map())
   const [spans, setSpans] = useState<EventSpan[]>([])
@@ -293,21 +295,49 @@ export default function CalendarPageView() {
               {formatTitle(view, selectedDateKey)}
             </h3>
             {(view === 'day' || view === 'week') && (
-              <div className="flex items-center gap-1 rounded-lg bg-surface-container p-0.5">
-                {(['grid', 'agenda'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setGridMode(mode)}
-                    className={`rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors duration-200 ${
-                      gridMode === mode
-                        ? 'bg-surface-container-high text-on-surface'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
+              <div className="flex items-center gap-3">
+                {gridMode === 'grid' && (
+                  <div
+                    className="flex items-center gap-1.5"
+                    title="Zoom the hour grid — shrink it all the way to fit the whole day with no scrolling"
                   >
-                    {mode}
-                  </button>
-                ))}
+                    <ZoomOut className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
+                    <input
+                      type="range"
+                      min={MIN_PX_PER_MIN}
+                      max={MAX_PX_PER_MIN}
+                      step={0.05}
+                      value={pxPerMin}
+                      onChange={(e) => setPxPerMin(Number(e.target.value))}
+                      aria-label="Hour grid zoom"
+                      className="h-1 w-20 accent-on-surface-variant"
+                    />
+                    <ZoomIn className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
+                    <button
+                      type="button"
+                      onClick={() => setPxPerMin(MIN_PX_PER_MIN)}
+                      className="rounded-md px-1.5 py-1 text-xs font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                    >
+                      Fit day
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center gap-1 rounded-lg bg-surface-container p-0.5">
+                  {(['grid', 'agenda'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setGridMode(mode)}
+                      className={`rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors duration-200 ${
+                        gridMode === mode
+                          ? 'bg-surface-container-high text-on-surface'
+                          : 'text-on-surface-variant hover:text-on-surface'
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -337,6 +367,7 @@ export default function CalendarPageView() {
               itemsByDate={itemsByDate}
               spans={spans}
               todayKey={todayKey}
+              pxPerMin={pxPerMin}
               onSelectDate={(dateKey) => {
                 setSelectedDateKey(dateKey)
                 setView('day')
@@ -379,6 +410,7 @@ export default function CalendarPageView() {
                   dateKey={selectedDateKey}
                   items={itemsByDate.get(selectedDateKey) ?? []}
                   isToday={selectedDateKey === todayKey}
+                  pxPerMin={pxPerMin}
                   onSelectTask={setSelectedTask}
                   onSelectRoutineInstance={setSelectedRoutineInstance}
                 />

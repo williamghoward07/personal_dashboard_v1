@@ -8,6 +8,7 @@ export default function WeekView({
   itemsByDate,
   spans,
   todayKey,
+  pxPerMin,
   onSelectDate,
   onSelectTask,
   onSelectRoutineInstance,
@@ -16,6 +17,7 @@ export default function WeekView({
   itemsByDate: Map<string, DayItem[]>
   spans: EventSpan[]
   todayKey: string
+  pxPerMin: number
   onSelectDate: (dateKey: string) => void
   onSelectTask: (task: Task) => void
   onSelectRoutineInstance: (instance: RoutineInstance) => void
@@ -28,6 +30,7 @@ export default function WeekView({
       itemsByDate={itemsByDate}
       spans={spans}
       todayKey={todayKey}
+      pxPerMin={pxPerMin}
       onSelectDate={onSelectDate}
       onSelectTask={onSelectTask}
       onSelectRoutineInstance={onSelectRoutineInstance}

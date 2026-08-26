@@ -17,11 +17,11 @@ export function useCurrentTimeMinutes(): number {
   return minutes
 }
 
-export default function CurrentTimeLine({ nowMinutes }: { nowMinutes: number }) {
+export default function CurrentTimeLine({ nowMinutes, pxPerMin }: { nowMinutes: number; pxPerMin: number }) {
   return (
     <div
       className="pointer-events-none absolute left-0 right-0 z-10 flex items-center"
-      style={{ top: minutesToPx(nowMinutes) }}
+      style={{ top: minutesToPx(nowMinutes, pxPerMin) }}
     >
       <span className="-ml-1 h-2 w-2 shrink-0 rounded-full bg-error" />
       <span className="h-px flex-1 bg-error" />

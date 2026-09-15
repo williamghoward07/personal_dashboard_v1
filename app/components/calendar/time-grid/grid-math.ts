@@ -1,24 +1,16 @@
 export const MINUTES_PER_DAY = 24 * 60
 export const GUTTER_PX = 44
 
-// Zoom range for the hour grid's vertical density — MIN is chosen so the
-// full 24h grid fits inside MAX_GRID_CONTAINER_PX (see DayGridView/
-// WeekGridView) with no scrolling at all, which is the whole point of
-// "shrink the view" from the user's side. MAX roughly doubles the default,
-// for a closer look at a busy stretch of the day.
-export const DEFAULT_PX_PER_MIN = 1.2
-export const MIN_PX_PER_MIN = 0.3
+// Zoom ceiling for the hour grid's vertical density — the floor isn't a
+// fixed constant, CalendarPageView derives it from the actual viewport
+// height so "fully zoomed out" always exactly fits whatever screen space is
+// available, with no scrolling. This roughly doubles that floor, for a
+// closer look at a busy stretch of the day.
 export const MAX_PX_PER_MIN = 2.4
 
-// The scroll container never grows past this — at the default/zoomed-in
-// end of the range the grid scrolls inside it as before; at the zoomed-out
-// end the container shrinks to fit the (now-shorter) grid exactly, so the
-// whole day shows with no scrollbar and no dead space below it.
-export const MAX_GRID_CONTAINER_PX = 480
-
-// A short event at MIN_PX_PER_MIN would otherwise render as a near-invisible
-// sliver (a 15min event is ~4.5px tall there) — every pill stays at least
-// this tall regardless of zoom, so it's always legible and clickable.
+// A short event at the zoomed-out floor would otherwise render as a
+// near-invisible sliver — every pill stays at least this tall regardless of
+// zoom, so it's always legible and clickable.
 export const MIN_PILL_HEIGHT_PX = 14
 
 export const HOURS = Array.from({ length: 24 }, (_, h) => h)

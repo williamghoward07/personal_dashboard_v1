@@ -3,7 +3,7 @@ import CalendarPageView from '../components/calendar/CalendarPageView'
 
 export default function CalendarPage() {
   return (
-    <PageContainer title="Calendar" subtitle="Google Calendar, deadlines, and rugby sessions in one view.">
+    <PageContainer title="Calendar">
       <CalendarPageView />
     </PageContainer>
   )

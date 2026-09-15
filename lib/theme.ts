@@ -56,7 +56,17 @@ export const ACCENT_VAR: Record<Accent, string> = {
 }
 
 export const MODULE_ACCENT: Record<
-  'home' | 'health' | 'education' | 'money' | 'research' | 'habits' | 'calendar' | 'people' | 'todos' | 'bible',
+  | 'home'
+  | 'health'
+  | 'education'
+  | 'money'
+  | 'research'
+  | 'habits'
+  | 'calendar'
+  | 'people'
+  | 'todos'
+  | 'bible'
+  | 'apps',
   Accent
 > = {
   home: 'neutral',
@@ -69,4 +79,5 @@ export const MODULE_ACCENT: Record<
   people: 'amber',
   todos: 'purple',
   bible: 'crimson',
+  apps: 'neutral',
 }

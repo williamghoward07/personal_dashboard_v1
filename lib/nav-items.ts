@@ -1,4 +1,4 @@
-import { Home, GraduationCap, DollarSign, FileSearch, ListChecks, ListTodo, CalendarDays, Contact, Brain, BookOpen } from 'lucide-react'
+import { Home, GraduationCap, DollarSign, FileSearch, ListChecks, ListTodo, CalendarDays, Contact, Brain, BookOpen, LayoutGrid } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { MODULE_ACCENT } from '@/lib/theme'
 
@@ -20,4 +20,5 @@ export const navItems: NavItem[] = [
   { href: '/people', label: 'People', icon: Contact, module: 'people' },
   { href: '/bible', label: 'Bible', icon: BookOpen, module: 'bible' },
   { href: '/brain-dump', label: 'Brain Dump', icon: Brain, module: 'todos' },
+  { href: '/apps', label: 'App Library', icon: LayoutGrid, module: 'apps' },
 ]

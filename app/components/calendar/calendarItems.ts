@@ -113,8 +113,8 @@ function resolveEventSpan(event: CalendarEvent): { startKey: string; endKey: str
 // multi-day event appears under every date it spans (annotated with
 // spanStartKey/spanEndKey) so day/agenda views can show it wherever it's
 // relevant; month/week grid views instead render it once as a spanning bar
-// (see getMultiDayEventSpans) and filter these per-day entries out to avoid
-// showing it twice.
+// (see getBarSpans) and filter these per-day entries out (see
+// isBarRenderedCalendarItem) to avoid showing it twice.
 //
 // A scheduled routine writes both a routine_instances row AND a real Google
 // Calendar event (see app/api/routines/schedule) — Google events whose id
@@ -196,16 +196,22 @@ export function groupItemsByDate(
   return byDate
 }
 
-// All-day events — single-day or multi-day — rendered as a blocked-out bar
-// across the month/week grid instead of a dot+title row, so a whole day
-// reads as "blocked" the way it does on the calendar itself. Timed events
-// never become bars: they stay in the compact per-day list with their time
-// shown, regardless of how many days they technically touch.
-export function getAllDayEventSpans(events: CalendarEvent[]): EventSpan[] {
+// All-day events — single-day or multi-day — and any timed event that
+// crosses more than one day are rendered as a blocked-out bar across the
+// month/week grid instead of a dot+title row, so a multi-day commitment
+// reads as one continuous span the way it does on the calendar itself. A
+// same-day timed event stays in the compact per-day list with its time
+// shown.
+export function getBarSpans(events: CalendarEvent[]): EventSpan[] {
   return events
-    .filter((event) => event.allDay)
-    .map((event) => {
-      const { startKey, endKey } = resolveEventSpan(event)
-      return { id: event.id, title: event.title, startKey, endKey }
-    })
+    .map((event) => ({ event, ...resolveEventSpan(event) }))
+    .filter(({ event, startKey, endKey }) => event.allDay || startKey !== endKey)
+    .map(({ event, startKey, endKey }) => ({ id: event.id, title: event.title, startKey, endKey }))
+}
+
+// True for a 'calendar' DayItem that's already rendered as a spanning bar
+// (see getBarSpans above) — used to filter such items out of the ordinary
+// per-day list/pill rendering so they don't also show up there.
+export function isBarRenderedCalendarItem(item: DayItem): boolean {
+  return item.kind === 'calendar' && (item.allDay || item.spanStartKey !== item.spanEndKey)
 }

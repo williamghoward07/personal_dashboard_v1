@@ -1,71 +1,76 @@
-# Execution State — Consolidated Roadmap
+# Execution State — Calendar/Routines/Education batch
 
 ## Current task
-None — all in-scope plan items are done or correctly deferred. Two
-manual-verification items remain for the user (see Blockers); everything
-that could be verified without them (tests, types, lint, build) is green.
+None — all 5 tasks + a follow-up zoom feature done and committed.
+
+## Follow-up: hour grid zoom control (commits 7f8c68a, c1a6db3)
+- Fixed .claude/launch.json (was pointing at a nonexistent Mac path —
+  npm run dev directly now; pinned autoPort:false since OAuth redirect
+  URIs need port 3000 specifically) and got the dev server actually
+  running for the first time this session.
+- Added a Day/Week hour-grid zoom slider + "Fit day" button so the whole
+  24h grid can fit on screen with no scrolling. grid-math.ts's PX_PER_MIN
+  became a MIN/DEFAULT/MAX range threaded through as a prop; scroll
+  container height is now dynamic (shrinks to fit once the grid is short
+  enough) instead of a fixed 480px.
+- With the dev server actually running, got a live (if login-gated)
+  browser check for the first time this session: fresh tab, zero console
+  errors, confirms the build is genuinely clean, not just tsc/lint-clean.
 
 ## Completed tasks (all committed)
-1. Statement import — verified + committed (c151bd1)
-2. Todo Phase A (schema + data layer) — committed (72264e5). Migration
-   hand-run by user in Supabase SQL Editor; all three guard-trigger cases
-   verified live against production by the user.
-3. Todo Phase B (UI) — committed (795186e). All 9 plan sub-items built:
-   Modal size prop, TodoFormModal list picker, TodoDetailModal (subtasks
-   checklist + quick-add), TodosBoard click-to-open rows, shared TodoRow
-   (3 consumers: list/extended/completed), completed-hiding with
-   recentlyCompletedIds + List/Extended/Completed view switcher,
-   CompletedTodosList (grouped by date, scrolls to today),
-   TodosExtendedView (due-date buckets), lists filter-chip row +
-   TodoListFormModal (create/rename, color swatches) + delete-unlists
-   confirm dialog.
-4. Todo Phase C (chrome/nav pass) — committed (cbaaa1d)
-5. Phase 7 Education — correctly left untouched (deferred per plan)
+1+2. Full 24h Day/Week calendar grid + overlap columns (67bf23d)
+3. Grid/Agenda view toggle for Day/Week (adaa29c)
+4. Routine editor stale-closure fix — first step now appears immediately
+   (1ff799f)
+5. Education: todos-per-notes-document + progress bar (a3db0df) — needs
+   migration 20260826000000_notes_documents.sql run by the user
 
-## Files changed this session (all committed, see commit messages for detail)
-- c151bd1: lib/statement-import/parser.ts(+test), StatementImportBoard.tsx,
-  app/api/money/statement-import/commit/route.ts
-- cbaaa1d: lib/nav-items.ts, lib/use-scroll-direction.ts,
-  MobileBottomNav.tsx, lib/theme.ts, Sidebar.tsx, AppChrome.tsx, TopAppBar.tsx
-- 72264e5: lib/types.ts, use-todos.ts, checklist.test.ts,
-  lib/todos/use-todo-lists.ts, extended-view.ts(+test), subtasks.ts(+test),
-  supabase/migrations/20260818050000_todos_lists_and_subtasks.sql
-- 795186e: Modal.tsx (size prop), TodoFormModal.tsx (list picker),
-  TodosBoard.tsx (full rewrite), lib/daily-goals/use-todos.ts (updateTodo
-  patch-type fix), lib/todos/use-todo-lists.ts (renameList->updateList),
-  new: TodoDetailModal.tsx, TodoRow.tsx, CompletedTodosList.tsx,
-  TodosExtendedView.tsx, TodoListFormModal.tsx
+## Read-only, delivered to user in chat (no code changes)
+- iCloud CalDAV sync diagnosis — findings given directly in conversation,
+  not repeated here. Summary: implemented correctly, but pull/push
+  failures are silently swallowed (no UI surfacing at all) at
+  lib/daily-goals/use-todos.ts's pullReminders — that's the most likely
+  reason it "looks broken" with zero diagnostic signal. Did not touch
+  lib/caldav/ or its routes.
 
-## Tests performed (final, post-Phase-B)
-- `npx vitest run`: 145/145 pass, 14 files
-- `npx tsc --noEmit`: clean
-- `npm run lint`: same pre-existing error set as the repo-wide baseline
-  taken before this session (react-hooks/set-state-in-effect across every
-  *FormModal.tsx, including the new TodoListFormModal.tsx which follows
-  the same established repo pattern) — no new *categories* of error
-- `npm run build`: production build succeeds, /todos route present
-- Browser: confirmed no console errors reachable pre-login; could not
-  click through authenticated pages (no Google sign-in access this session)
+## Explicitly out of scope this batch (per user instruction)
+- Alexa reminders bridging, cross-device Apple Reminders visibility.
 
-## Blockers (both require the user; both are manual/visual only — nothing
-## code-level is outstanding)
-- Statement import: re-upload the user's real multi-year bank statement
-  PDF once at /money/import to confirm dates land in the right years and
-  that skippedDuplicates reports correctly on a second upload of the same
-  file. Not done — no real statement file available to this session.
-- Nav/chrome (Phase C) + Todos UI (Phase B): click through /todos and a
-  couple of other module pages, both at a narrow (mobile) viewport and
-  normal desktop width, to confirm: bottom nav + collapsing header look
-  right; the todo detail modal, subtask quick-add, list filter chips,
-  and List/Extended/Completed view switcher all behave as expected.
-  Not done — this session has no Google sign-in access to the app.
+## Key decisions from user (mid-session)
+- Tasks 1+2: user confirmed via screenshot that the existing Week tab was
+  genuinely the plain WeekRow mini-box view (not a different branch) —
+  neither Day nor Week had a real hour grid before. Built one from
+  scratch for both (see time-grid/ module).
+- Task 5: chose "new local notes_documents table" over "link todos to
+  whole module" — implemented accordingly.
 
-## Plan order — final status
-1. Statement import — DONE
-2. Todo Phase A — DONE
-3. Todo Phase B UI — DONE
-4. Todo Phase C chrome/nav — DONE
-5. Phase 7 Education — deferred, correctly untouched
+## Blockers — all require the user
+- **Migration not run**: `supabase/migrations/20260826000000_notes_documents.sql`
+  needs hand-running in the Supabase SQL Editor (same convention as
+  Todo Phase A earlier). Until then, Education's notes-document-todos
+  feature degrades gracefully (every page shows 0 linked todos, no
+  crash) rather than working.
+- **Statement import** (from prior batch, still outstanding): real
+  multi-year PDF re-upload test not done.
+- **Live browser verification**: not possible this session — dev-tooling
+  (Claude_Browser navigate) was unresponsive on top of the pre-existing
+  no-login-access limitation. Everything was verified via tsc/lint/
+  vitest/production-build only. Recommend the user click through:
+  /calendar (Day + Week grids, overlap with a real double-booked
+  afternoon, Grid/Agenda toggle, current-time line), the Routines tab
+  (create a brand-new routine, add its first step, confirm it appears
+  without reopening), and /education (a module with a linked OneNote
+  section — attach a todo to a page, confirm the progress bar updates).
 
-All four feature commits are local only (not pushed), per standing
-instruction not to push without explicit request.
+## Cumulative test/build status
+tsc clean, full vitest suite 198/198 (34 new this batch — 7 overlap-
+layout, 6 grid-math, 5 timed-range, plus test-helper updates for the new
+notes_document_id field), production build succeeds, lint has only
+pre-existing errors (confirmed via git diff hunks each time, no new
+categories introduced — one genuine new lint issue was caught and fixed
+in lib/education/use-notes-document-todos.ts before commit).
+
+## Not part of my work, left untouched
+app/components/widgets/people/PeopleDirectoryCard.tsx has an uncommitted
+diff that predates this session and was never touched — not part of any
+task list given to me.

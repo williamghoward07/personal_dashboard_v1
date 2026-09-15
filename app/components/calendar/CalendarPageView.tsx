@@ -18,8 +18,8 @@ import RoutinesPanel from './routines/RoutinesPanel'
 import RoutineInstanceModal from './routines/RoutineInstanceModal'
 import TimeBlockWizardModal from './timeblock/TimeBlockWizardModal'
 import type { CalendarEvent, DayItem, EventSpan } from './calendarItems'
-import { groupItemsByDate, getAllDayEventSpans, addDaysToKey } from './calendarItems'
-import { DEFAULT_PX_PER_MIN, MIN_PX_PER_MIN, MAX_PX_PER_MIN } from './time-grid/grid-math'
+import { groupItemsByDate, getBarSpans, addDaysToKey } from './calendarItems'
+import { MAX_PX_PER_MIN, MINUTES_PER_DAY } from './time-grid/grid-math'
 
 type ViewMode = 'month' | 'week' | 'day' | 'routines'
 
@@ -131,10 +131,27 @@ const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
 
 type GridMode = 'grid' | 'agenda'
 
+// Everything rendered above the hour grid box (sticky top bar, page header,
+// widget card chrome, the calendar's own title/toolbar row) — used as a
+// generous, shared-across-Day/Week estimate so the grid can size itself to
+// "whatever's left" of the viewport instead of a small fixed pixel cap.
+const RESERVED_CHROME_PX = 360
+// Reuses the old fixed cap as a floor, so a short/laptop viewport still
+// looks exactly like it used to rather than shrinking further.
+const MIN_GRID_CONTAINER_PX = 480
+const SSR_FALLBACK_VIEWPORT_PX = RESERVED_CHROME_PX + MIN_GRID_CONTAINER_PX
+
 export default function CalendarPageView() {
   const [view, setView] = useState<ViewMode>('month')
   const [gridMode, setGridMode] = useState<GridMode>('grid')
-  const [pxPerMin, setPxPerMin] = useState(DEFAULT_PX_PER_MIN)
+  // null = not manually zoomed — pxPerMin below tracks fitPxPerMin instead,
+  // so the grid stays auto-fitted to the viewport until the user picks a
+  // zoom level themselves ("Fit day" resets this back to null).
+  const [manualPxPerMin, setManualPxPerMin] = useState<number | null>(null)
+  // Read only after mount (see effect below) — window isn't available
+  // during SSR, so this fallback keeps the first client render matching
+  // the server-rendered markup exactly.
+  const [viewportH, setViewportH] = useState(SSR_FALLBACK_VIEWPORT_PX)
   const [selectedDateKey, setSelectedDateKey] = useState(() => todayKeyLondon())
   const [itemsByDate, setItemsByDate] = useState<Map<string, DayItem[]>>(new Map())
   const [spans, setSpans] = useState<EventSpan[]>([])
@@ -146,6 +163,20 @@ export default function CalendarPageView() {
   const [timeBlockOpen, setTimeBlockOpen] = useState(false)
   const [refreshToken, setRefreshToken] = useState(0)
   const refetch = () => setRefreshToken((t) => t + 1)
+
+  const maxContainerHeightPx = Math.max(MIN_GRID_CONTAINER_PX, viewportH - RESERVED_CHROME_PX)
+  const fitPxPerMin = maxContainerHeightPx / MINUTES_PER_DAY
+  const zoomMaxPxPerMin = Math.max(MAX_PX_PER_MIN, fitPxPerMin * 2)
+  // The actual zoom level in effect: whatever the user picked, or the
+  // viewport-fit value if they haven't touched the slider.
+  const pxPerMin = manualPxPerMin ?? fitPxPerMin
+
+  useEffect(() => {
+    const updateViewportH = () => setViewportH(window.innerHeight)
+    updateViewportH()
+    window.addEventListener('resize', updateViewportH)
+    return () => window.removeEventListener('resize', updateViewportH)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -182,7 +213,7 @@ export default function CalendarPageView() {
           (routineInstancesRes.data ?? []) as RoutineInstance[]
         )
       )
-      setSpans(getAllDayEventSpans(events))
+      setSpans(getBarSpans(events))
       setLoading(false)
     })
 
@@ -304,18 +335,18 @@ export default function CalendarPageView() {
                     <ZoomOut className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
                     <input
                       type="range"
-                      min={MIN_PX_PER_MIN}
-                      max={MAX_PX_PER_MIN}
+                      min={fitPxPerMin}
+                      max={zoomMaxPxPerMin}
                       step={0.05}
                       value={pxPerMin}
-                      onChange={(e) => setPxPerMin(Number(e.target.value))}
+                      onChange={(e) => setManualPxPerMin(Number(e.target.value))}
                       aria-label="Hour grid zoom"
                       className="h-1 w-20 accent-on-surface-variant"
                     />
                     <ZoomIn className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
                     <button
                       type="button"
-                      onClick={() => setPxPerMin(MIN_PX_PER_MIN)}
+                      onClick={() => setManualPxPerMin(null)}
                       className="rounded-md px-1.5 py-1 text-xs font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                     >
                       Fit day
@@ -368,6 +399,7 @@ export default function CalendarPageView() {
               spans={spans}
               todayKey={todayKey}
               pxPerMin={pxPerMin}
+              maxContainerHeightPx={maxContainerHeightPx}
               onSelectDate={(dateKey) => {
                 setSelectedDateKey(dateKey)
                 setView('day')
@@ -411,6 +443,7 @@ export default function CalendarPageView() {
                   items={itemsByDate.get(selectedDateKey) ?? []}
                   isToday={selectedDateKey === todayKey}
                   pxPerMin={pxPerMin}
+                  maxContainerHeightPx={maxContainerHeightPx}
                   onSelectTask={setSelectedTask}
                   onSelectRoutineInstance={setSelectedRoutineInstance}
                 />

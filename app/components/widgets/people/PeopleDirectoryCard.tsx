@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Contact, Plus, Search } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -39,24 +39,16 @@ export default function PeopleDirectoryCard({
   const [query, setQuery] = useState('')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
-  const [viewingPerson, setViewingPerson] = useState<Person | null>(null)
   const [editingPerson, setEditingPerson] = useState<Person | null>(null)
   const [deletingPerson, setDeletingPerson] = useState<Person | null>(null)
 
-  // Deep-link support: a follow-up elsewhere in the app (home glance,
-  // FollowUpsCard) links to /people?person=<id> so clicking it jumps
-  // straight into that person's detail view instead of just the page.
-  useEffect(() => {
-    const personId = searchParams.get('person')
-    if (!personId) return
-    const match = people.find((p) => p.id === personId)
-    if (match) setViewingPerson(match)
-  }, [searchParams, people])
-
-  const closeViewingPerson = () => {
-    setViewingPerson(null)
-    if (searchParams.get('person')) router.replace('/people', { scroll: false })
-  }
+  // Who's being viewed lives entirely in the URL (?person=<id>) rather than
+  // local state — a follow-up elsewhere in the app (home glance,
+  // FollowUpsCard) links straight here, and the directory list below does
+  // the same on click, so "view a person" always has one source of truth.
+  const viewingPersonId = searchParams.get('person')
+  const openPerson = (personId: string) => router.push(`/people?person=${personId}`)
+  const closeViewingPerson = () => router.replace('/people', { scroll: false })
 
   const allTags = useMemo(
     () => [...new Set(people.flatMap((p) => p.tags))].sort(),
@@ -75,8 +67,7 @@ export default function PeopleDirectoryCard({
     })
   }, [people, query, activeTag])
 
-  // Keep the modal showing fresh data after an edit.
-  const viewing = viewingPerson ? (people.find((p) => p.id === viewingPerson.id) ?? null) : null
+  const viewing = viewingPersonId ? (people.find((p) => p.id === viewingPersonId) ?? null) : null
 
   return (
     <>
@@ -143,7 +134,7 @@ export default function PeopleDirectoryCard({
                   <li key={person.id}>
                     <button
                       type="button"
-                      onClick={() => setViewingPerson(person)}
+                      onClick={() => openPerson(person.id)}
                       className="flex w-full items-center gap-2 rounded-lg border border-outline-variant p-2 text-left hover:border-people-amber/40"
                     >
                       <PersonAvatar fullName={person.full_name} photoUrl={person.photo_url} />
@@ -180,11 +171,11 @@ export default function PeopleDirectoryCard({
         onChange={onChange}
         onEdit={() => {
           setEditingPerson(viewing)
-          setViewingPerson(null)
+          closeViewingPerson()
         }}
         onDelete={() => {
           setDeletingPerson(viewing)
-          setViewingPerson(null)
+          closeViewingPerson()
         }}
         onClose={closeViewingPerson}
       />

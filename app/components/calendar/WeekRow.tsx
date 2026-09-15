@@ -1,5 +1,5 @@
 import type { DayItem, EventSpan } from './calendarItems'
-import { DOT_CLASS, formatTime } from './calendarItems'
+import { DOT_CLASS, formatTime, isBarRenderedCalendarItem } from './calendarItems'
 import { layoutBarsForWeek, laneCountForWeek } from './weekBarLayout'
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -107,10 +107,11 @@ export default function WeekRow({
 
       {weekCells.map((dateKey, col) => {
         if (!dateKey) return null
-        // All-day events (single- or multi-day) render as bars above, not
-        // here — otherwise they'd show up twice.
+        // Events rendered as a spanning bar above (all-day, or a timed
+        // event crossing multiple days) are excluded here — otherwise
+        // they'd show up twice.
         const items = (itemsByDate.get(dateKey) ?? []).filter(
-          (item) => !(item.kind === 'calendar' && item.allDay)
+          (item) => !isBarRenderedCalendarItem(item)
         )
         return (
           <ul

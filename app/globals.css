@@ -59,8 +59,9 @@
   --color-people-amber: #ffc233;
   --color-bible-crimson: #ff3b3b;
 
-  --font-display: var(--font-geist-sans), "Geist", sans-serif;
-  --font-body: var(--font-inter), "Inter", sans-serif;
+  --font-display: var(--font-bricolage-grotesque), "Bricolage Grotesque", sans-serif;
+  --font-body: var(--font-instrument-sans), "Instrument Sans", sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), "IBM Plex Mono", monospace;
 
   --radius-card: 0.75rem;
 
@@ -130,6 +131,14 @@ body {
   background: var(--color-background);
   color: var(--color-on-surface);
   font-family: var(--font-body);
+}
+
+/* --text-* theme tokens only support --line-height/--letter-spacing/
+   --font-weight companion keys, not --font-family (Tailwind v4) — bound
+   here instead so IBM Plex Mono applies wherever text-data-display is
+   used, without editing individual components. */
+.text-data-display {
+  font-family: var(--font-mono);
 }
 
 .led-dot {

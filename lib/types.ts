@@ -372,3 +372,25 @@ export interface Integration {
   sync_token: string | null
   account_email: string | null
 }
+
+// color is one of lib/theme.ts's Accent keys, kept as `string` here to
+// match this file's style — callers narrow it at the point of use.
+export interface LinkFolder {
+  id: string
+  name: string
+  color: string
+  sort_order: number
+  created_at: string
+}
+
+export interface QuickLink {
+  id: string
+  folder_id: string | null
+  title: string
+  url: string
+  favicon_path: string | null
+  is_pinned: boolean
+  sort_order: number
+  last_opened_at: string | null
+  created_at: string
+}

@@ -14,7 +14,8 @@ connects across modules.
   bespoke checklist for that task, not a generic template)
 - Visual design system: "BIO-SYSTEM" dark cyber-kinetic theme (committed
   dark-only, not light/dark-adaptive). Deep charcoal/green surface scale,
-  Geist for headings/data, Inter for body text, glassy bento cards with a
+  Bricolage Grotesque for headings, Instrument Sans for body text, IBM
+  Plex Mono for data/tabular displays, glassy bento cards with a
   hover glow in the active module's accent color. Per-module accent colors:
   mint = Health, electric blue = Money, orange = Education, pink = Research,
   purple = Habits, crimson = Bible. Tokens live in `app/globals.css` (`@theme`) and

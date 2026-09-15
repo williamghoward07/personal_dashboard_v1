@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from './calendarItems'
-import { MAX_GRID_CONTAINER_PX, MIN_PILL_HEIGHT_PX, defaultScrollMinutes, gridHeightPx, minutesToPx } from './time-grid/grid-math'
+import { MIN_PILL_HEIGHT_PX, defaultScrollMinutes, gridHeightPx, minutesToPx } from './time-grid/grid-math'
 import { layoutOverlappingBlocks } from './time-grid/overlap-layout'
 import { resolveTimedRange } from './time-grid/timed-range'
 import TimeGridPill, { isTimedDayItem } from './time-grid/TimeGridPill'
@@ -24,6 +24,7 @@ export default function DayGridView({
   items,
   isToday,
   pxPerMin,
+  maxContainerHeightPx,
   onSelectTask,
   onSelectRoutineInstance,
 }: {
@@ -31,6 +32,7 @@ export default function DayGridView({
   items: DayItem[]
   isToday: boolean
   pxPerMin: number
+  maxContainerHeightPx: number
   onSelectTask: (task: Task) => void
   onSelectRoutineInstance: (instance: RoutineInstance) => void
 }) {
@@ -67,7 +69,7 @@ export default function DayGridView({
       <div
         ref={scrollRef}
         className="relative overflow-y-auto rounded-lg border border-outline-variant/60"
-        style={{ height: Math.min(MAX_GRID_CONTAINER_PX, gridHeightPx(pxPerMin)) }}
+        style={{ height: Math.min(maxContainerHeightPx, gridHeightPx(pxPerMin)) }}
       >
         <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
           <TimeGridHourLabels pxPerMin={pxPerMin} />

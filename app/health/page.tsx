@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { FileUp } from 'lucide-react'
 import PageContainer from '../components/PageContainer'
@@ -5,6 +6,11 @@ import HealthRingsCard from '../components/widgets/health/HealthRingsCard'
 import ActivitySessionsCard from '../components/widgets/health/ActivitySessionsCard'
 
 export default function HealthPage() {
+  // Health tab pulled from the live site (2026-09-01) — Bevel already covers this well,
+  // not worth the integration effort right now. Everything below is left intact so this
+  // is a one-line revert (just remove this notFound() call) if that changes.
+  notFound()
+
   return (
     <PageContainer title="Health" subtitle="Physiological load — running, lifting, and everything else." accent="mint">
       <HealthRingsCard />

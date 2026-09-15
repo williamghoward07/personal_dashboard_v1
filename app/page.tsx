@@ -7,6 +7,7 @@ import HabitsGlance from './components/widgets/home/HabitsGlance'
 import DailyGoals from './components/widgets/home/DailyGoals'
 import PeopleGlance from './components/widgets/home/PeopleGlance'
 import AiUsageGlance from './components/widgets/home/AiUsageGlance'
+import AppLauncherGlance from './components/widgets/app-launcher/AppLauncherGlance'
 
 export default function Home() {
   return (
@@ -21,6 +22,7 @@ export default function Home() {
         <ResearchGlance />
         <HabitsGlance />
         <PeopleGlance />
+        <AppLauncherGlance />
         <CalendarModule />
       </div>
     </main>

@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem, EventSpan } from './calendarItems'
+import { isBarRenderedCalendarItem } from './calendarItems'
 import { layoutBarsForWeek, laneCountForWeek } from './weekBarLayout'
 import {
   GUTTER_PX,
-  MAX_GRID_CONTAINER_PX,
   MIN_PILL_HEIGHT_PX,
   defaultScrollMinutes,
   gridHeightPx,
@@ -36,6 +36,7 @@ export default function WeekGridView({
   spans,
   todayKey,
   pxPerMin,
+  maxContainerHeightPx,
   onSelectDate,
   onSelectTask,
   onSelectRoutineInstance,
@@ -45,6 +46,7 @@ export default function WeekGridView({
   spans: EventSpan[]
   todayKey: string
   pxPerMin: number
+  maxContainerHeightPx: number
   onSelectDate: (dateKey: string) => void
   onSelectTask: (task: Task) => void
   onSelectRoutineInstance: (instance: RoutineInstance) => void
@@ -135,14 +137,16 @@ export default function WeekGridView({
       <div
         ref={scrollRef}
         className="relative overflow-y-auto rounded-lg border border-outline-variant/60"
-        style={{ height: Math.min(MAX_GRID_CONTAINER_PX, gridHeightPx(pxPerMin)) }}
+        style={{ height: Math.min(maxContainerHeightPx, gridHeightPx(pxPerMin)) }}
       >
         <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
           <TimeGridHourLabels pxPerMin={pxPerMin} />
           <div className="relative flex flex-1">
             {weekKeys.map((dateKey) => {
               const isToday = dateKey === todayKey
-              const timed = (itemsByDate.get(dateKey) ?? []).filter(isTimedDayItem)
+              const timed = (itemsByDate.get(dateKey) ?? [])
+                .filter(isTimedDayItem)
+                .filter((item) => !isBarRenderedCalendarItem(item))
               const ranges = new Map(timed.map((item) => [itemKey(item), resolveTimedRange(item)]))
               const layouts = new Map(
                 layoutOverlappingBlocks(timed.map((item) => ({ id: itemKey(item), ...ranges.get(itemKey(item))! }))).map(

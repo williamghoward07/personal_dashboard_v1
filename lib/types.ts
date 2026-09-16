@@ -159,6 +159,9 @@ export interface Todo {
   // Set when this todo is attached to a specific Education notes document
   // (see NotesDocument) — independent of list_id, a todo can carry both.
   notes_document_id: string | null
+  // Scopes this todo into a Workspace's Todos section — independent of
+  // workspace_link_todos, which tracks fine-grained link attachment.
+  workspace_id: string | null
 }
 
 export interface TodoList {
@@ -392,5 +395,59 @@ export interface QuickLink {
   is_pinned: boolean
   sort_order: number
   last_opened_at: string | null
+  created_at: string
+}
+
+export type WorkspaceLinkKind = 'paper' | 'data' | 'doc' | 'other'
+export type WorkspaceNoteKind = 'realization' | 'discarded' | 'argument' | 'meeting' | 'note'
+
+export interface Workspace {
+  id: string
+  title: string
+  // Free-text context line under the title, e.g. "AQA Geography Module 4".
+  // Not a FK to modules — Workspaces stays decoupled from Education.
+  subtitle: string | null
+  archived_at: string | null
+  created_at: string
+}
+
+export interface WorkspaceLink {
+  id: string
+  workspace_id: string
+  title: string
+  url: string
+  favicon_path: string | null
+  position: number
+  // Auto-detected from the URL on add, correctable per card afterwards.
+  kind: WorkspaceLinkKind
+  citation: string | null
+  doi: string | null
+  // Display-only free text ("4.2 MB", "3,410 words") — never parsed.
+  meta_label: string | null
+  created_at: string
+}
+
+export interface WorkspaceNote {
+  id: string
+  workspace_id: string
+  body: string
+  // Drives the coloured timeline dot and badge. Set at insert time only —
+  // workspace_notes is append-only at the DB level.
+  kind: WorkspaceNoteKind
+  footnote: string | null
+  created_at: string
+}
+
+export interface WorkspaceSession {
+  id: string
+  workspace_id: string
+  started_at: string
+  created_at: string
+}
+
+export interface WorkspaceLinkTodo {
+  id: string
+  workspace_link_id: string
+  todo_id: string
   created_at: string
 }

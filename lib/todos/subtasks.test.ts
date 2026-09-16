@@ -15,6 +15,7 @@ function todo(overrides: Partial<Todo> = {}): Todo {
     list_id: null,
     parent_id: null,
     notes_document_id: null,
+    workspace_id: null,
     ...overrides,
   }
 }

@@ -1,4 +1,4 @@
-export type Accent = 'mint' | 'blue' | 'orange' | 'pink' | 'purple' | 'amber' | 'crimson' | 'neutral'
+export type Accent = 'mint' | 'blue' | 'orange' | 'pink' | 'purple' | 'amber' | 'crimson' | 'teal' | 'neutral'
 
 export const ACCENT_TEXT: Record<Accent, string> = {
   mint: 'text-primary-container',
@@ -8,6 +8,7 @@ export const ACCENT_TEXT: Record<Accent, string> = {
   purple: 'text-habit-purple',
   amber: 'text-people-amber',
   crimson: 'text-bible-crimson',
+  teal: 'text-workspace-teal',
   neutral: 'text-on-surface-variant',
 }
 
@@ -19,6 +20,7 @@ export const ACCENT_GLOW: Record<Accent, string> = {
   purple: 'hover:border-habit-purple/50 hover:shadow-[0_0_15px_rgba(192,132,252,0.2)]',
   amber: 'hover:border-people-amber/50 hover:shadow-[0_0_15px_rgba(255,194,51,0.2)]',
   crimson: 'hover:border-bible-crimson/50 hover:shadow-[0_0_15px_rgba(255,59,59,0.2)]',
+  teal: 'hover:border-workspace-teal/50 hover:shadow-[0_0_15px_rgba(45,212,191,0.2)]',
   neutral: 'hover:border-outline/50',
 }
 
@@ -30,6 +32,7 @@ export const ACCENT_CHIP: Record<Accent, string> = {
   purple: 'bg-habit-purple/10 text-habit-purple border-habit-purple/30',
   amber: 'bg-people-amber/10 text-people-amber border-people-amber/30',
   crimson: 'bg-bible-crimson/10 text-bible-crimson border-bible-crimson/30',
+  teal: 'bg-workspace-teal/10 text-workspace-teal border-workspace-teal/30',
   neutral: 'bg-surface-container-highest text-on-surface-variant border-outline-variant',
 }
 
@@ -41,6 +44,7 @@ export const ACCENT_BAR: Record<Accent, string> = {
   purple: 'bg-habit-purple',
   amber: 'bg-people-amber',
   crimson: 'bg-bible-crimson',
+  teal: 'bg-workspace-teal',
   neutral: 'bg-outline',
 }
 
@@ -52,6 +56,7 @@ export const ACCENT_VAR: Record<Accent, string> = {
   purple: 'var(--color-habit-purple)',
   amber: 'var(--color-people-amber)',
   crimson: 'var(--color-bible-crimson)',
+  teal: 'var(--color-workspace-teal)',
   neutral: 'var(--color-outline)',
 }
 
@@ -66,7 +71,8 @@ export const MODULE_ACCENT: Record<
   | 'people'
   | 'todos'
   | 'bible'
-  | 'apps',
+  | 'apps'
+  | 'workspaces',
   Accent
 > = {
   home: 'neutral',
@@ -80,4 +86,5 @@ export const MODULE_ACCENT: Record<
   todos: 'purple',
   bible: 'crimson',
   apps: 'neutral',
+  workspaces: 'teal',
 }

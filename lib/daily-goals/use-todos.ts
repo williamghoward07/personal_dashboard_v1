@@ -109,6 +109,9 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
         // Only ever set by the Education notes-document feature, which
         // writes directly via Supabase rather than through this hook.
         notes_document_id: null,
+        // Only ever set by the Workspaces feature, which writes directly
+        // via Supabase rather than through this hook.
+        workspace_id: null,
       }
       setTodos((prev) => [...prev, optimisticTodo])
       setError(null)

@@ -58,6 +58,7 @@
   --color-habit-purple: #c084fc;
   --color-people-amber: #ffc233;
   --color-bible-crimson: #ff3b3b;
+  --color-workspace-teal: #2dd4bf;
 
   --font-display: var(--font-bricolage-grotesque), "Bricolage Grotesque", sans-serif;
   --font-body: var(--font-instrument-sans), "Instrument Sans", sans-serif;
@@ -141,11 +142,13 @@ body {
   font-family: var(--font-mono);
 }
 
+/* Status LED. Set --led-color on the element to tint it per module;
+   defaults to mint so existing usages are unchanged. */
 .led-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background-color: var(--color-primary-container);
+  background-color: var(--led-color, var(--color-primary-container));
   animation: led-pulse 1.6s ease-in-out infinite;
 }
 
@@ -154,12 +157,12 @@ body {
   100% {
     opacity: 1;
     transform: scale(1);
-    box-shadow: 0 0 8px 2px color-mix(in srgb, var(--color-primary-container) 60%, transparent);
+    box-shadow: 0 0 8px 2px color-mix(in srgb, var(--led-color, var(--color-primary-container)) 60%, transparent);
   }
   50% {
     opacity: 0.45;
     transform: scale(0.85);
-    box-shadow: 0 0 4px 1px color-mix(in srgb, var(--color-primary-container) 30%, transparent);
+    box-shadow: 0 0 4px 1px color-mix(in srgb, var(--led-color, var(--color-primary-container)) 30%, transparent);
   }
 }
 

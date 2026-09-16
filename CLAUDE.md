@@ -5,8 +5,13 @@ Not a demo project — built for my own real use. Bento-grid layout, no module
 (academic/finance/fitness) visually dominates another. Central AI query box
 connects across modules.
 
+**Before writing Next.js code, read `AGENTS.md`**: this is Next.js 16 (App
+Router) with breaking changes — check `node_modules/next/dist/docs/` rather
+than relying on memory (e.g. `searchParams` is a Promise in pages).
+
 ## Design philosophy
-- Equally weighted, self-contained widget cards in a bento-grid
+- Equally weighted, self-contained widget cards in a bento-grid (they don't
+  need identical sizes, just balanced visual weight)
 - Desktop/web-first, designed for 1440px+ screens (current priority)
 - Mobile companion app is a future phase — explicitly out of scope now
 - Research prompts library is standalone, not nested under academics
@@ -16,133 +21,249 @@ connects across modules.
   dark-only, not light/dark-adaptive). Deep charcoal/green surface scale,
   Bricolage Grotesque for headings, Instrument Sans for body text, IBM
   Plex Mono for data/tabular displays, glassy bento cards with a
-  hover glow in the active module's accent color. Per-module accent colors:
-  mint = Health, electric blue = Money, orange = Education, pink = Research,
-  purple = Habits, crimson = Bible. Tokens live in `app/globals.css` (`@theme`) and
-  `lib/theme.ts` (accent → class maps). Icons stay on `lucide-react`
-  (not the reference mockups' Material Symbols) to avoid a second icon
-  system — reskin new UI to match this rather than reverting to the old
-  neutral light/dark styling.
+  hover glow in the active module's accent color. Per-module accent colors
+  (`lib/theme.ts` `MODULE_ACCENT`): mint = Health, electric blue = Money,
+  orange = Education (and the home query box), pink = Research, purple =
+  Habits/Todos, amber = People, crimson = Bible, teal = Workspaces (default —
+  each workspace/folder can pick its own). Tokens live in `app/globals.css`
+  (`@theme`) and `lib/theme.ts` (accent → class maps). Icons stay on
+  `lucide-react` (not the reference mockups' Material Symbols) to avoid a
+  second icon system — reskin new UI to match this rather than reverting to
+  the old neutral light/dark styling.
 - Glass effects: prefer an existing component library over hand-rolled
   CSS (e.g. glinui — Radix + Tailwind, ships elevation/blur/motion
   tokens) so widgets consume shared tokens rather than each inventing
   the effect. Some glass/refraction effects render Chromium-only —
   verify Safari before relying on one for a shipped widget, since an
   iOS app is a planned future phase.
+- Shared building blocks — reuse, don't re-invent: `<ProgressRing />`
+  (`components/ui`), `LoadingGlowBorder` (the LED-strip loading border on
+  every AI/search input), `LiquidSwitch` (segmented toggle), `Popover` and
+  `InfoPopover` (in-place, not portalled — so per-workspace CSS variables
+  still apply), `Modal` (portalled), `ConfirmDialog`, `AccentPicker`,
+  `onActivateKey` (`lib/utils/a11y.ts` — Enter/Space on a clickable row
+  only when the row itself has focus, never from an input inside it),
+  `useStoredIdSet` (per-browser remembered id sets, e.g. collapsed folders).
 
 ## Tech stack
-- Frontend: Next.js (App Router), TypeScript, Tailwind CSS
-- Backend/Auth/DB: Supabase
+- Frontend: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4
+- Backend/Auth/DB: Supabase (RLS on every table)
 - Deployment: Vercel
+- Tests: vitest + jsdom + Testing Library (`npm test`); pure logic lives in
+  `lib/**` with a `.test.ts` next to it
+- Drag and drop: `@dnd-kit` (grip-handle pattern — see `HabitCard`)
 - AI: Gemini (aistudio.google.com), behind a swappable interface in
   `lib/ai/gemini.ts` — every AI call site imports only from there, so a
-  provider switch (e.g. to Claude) only touches that one file. Currently
-  powers the home page's search box and the People quick-add bar; a
-  dedicated Education/research panel is still unbuilt (deferred, see
-  Features below)
+  provider switch only touches that one file. Two tiers (`fast`/`smart`),
+  every call logged to `ai_usage`, daily cap of 200 calls
+  (`lib/ai/constants.ts` — call-count based, not cost based, and it fails
+  open if the usage read errors). Powers the home query box (Find / Ask /
+  Capture), the Brain Dump page and the People quick-add bar.
 
-## Home page widgets (v1 layout, decided)
-Six widgets on the bento grid, each self-contained:
-- **Habits** — rings only (circle + title underneath). Daily / specific-day
-  habits only; health-specific habits live in the Health widget instead.
-- **Health** — progress rings for Running and Gym (see habit model below),
-  alongside other health tracking (e.g. manual rugby session logging).
-- **Daily Goals** — top: roll-up progress ring for TODAY across todos +
-  education_tasks + habits combined, with a fraction underneath (e.g.
-  "5/8 today"). Bottom: checklist of general todos only — not education
-  tasks, not habits, those are counted in the ring but managed in their
-  own widgets. Divider between the two sections.
-- **Education** — absorbs the standalone Research widget. Toggle between
-  Modules and Tasks views; defaults to "nothing due soon" when empty.
-  Research links (Perplexity etc.) live inside modules, not a separate
-  widget.
-- **Prompt Library** — home widget is a small quick-copy card: title +
-  one-line explanation, click copies the prompt. Full searchable/
-  organizable library lives on its own page. "Auto-organize" is a UI
-  stub for now (tells the user it isn't wired up yet) — the AI infra
-  it would need now exists (`lib/ai/gemini.ts`), it just hasn't been
-  connected to this specific feature yet.
-- **Calendar** — widget shows "nothing on today" (or today's items),
-  a horizontal divider, then the next upcoming event with date/time.
-  On the full calendar page, clicking an event opens an anchored
-  popover (desktop) or bottom sheet (mobile) — never a full-screen
-  blocking modal.
+## Pages (sidebar order, `lib/nav-items.ts`)
+Home · Calendar · Education · Workspaces · Money · Research · Tasks
+(`/habits` and `/todos`, one tabbed board) · People · Bible · Brain Dump ·
+App Library (`/apps`). Also `/ai-usage`. `/health` exists but is hidden
+(`notFound()`, 2026-09-01 — Bevel already covers it; a one-line revert).
 
-Daily Verse was planned here but was dropped before build — see the
-standalone Bible module (`bible_*` in Data model conventions below)
-instead, which has no home-grid widget of its own.
+## Home page (`app/page.tsx`)
+The **System Query** box on top, then the bento grid: Daily Goals, Morning
+routine, Education, Workspaces, Money, AI usage, Research, Habits, People,
+App Library (pinned links), Calendar.
 
-## Data model conventions (decided)
-- `todos` — general to-dos only, separate table from education tasks.
-- `education_tasks` — separate table, FK to `modules`, not merged with
-  general todos even though both surface on Daily Goals.
-- `habits` + `habit_completions` — one shared table for ALL habits
-  (daily and health), distinguished by a `widget` field (`habits` |
-  `health`) and a `frequency_type` field (`daily` | `specific_days` |
-  `times_per_week`). Completions are logged as separate dated rows in
-  `habit_completions`, never a boolean on the habit — needed for weekly
-  counts, streaks, and the "already met this week's target" state.
-  Running and Gym are seeded as `times_per_week` habits under `health`.
-- Shared `<ProgressRing />` component — used by Habits, Health, and the
-  Daily Goals roll-up. Build once, reuse; don't let each widget grow
-  its own ring implementation.
-- `ai_usage` — append-only log, one row per `generateStructured()` call
-  (real token counts, tier, model, an estimated USD cost). Backs the daily
-  call cap and the AI Usage bento widget. See the AI Search & Token Budget
-  plan (2026-08-18, `lib/ai/`) for the two-tier (`fast`/`smart`) model
-  policy this all sits under.
-- `bible_*` — a standalone module (`/bible`, nav-reachable, no home-grid
-  widget), keyed off `bible_passages` (a normalised book/chapter/verse
-  reference — never scripture text itself, and never fetched from a Bible
-  API). `bible_studies` allows only one `status = 'active'` row at a time,
-  DB-enforced via a partial unique index; `bible_study_sessions` +
-  `bible_session_questions` hold a study's fixed, author-imported plan
-  (paste-JSON import only), with per-question `answered_at` making
-  pause/resume work without separate progress bookkeeping. Zero AI calls
-  in this module — the prompt launcher only builds a copyable prompt for a
-  separate Claude Project.
+A home density/layout overhaul is **deferred** until it's clearer which
+widgets actually get used. Don't add home widgets casually.
 
-## Tech stack
-- Frontend: Next.js (App Router), TypeScript, Tailwind CSS
-- Backend/Auth/DB: Supabase
-- Deployment: Vercel
-- AI: Gemini (aistudio.google.com), behind a swappable interface in
-  `lib/ai/gemini.ts` — every AI call site imports only from there, so a
-  provider switch (e.g. to Claude) only touches that one file. Currently
-  powers the home page's search box and the People quick-add bar; a
-  dedicated Education/research panel is still unbuilt (deferred, see
-  Features below)
+- **System Query** (`app/components/AiQueryBar.tsx`) — one input with four
+  explicit modes (`LiquidSwitch`, one-line hint under the box explaining the
+  current mode; logic in `lib/search/query-mode.ts`):
+  - **Find** — Gemini extracts keywords + modules only; the queries
+    themselves are hand-written `ilike` lookups (`app/api/search`). No AI in
+    query execution.
+  - **Ask** — Find, then a smart-tier call answers from those results only.
+  - **Capture** — same extractor as Brain Dump (`/api/brain-dump/extract`,
+    smart tier with thinking, so pricier). Produces drafts; **nothing is
+    written until the user confirms** each draft (or "Confirm all" for
+    todos / education tasks / calendar events). People drafts always open
+    their form for review. Writes go through `/api/capture/confirm`.
+  - **Auto** (default) — local, zero-cost routing: ends in "?" → Ask;
+    multi-line / ";" / reads as an instruction (add, remind me, book, met…,
+    or has a date/time hint) → Capture; question word → Ask; else Find.
+  - The input is an auto-growing textarea (Enter submits, Shift+Enter adds a
+    line). Draft lists live in module-scope stores (`lib/braindump/store.ts`
+    `createDraftStore`) so an extraction survives navigating away; the home
+    box and Brain Dump have separate stores. Shared UI:
+    `app/components/capture/DraftList.tsx` / `DraftCard.tsx` (drafts are
+    editable inline before confirming).
+- **Daily Goals** — top: roll-up ring for TODAY across todos +
+  `education_tasks` + habits, with "5/8 today". Bottom: checklist of general
+  todos only — starred first, then overdue, then due today; starred undated
+  todos always show. **Capped at 5 open rows** (`capChecklist`) with a
+  "✓ N done · +M more →" link to `/todos`; rows ticked or added this visit
+  stay in place. Rows show a star toggle and the todo's workspace chip. Pulls
+  from Microsoft To Do at most every 5 minutes.
+- **Morning routine** — see Habits below. Offers a one-time setup; "Not now"
+  hides the offer in that browser.
+- **Education / Research / Habits / People / Money / AI usage / App Library
+  / Calendar** — small glance cards linking to their pages. Calendar shows
+  "nothing on today" (or today's items), a divider, then the next event. On
+  the full calendar page, clicking an event opens an anchored popover
+  (desktop) or bottom sheet (mobile) — never a full-screen blocking modal.
+- **Workspaces** — up to 4 active workspaces, most recently opened first,
+  with colour, folder, open-action count and "opened X ago".
 
-## Features (build order — easiest to hardest)
-1. App shell with placeholder slots for every feature
-2. Deadline/checklist view (own DB table, no external API)
-3. Manual time tracking + progress visual
-4. Manual rugby session logging (Health widget — see habit model for
-   Running/Gym rings, which are a separate mechanism from this log)
-5. Calendar API integration for day view
-6. Strava API (running + Hevy-synced gym sessions)
-7. A dedicated research panel with saved conversation links (still
-   pending — distinct from the Gemini search/quick-add in item 10,
-   deferred alongside the Education rework)
-8. Monzo/Starling integration (read-only scopes, encrypted token storage) — Trading212
-   was attempted and removed (broken auth against its live API, never fixed);
-   PDF bank-statement upload covers accounts without a working read-only API instead.
-9. One-way sync (pull) from Apple Reminders via CalDAV, plus a narrow
-   completion-push back — see the Environment Variables section
-10. Gemini-powered home search box (extracts keywords + relevant modules
-    only — no AI in the actual query execution, which is hand-written
-    `ilike` lookups) and a People quick-add bar that extracts a new/
-    updated contact or a logged conversation from a short typed note
+## Modules
 
-## Decided / out of scope for v1
-- No push/email notifications — in-app only, not building for mobile yet
-- No data export feature — Supabase's own export covers this
-- Perplexity integration is manual link-saving only (no public API available),
-  stored within Education modules as a URL + note field, not a separate widget
-- Apple Reminders sync is one-way pull (plus completion-push) only — see
-  Environment Variables. Todos created in the app stay app-only, never
-  pushed to Reminders; editing a synced reminder's title/due date is done
-  in Reminders/via Siri, not in the app
+### Todos (`/todos`, `todos` + `todo_lists`)
+- Lists (colour chips), one level of subtasks, due date + time, List /
+  Extended / Completed views, a **Starred** filter (starred sort first).
+- A todo filed under a workspace (`todos.workspace_id`) shows that
+  workspace's coloured chip everywhere (Todos rows, detail view, Daily
+  Goals). Workspace todos are ordinary todos — they appear in `/todos` and
+  Daily Goals like any other.
+- **Microsoft To Do sync** (replaced Apple Reminders): pull on `/todos` load
+  (`/api/microsoft/todo/pull`), push on every change to a linked todo
+  (`/api/microsoft/todo/push`): tick, star (= To Do "Important"), title,
+  notes, due date, delete (deletes the task first; if that fails the todo is
+  kept). To Do lists map to app lists by name (the default "Tasks" list =
+  no list; missing lists are created). A reminder time becomes `due_time`.
+  Tasks deleted in To Do are deleted here. Completed tasks older than 30
+  days aren't imported. Todos created in the app stay app-only (never
+  created in To Do); To Do-linked todos can't have app subtasks (DB
+  trigger). A status line on `/todos` shows synced / Connect / Reconnect.
+  One Microsoft connection (`integrations` provider `microsoft_onenote`,
+  scopes Notes.Read + Tasks.ReadWrite) serves OneNote and To Do.
+- **Why not Apple Reminders:** iCloud CalDAV only serves placeholder
+  "⚠️" lists for upgraded Reminders (tsdav also defaulted to a VEVENT
+  filter), so the old CalDAV pull never imported anything. The CalDAV code
+  was removed; `todos.caldav_uid` / `upsert_caldav_todos` remain unused.
+
+### Education (`/education`)
+- `years` → `modules` → `topics` / `tasks` (coursework, per module), with
+  time tracking (`time_logs`) and research links attached to tasks
+  (`task_research_links` → `perplexity_links`). These base tables exist only
+  in the live DB (no migration file — `remote_schema.sql` is empty).
+- OneNote: link a module to a section and open its pages in OneNote
+  (read-only, fetched on demand, never indexed). Notes documents can carry
+  todos with a progress bar (`notes_documents`) — **its migration
+  (`20260826000000_notes_documents.sql`) has not been applied to the live
+  DB**, so that feature currently shows 0 linked todos.
+- **Known split:** the Education pages use `tasks` (per module); Daily
+  Goals, the time-block wizard and Capture use `education_tasks`. So a
+  deadline added in Education doesn't count on Daily Goals, and a captured
+  education task doesn't show in Education. Reconciling them (probably
+  pointing everything at `tasks`, with a module picker on capture) is open.
+
+### Workspaces (`/workspaces`, `/workspaces/[id]`)
+A workspace is the desk for one piece of work: sources (links with
+kind/citation/DOI), scoped next actions (ordinary todos with
+`workspace_id`), and an append-only thinking log (kinds + custom
+`#tags`). Plus sessions ("last opened"), stat rings, archive, and a
+Markdown export (always complete, even for hidden sections).
+- **Folders** (`workspace_folders`, nested via `parent_id`): breadcrumb,
+  drag a workspace/folder (grip handle) onto a folder or crumb, `?folder=`
+  in the URL. DB triggers block cycles and move a deleted folder's contents
+  up a level.
+- **Colour**: workspace `color` → nearest folder ancestor with a colour →
+  teal (`resolveAccent`). Implemented as a `--ws-accent` CSS variable and the
+  `ws-accent` Tailwind token, so components don't thread colour props.
+- **Layout**: `hidden_sections` (Layout menu — stats / sources / actions /
+  log; hidden = not rendered, data untouched, the rest of the page adapts)
+  and `collapsed_sections` (chevron → slim bar).
+- **Launch set** opens every source in a tab; browsers block all but the
+  first unless pop-ups are allowed, so it reports blocked tabs, explains how
+  to allow them, and offers "Open next".
+- An (i) help popover on both pages explains all of this
+  (`WorkspacesHelp.tsx`) — keep it in sync when behaviour changes.
+- Logic: `lib/workspaces/{folders,layout,tags,launch,glance,stats}.ts`.
+
+### Habits (`/habits`, `daily_goal_habits` + `daily_goal_habit_completions`)
+- One shared table for all habits, distinguished by `widget` (`habits` |
+  `health`) and `frequency_type` (`daily` | `specific_days` |
+  `times_per_week`). Completions are separate dated rows (unique per habit
+  + day), never a boolean — needed for weekly counts, streaks and "already
+  met this week". Quantifiable habits store a `value` against a target.
+- **Habit steps** (`habit_steps`, `habit_step_checks`): any non-quantifiable
+  habit can have ordered **core** and **bonus** steps (edit the habit).
+  Ticking every core step for a day logs that day's completion via RPC
+  `set_habit_step_check`; unticking a core step removes it; bonus steps
+  never matter. With no step flagged core, all count.
+- **Morning routine** = a `times_per_week` habit with steps (default target
+  4/week, 1–3 core steps). Home card: core checkboxes, collapsed bonus, week
+  dots + status ("on track" / "every day counts"), a "don't miss twice"
+  nudge only after two missed scheduled days in a row, and after 11:00 a
+  "minimum version: just <first step>" line. It fires `habits:changed`
+  (`lib/habits/events.ts`) so Daily Goals and the Habits card refresh.
+  Logic in `lib/habits/steps.ts`.
+- Habit steps are **not** Calendar routines (`routines`, `routine_items`,
+  `routine_instances`): those are timed stacks dragged onto the calendar to
+  create Google events, with no "done" tracking.
+- All dates are Europe/London calendar days (`lib/google/london-day.ts`).
+- Old `habits` / `habit_logs` / `rugby_sessions` tables are legacy and
+  unused.
+
+### People (`/people`)
+- Contacts, interactions (+ attendees), places, follow-ups, Google Contacts
+  sync (two-way for linked contacts), and the Gemini quick-add bar.
+- **Instagram log** (`instagram_accounts`, `instagram_imports`,
+  `instagram_events`): no Instagram API and no scraping or browser
+  automation (against Instagram's terms). Workflow: screenshot Following
+  (sorted "Date followed: Latest") and/or Activity "started following you"
+  → send them to Claude with the copied instructions (Claude Project on the
+  phone) or run the `instagram-log` skill in Claude Code → paste the JSON →
+  preview → import (RPC `import_instagram_snapshot`). An event is logged
+  only the first time a relationship is seen; the first import should be a
+  **baseline** (no events); unfollows are never inferred. Accounts can be
+  added to People or linked to a same-name contact. Logic:
+  `lib/people/instagram-import.ts`, `instagram-prompt.ts`.
+
+### App Library (`/apps`, `link_folders` + `quick_links`)
+- All folders open by default (collapse state remembered per browser),
+  Expand/Collapse all. Folder toolbar: **+** (add a link straight into that
+  folder), drag handle, edit, delete; the virtual "Unfiled" folder only has
+  +. Folders and links reorder by drag and drop, and links can be dragged
+  between folders. `quick_links.sort_order` is global (the home launcher
+  sorts pinned links by it), so moves renumber all links in display order
+  (`lib/app-launcher/order.ts`). `link_folders.color` can't be teal.
+
+### Money (`/money`)
+- Starling (live balances + Spaces, transaction sync) and PDF bank-statement
+  import (generic parser, mandatory review step). Trading212 was tried and
+  removed; Monzo isn't built.
+
+### Bible (`/bible`)
+- Standalone module, no home widget. Keyed off `bible_passages` (a
+  normalised book/chapter/verse reference — never scripture text, never a
+  Bible API). One `status = 'active'` study at a time (partial unique
+  index); studies are paste-JSON imports (`import_bible_study`), with
+  per-question `answered_at` for pause/resume. Zero AI calls — the prompt
+  launcher only builds a copyable prompt for a separate Claude Project.
+
+### Research (`/research`)
+- Prompt library (`prompts`) and saved Perplexity chats (`perplexity_links`
+  — manual link saving, no public API). The home card shows counts.
+
+### Brain Dump (`/brain-dump`)
+- Long free-text → drafts (todos, education tasks, calendar events, new or
+  updated people, logged conversations), reviewed with the same shared
+  draft list as Capture.
+
+## Data model conventions
+- `todos` — general to-dos only, separate from education tasks.
+- `tasks` / `education_tasks` — see the known split under Education.
+- `habits` model — see Habits (completions as dated rows; steps separate).
+- `ai_usage` — append-only, one row per `generateStructured()` call (token
+  counts, tier, model, estimated USD). Feature keys: `search`,
+  `search_answer`, `brain_dump` (Capture + Brain Dump), `people_quick_add`,
+  and the retired `search_act` (kept for old rows).
+- Every table: `user_id default auth.uid()`, four "own row" RLS policies,
+  `revoke … from anon`. Child tables also check the parent row's owner in
+  RLS. RPCs are `security invoker` with `set search_path = ''` unless they
+  must be definer (then they pin `auth.uid()` themselves).
+- **Migrations are applied by hand** (Supabase SQL editor or the Supabase
+  connector), not CLI-pushed, so the files and the live DB can drift.
+  Write them re-runnable (`if not exists`, `drop policy if exists`, guarded
+  constraints, `create or replace`). Two older files share a timestamp.
 
 ## Environment Variables
 Required in `.env.local` (see `.env.example` for setup notes). Never commit
@@ -150,79 +271,80 @@ actual values.
 
 - **Supabase**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
   `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`
-- **Google Contacts (People module)**: `GOOGLE_CLIENT_ID`,
-  `GOOGLE_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY`
-- **Microsoft OneNote (Education module, section/page browsing)**:
-  `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (Azure app registration,
-  "Personal Microsoft accounts only"; reuses `INTEGRATION_ENCRYPTION_KEY`
-  above). Links a module to a section and lists its pages, which open
-  directly in OneNote rather than being read in-app (tried and dropped —
-  Graph never returns handwriting, and the beta ink fallback wasn't
-  reliable either). No indexing/reindexing — every Graph call is made on
-  demand when a section is actually opened in the app.
+- **Google (Contacts, Calendar)**: `GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET`, `INTEGRATION_ENCRYPTION_KEY` (seals refresh
+  tokens). The Google OAuth app is in "Testing" mode, so refresh tokens
+  expire after 7 days — publishing the consent screen fixes the weekly
+  re-auth.
+- **Microsoft (OneNote + To Do)**: `MICROSOFT_CLIENT_ID`,
+  `MICROSOFT_CLIENT_SECRET` (Azure app registration, "Personal Microsoft
+  accounts only", delegated Notes.Read + Tasks.ReadWrite + offline_access
+  + openid + profile; reuses `INTEGRATION_ENCRYPTION_KEY`). Connect via
+  `/api/microsoft/connect?next=/todos` (or from Education). Adding a scope
+  needs one reconnect.
 - **Starling**: `STARLING_ACCESS_TOKEN`
-- **Apple Reminders (Todos page, via CalDAV)**: `ICLOUD_CALDAV_USERNAME`,
-  `ICLOUD_CALDAV_APP_PASSWORD` (an app-specific password from
-  appleid.apple.com, not your real Apple ID password — Apple doesn't
-  support OAuth for CalDAV), optional `ICLOUD_CALDAV_LIST_NAME` (a single
-  list name, or a comma-separated list of names to sync multiple lists
-  into the same flat pool)
-- **Gemini (home search, People quick-add)**: `GEMINI_API_KEY` from
-  aistudio.google.com (free tier), optional `AI_ENABLED=false` kill switch
-- **Bible module prompt launcher**: `NEXT_PUBLIC_BIBLE_CLAUDE_PROJECT_URL`
-  (optional) — deep-links "Open Claude Project" to a separate Claude
-  Project you paste the copied prompt into. Omitted entirely when unset.
-  Not an AI API call: this module never calls Gemini or any other AI
-  provider itself.
+- **Gemini**: `GEMINI_API_KEY` (aistudio.google.com, free tier), optional
+  `AI_ENABLED=false` kill switch
+- **Claude Project deep links** (optional, hidden when unset — the app never
+  calls Claude): `NEXT_PUBLIC_BIBLE_CLAUDE_PROJECT_URL`,
+  `NEXT_PUBLIC_INSTAGRAM_CLAUDE_PROJECT_URL`
+- `ICLOUD_CALDAV_*` are no longer used.
+
+## Using Education and Workspaces together
+- **Education** is the official record: year → module, assessed deadlines,
+  grades, time logged, OneNote.
+- **Workspaces** is where the work happens: sources, next actions, thinking
+  log.
+- For an essay: add the deadline in Education **and** create a workspace
+  (subtitle = module), filed under a folder like Uni › Year 2. Non-uni
+  projects (e.g. the Christian clothing brand) are workspace-only — hide the
+  sections they don't need.
+- If one side goes unopened for a few weeks, revisit whether both are
+  needed.
+
+## Obsidian (guidance only — nothing built)
+- Obsidian itself is free. Keeping the vault in iCloud Drive syncs Mac ↔
+  iPhone for free (Obsidian Sync is the paid alternative).
+- Using the Claude subscription with it: point a filesystem MCP server in
+  Claude Desktop at the vault folder, or run Claude Code inside the vault.
+  The Claude phone app can't read local files.
+- Possible future link: export a workspace's Markdown straight into the
+  vault.
+
+## Decided / out of scope for v1
+- No push/email notifications — in-app only, not building for mobile yet
+- Data export: Supabase's own export, plus per-workspace Markdown export
+- Perplexity: manual link saving only (no public API)
+- Instagram: screenshots → Claude → paste only; never automate Instagram
+- Microsoft To Do is the phone-side todo app (not Apple Reminders)
 
 ## Bugs (bounded, fix first)
-- Money: hidden accounts are not actually being hidden in the accounts list.
-- Habits: the confirm/action label says "Delete" when updating an existing
-  entry or adding a completion — should reflect the actual operation.
-- Calendar header: the date label always shows the current day ("Thu 20th")
-  regardless of which day is selected. It should show the SELECTED day, using
-  relative names where they apply — "Today", "Tomorrow", "Yesterday" — and
-  fall back to "Thu 20th" format for any other selected day.
+- Money: hidden accounts are not actually hidden — the toggle saves
+  `is_hidden`, but nothing filters on it (and the headline balance still
+  includes them).
 - Calendar routines: clicking a routine causes the panel to jump far up the
   page while the mouse hovers the tab; it snaps back to the correct centred
-  position only when the window loses focus. Positioning/layout bug.
-- Rainbow loading bar: currently spins the whole element. Intended behaviour is
-  a fixed border that stays in place while the colour and glow travel around
-  the perimeter — an LED-strip effect, like the iOS 26 Apple Intelligence
-  screen-edge glow. Fix the animation, extract it as a shared component, and
-  apply it to every search bar in the app, not just the home one.
+  position only when the window loses focus. (Reported; not re-verified.)
 
-## Money module
-- Shrink "Add account", "Hidden accounts" and "Import PDF statement" buttons —
-  currently too large and visually dominant for their importance.
-- Spending tab: breakdown per category.
-- Monthly spending breakdown drill-down: clicking a category opens the
-  individual transactions inside it. Add an equivalent monthly INCOME
-  breakdown, split by sender. From either view, allow moving a transaction to
-  a different category, creating new categories, and assigning a specific
-  sender to a category as a persistent rule.
+## Backlog
+- **Money**: shrink "Add account", "Hidden accounts" and "Import PDF
+  statement" (too dominant); per-category spending breakdown with
+  drill-down to transactions; a monthly income breakdown by sender; move a
+  transaction to another (or a new) category, and persistent
+  sender → category rules.
+- **Todos**: multi-select and move to another/new list; "add a reminder"
+  wording in capture.
+- **Education**: reconcile `tasks` / `education_tasks`; a dedicated research
+  panel with saved conversation links.
+- **Calendar**: the basic Google Calendar event options when adding an event
+  (all-day vs timed, etc.).
+- **Home**: edit mode (drag widgets to chosen positions, saved per user),
+  after the density overhaul decision; a whole-app UI pass using the
+  Perplexity home screen as the visual reference; a widget for Claude
+  session/weekly usage (no source for that data identified yet).
+- **Platform**: web push notifications to the phone (PWA). Approach
+  undecided.
 
-## Todos & reminders
-- Natural-language add must support "add a reminder", not only "add a todo".
-- Show the time a reminder is set for in the todo/reminder views.
-- Multi-select todos and move the selection to a different or newly created list.
-
-## Calendar
-- Support the basic Google Calendar event options when adding an event
-  (all-day vs timed, etc.) — see open question below.
-
-## Home screen & UI
-- Edit mode for the home screen: drag individual widgets to chosen positions,
-  persisted per user.
-- System query box: the UI is confusing. Make the available modes explicit and
-  explained in-place. See claude/ai-search-architecture.md — the modes are
-  Find / Answer / Act, and only Find is built.
-- Whole-app UI pass referencing the Perplexity home screen as the visual
-  reference. NOTE: this overlaps the existing nine-prompt redesign sequence
-  already specced in CLAUDE.md — reconcile rather than starting a parallel
-  redesign.
-- Widget showing Claude session-limit and weekly-limit usage as percentages.
-  See open question below.
-
-## Platform
-- Web push notifications to the phone (PWA). Approach undecided.
+## Reference docs
+- `docs/FEATURE_INVENTORY.md` — what's built, half-built and hidden.
+- `docs/people-crm-plan.md` — the People module's original plan.

@@ -1,13 +1,14 @@
 'use client'
 
-import { useMemo } from 'react'
+import { Fragment, useMemo } from 'react'
 import { CheckCircle2, Layers, Link2, Brain } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo, WorkspaceNote } from '@/lib/types'
 import { recentLogShare, sourceCoupling, sourceFootprint, taskProgress } from '@/lib/workspaces/stats'
-import { logTimestamp, microLabelClass } from './shared'
+import { STAT_GRID_CLASS, type StatCardKey } from '@/lib/workspaces/layout'
+import { logTimestamp, microLabelClass, wsAccentStyle } from './shared'
 
 function StatCard({
   label,
@@ -27,7 +28,7 @@ function StatCard({
   ringTitle: string
 }) {
   return (
-    <ModuleGlassCard accent="teal" size="sm" className="flex items-center justify-between gap-3">
+    <ModuleGlassCard style={wsAccentStyle} size="sm" className="flex items-center justify-between gap-3">
       <div className="flex min-w-0 flex-col gap-1">
         <span className={microLabelClass}>{label}</span>
         <span className="flex items-baseline gap-1.5">
@@ -38,11 +39,11 @@ function StatCard({
       </div>
       <div title={ringTitle}>
         <ProgressRing
-          accent="teal"
+          style={wsAccentStyle}
           value={percent}
           size="md"
           showValue
-          formatValue={() => <Icon className="h-4 w-4 text-workspace-teal" strokeWidth={1.75} />}
+          formatValue={() => <Icon className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />}
         />
       </div>
     </ModuleGlassCard>
@@ -50,11 +51,15 @@ function StatCard({
 }
 
 export default function WorkspaceStatCards({
+  cards,
   links,
   todos,
   notes,
   linkTodos,
 }: {
+  // Which cards to show, in order — see lib/workspaces/layout.ts
+  // visibleStatCards (a card drops out when its section is hidden).
+  cards: StatCardKey[]
   links: WorkspaceLink[]
   todos: Todo[]
   notes: WorkspaceNote[]
@@ -66,8 +71,10 @@ export default function WorkspaceStatCards({
   const logShare = useMemo(() => recentLogShare(notes), [notes])
   const latest = notes[0]?.created_at ?? null
 
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  if (cards.length === 0) return null
+
+  const rendered: Record<StatCardKey, React.ReactNode> = {
+    tasks: (
       <StatCard
         label="Task progress"
         value={`${tasks.percent}%`}
@@ -76,7 +83,8 @@ export default function WorkspaceStatCards({
         Icon={CheckCircle2}
         ringTitle="Share of this workspace's scoped actions completed"
       />
-
+    ),
+    footprint: (
       <StatCard
         label="Working set footprint"
         value={String(links.length)}
@@ -86,7 +94,8 @@ export default function WorkspaceStatCards({
         Icon={Layers}
         ringTitle="Share of sources with a type assigned"
       />
-
+    ),
+    coupling: (
       <StatCard
         label="Source coupling"
         value={`${coupling.percent}%`}
@@ -99,7 +108,8 @@ export default function WorkspaceStatCards({
         Icon={Link2}
         ringTitle="Share of scoped actions attached to at least one source"
       />
-
+    ),
+    log: (
       <StatCard
         label="Thinking log"
         value={String(notes.length)}
@@ -109,6 +119,14 @@ export default function WorkspaceStatCards({
         Icon={Brain}
         ringTitle="Share of log entries written in the last 7 days"
       />
+    ),
+  }
+
+  return (
+    <div className={`grid grid-cols-1 gap-4 ${STAT_GRID_CLASS[cards.length]}`}>
+      {cards.map((card) => (
+        <Fragment key={card}>{rendered[card]}</Fragment>
+      ))}
     </div>
   )
 }

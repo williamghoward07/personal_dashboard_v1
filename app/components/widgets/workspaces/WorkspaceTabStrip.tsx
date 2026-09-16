@@ -3,17 +3,23 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Archive } from 'lucide-react'
+import type { Accent } from '@/lib/theme'
 import type { Workspace } from '@/lib/types'
+import { accentVars } from './shared'
 
-// Switch between active workspaces without going back to the index, plus a
-// collapsed archive shelf. The /workspaces list page remains the place to
+// Switch between the active workspaces in the same folder without going
+// back to the index, plus a collapsed archive shelf. Each tab carries its
+// own workspace colour. The /workspaces list page remains the place to
 // create one.
 export default function WorkspaceTabStrip({
   workspaces,
   currentId,
+  accentOf,
 }: {
+  // Already narrowed to the current workspace's folder.
   workspaces: Workspace[]
   currentId: string
+  accentOf: (workspace: Workspace) => Accent
 }) {
   const [showArchived, setShowArchived] = useState(false)
 
@@ -29,13 +35,14 @@ export default function WorkspaceTabStrip({
             key={w.id}
             href={`/workspaces/${w.id}`}
             aria-current={isCurrent ? 'page' : undefined}
+            style={accentVars(accentOf(w))}
             className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
               isCurrent
-                ? 'border-workspace-teal/40 bg-workspace-teal/10 text-workspace-teal'
+                ? 'border-ws-accent/40 bg-ws-accent/10 text-ws-accent'
                 : 'border-outline-variant text-on-surface-variant hover:border-outline hover:text-on-surface'
             }`}
           >
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isCurrent ? 'bg-workspace-teal' : 'bg-outline'}`} />
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-ws-accent" />
             <span className="max-w-50 truncate font-medium">{w.title}</span>
             {isCurrent && (
               <span className="font-display text-[10px] font-semibold uppercase tracking-wide">Active</span>
@@ -52,7 +59,7 @@ export default function WorkspaceTabStrip({
           className="flex items-center gap-1.5 rounded-lg border border-outline-variant px-3 py-1.5 text-xs text-on-surface-variant transition-colors hover:border-outline hover:text-on-surface"
         >
           <Archive className="h-3.5 w-3.5" strokeWidth={1.75} />
-          <span className="font-display font-semibold uppercase tracking-wide">Archived workspaces</span>
+          <span className="font-display font-semibold uppercase tracking-wide">Archived here</span>
           <span className="tabular-nums">{archived.length}</span>
         </button>
       )}
@@ -63,9 +70,10 @@ export default function WorkspaceTabStrip({
             <li key={w.id}>
               <Link
                 href={`/workspaces/${w.id}`}
+                style={accentVars(accentOf(w))}
                 className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                   w.id === currentId
-                    ? 'border-workspace-teal/40 bg-workspace-teal/10 text-workspace-teal'
+                    ? 'border-ws-accent/40 bg-ws-accent/10 text-ws-accent'
                     : 'border-outline-variant/60 text-on-surface-variant/70 hover:border-outline hover:text-on-surface'
                 }`}
               >

@@ -6,6 +6,7 @@ import type { Todo, WorkspaceLink, WorkspaceLinkTodo } from '@/lib/types'
 import { faviconPublicUrl } from '@/lib/workspaces/favicon'
 import { SOURCE_KINDS } from '@/lib/workspaces/kinds'
 import type { WorkspaceLinkPatch } from '@/lib/workspaces/use-workspace-links'
+import { onActivateKey } from '@/lib/utils/a11y'
 import { extractDroppedUrl } from './dnd'
 import LinkTodoAttachPanel from './LinkTodoAttachPanel'
 import SourceDetailsEditor from './SourceDetailsEditor'
@@ -77,7 +78,10 @@ export default function LinkCard({
 
   return (
     <div
-      draggable
+      // Not draggable while an inline editor/panel is open — a draggable
+      // ancestor turns a mouse drag inside a text input into a card drag,
+      // so text in the rename fields couldn't be selected.
+      draggable={!editing && !managingTodos}
       onDragStart={(e) => {
         draggingIdRef.current = link.id
         e.dataTransfer.effectAllowed = 'move'
@@ -108,16 +112,11 @@ export default function LinkCard({
       role="link"
       tabIndex={0}
       onClick={open}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          open()
-        }
-      }}
+      onKeyDown={onActivateKey(open)}
       className={`group cursor-pointer rounded-xl border bg-surface-container-low/60 p-3 transition-all duration-200 ${
         isDragTarget
-          ? 'border-workspace-teal/60 bg-workspace-teal/5'
-          : 'border-outline-variant hover:border-workspace-teal/40 hover:shadow-[0_0_15px_rgba(45,212,191,0.12)]'
+          ? 'border-ws-accent/60 bg-ws-accent/5'
+          : 'border-outline-variant hover:border-ws-accent/40 hover:shadow-[0_0_15px_color-mix(in_oklab,var(--color-ws-accent)_12%,transparent)]'
       }`}
     >
       <div className="flex items-start gap-2.5">
@@ -143,14 +142,14 @@ export default function LinkCard({
           <div className="flex items-start gap-2">
             <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-on-surface">{link.title}</h3>
             <ExternalLink
-              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-on-surface-variant/40 transition-colors group-hover:text-workspace-teal"
+              className="mt-0.5 h-3.5 w-3.5 shrink-0 text-on-surface-variant/40 transition-colors group-hover:text-ws-accent"
               strokeWidth={1.75}
               aria-hidden
             />
           </div>
 
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-on-surface-variant">
-            <span className="text-workspace-teal/80">{domain}</span>
+            <span className="text-ws-accent/80">{domain}</span>
             <span className="text-on-surface-variant/40">·</span>
             <span>{kindMeta.label}</span>
             {link.meta_label && (
@@ -170,7 +169,7 @@ export default function LinkCard({
                 return (
                   <li
                     key={todo.id}
-                    className="flex items-center gap-1 rounded-full border border-workspace-teal/30 bg-workspace-teal/10 px-2 py-0.5 text-[11px] text-workspace-teal"
+                    className="flex items-center gap-1 rounded-full border border-ws-accent/30 bg-ws-accent/10 px-2 py-0.5 text-[11px] text-ws-accent"
                   >
                     <span className="max-w-40 truncate">{todo.title}</span>
                     {junctionRow && (

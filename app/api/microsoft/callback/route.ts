@@ -3,16 +3,27 @@ import { createClient } from '@/lib/supabase/server'
 import { encryptSecret } from '@/lib/crypto'
 import {
   MICROSOFT_ONENOTE_PROVIDER,
+  NEXT_COOKIE,
   exchangeCode,
   fetchAccountDisplay,
+  safeNextPath,
 } from '@/lib/microsoft/oauth'
 import { STATE_COOKIE } from '../connect/route'
 
-/** Completes the Microsoft OneNote consent flow and stores the sealed token. */
+function readCookie(request: Request, name: string): string | undefined {
+  const value = (request.headers.get('cookie') ?? '')
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${name}=`))
+    ?.slice(name.length + 1)
+  return value === undefined ? undefined : decodeURIComponent(value)
+}
+
+/** Completes the Microsoft consent flow and stores the sealed token. */
 export async function GET(request: Request) {
   const { origin, searchParams } = new URL(request.url)
-  const fail = (reason: string) =>
-    NextResponse.redirect(`${origin}/education?error=${reason}`)
+  const next = safeNextPath(readCookie(request, NEXT_COOKIE))
+  const fail = (reason: string) => NextResponse.redirect(`${origin}${next}?error=${reason}`)
 
   if (searchParams.get('error')) return fail('microsoft_denied')
 
@@ -27,12 +38,7 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.redirect(`${origin}/login`)
 
   // CSRF: the state we handed out must come back unchanged.
-  const cookieHeader = request.headers.get('cookie') ?? ''
-  const expected = cookieHeader
-    .split(';')
-    .map((c) => c.trim())
-    .find((c) => c.startsWith(`${STATE_COOKIE}=`))
-    ?.slice(STATE_COOKIE.length + 1)
+  const expected = readCookie(request, STATE_COOKIE)
   if (!expected || expected !== state) return fail('microsoft_bad_state')
 
   try {
@@ -62,7 +68,8 @@ export async function GET(request: Request) {
     return fail('microsoft_exchange_failed')
   }
 
-  const response = NextResponse.redirect(`${origin}/education?connected=1`)
+  const response = NextResponse.redirect(`${origin}${next}?connected=1`)
   response.cookies.delete(STATE_COOKIE)
+  response.cookies.delete(NEXT_COOKIE)
   return response
 }

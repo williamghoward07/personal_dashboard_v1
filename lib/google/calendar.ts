@@ -92,7 +92,7 @@ function nextDateKey(dateKey: string): string {
 
 // Writes a real event via calendar.events (see lib/google/calendar-scope.ts
 // for why the connected token needs that scope, not just .readonly). Only
-// ever called from app/api/search/act/confirm — Search mode 3 (Act) — after
+// ever called from app/api/capture/confirm (query box Capture / Brain Dump) after
 // the user has explicitly confirmed a draft; never a direct consequence of
 // typing.
 export async function createGoogleCalendarEvent({

@@ -1,9 +1,24 @@
 // Shared class strings and formatters for the Workspaces module. Class
 // strings follow the per-module convention of reusing the app-wide input/
 // label/button shapes and swapping only the focus/accent colour.
+//
+// Colour: everything here uses the `ws-accent` token, which follows the
+// --ws-accent custom property set by accentVars() on a page/card root —
+// so one workspace can be orange and another pink (teal when unset).
+
+import type { CSSProperties } from 'react'
+import { ACCENT_VAR, type Accent } from '@/lib/theme'
+
+/** Root style that points every ws-accent utility inside at `accent`. */
+export function accentVars(accent: Accent): CSSProperties {
+  return { '--ws-accent': ACCENT_VAR[accent] } as CSSProperties
+}
+
+/** For ModuleGlassCard / ProgressRing: follow the workspace accent rather than a fixed module accent. */
+export const wsAccentStyle = { '--color-accent': 'var(--color-ws-accent)' } as CSSProperties
 
 export const inputClass =
-  'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-workspace-teal'
+  'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-ws-accent'
 
 export const labelClass = 'flex flex-col gap-1 text-xs text-on-surface-variant'
 
@@ -11,7 +26,7 @@ export const actionButtonClass =
   'flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40'
 
 export const primaryButtonClass =
-  'flex items-center gap-1.5 rounded-md bg-workspace-teal px-3 py-1.5 text-xs font-semibold text-surface-container-lowest transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40'
+  'flex items-center gap-1.5 rounded-md bg-ws-accent px-3 py-1.5 text-xs font-semibold text-surface-container-lowest transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40'
 
 export const ghostButtonClass =
   'rounded-md px-2.5 py-1.5 text-xs text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface'
@@ -20,7 +35,7 @@ export const iconButtonClass =
   'rounded p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-30'
 
 export const filterChipClass = 'rounded-full border px-2.5 py-1 text-xs transition-colors'
-export const filterChipActiveClass = 'border-workspace-teal/50 bg-workspace-teal/10 text-workspace-teal'
+export const filterChipActiveClass = 'border-ws-accent/50 bg-ws-accent/10 text-ws-accent'
 export const filterChipInactiveClass = 'border-outline-variant text-on-surface-variant hover:border-outline'
 
 export const microLabelClass =

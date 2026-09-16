@@ -3,12 +3,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { WorkspaceNote, WorkspaceNoteKind } from '@/lib/types'
+import { extractHashtags, mergeTags } from './tags'
+
+export interface AddNoteOptions {
+  kind?: WorkspaceNoteKind
+  footnote?: string | null
+  // Chip tags; any inline #hashtags in the body are added automatically.
+  tags?: string[]
+}
 
 export interface UseWorkspaceNotesResult {
   notes: WorkspaceNote[]
   loading: boolean
   error: string | null
-  addNote: (body: string, kind?: WorkspaceNoteKind, footnote?: string | null) => Promise<void>
+  addNote: (body: string, options?: AddNoteOptions) => Promise<void>
 }
 
 // Append-only dated log for one workspace, newest first. Deliberately
@@ -42,10 +50,11 @@ export function useWorkspaceNotes(workspaceId: string): UseWorkspaceNotesResult 
   }, [refresh])
 
   const addNote = useCallback(
-    async (body: string, kind: WorkspaceNoteKind = 'note', footnote: string | null = null) => {
+    async (body: string, { kind = 'note', footnote = null, tags = [] }: AddNoteOptions = {}) => {
       const trimmed = body.trim()
       if (!trimmed) return
       const trimmedFootnote = footnote?.trim() || null
+      const allTags = mergeTags(tags, extractHashtags(trimmed))
 
       const optimisticId = `optimistic-${crypto.randomUUID()}`
       const optimisticNote: WorkspaceNote = {
@@ -54,6 +63,7 @@ export function useWorkspaceNotes(workspaceId: string): UseWorkspaceNotesResult 
         body: trimmed,
         kind,
         footnote: trimmedFootnote,
+        tags: allTags,
         created_at: new Date().toISOString(),
       }
       // Prepend, not append — this list is newest-first.
@@ -62,7 +72,7 @@ export function useWorkspaceNotes(workspaceId: string): UseWorkspaceNotesResult 
 
       const { data, error: insertError } = await supabase
         .from('workspace_notes')
-        .insert({ workspace_id: workspaceId, body: trimmed, kind, footnote: trimmedFootnote })
+        .insert({ workspace_id: workspaceId, body: trimmed, kind, footnote: trimmedFootnote, tags: allTags })
         .select()
         .single()
 
@@ -79,4 +89,18 @@ export function useWorkspaceNotes(workspaceId: string): UseWorkspaceNotesResult 
   )
 
   return { notes, loading, error, addNote }
+}
+
+// Every tag used across all workspaces' logs, for composer suggestions —
+// a tag like #pricing is reusable between workspaces. One small column
+// read; filtering/counting happens client-side.
+export function useAllNoteTags(): { tags: string[] }[] {
+  const [rows, setRows] = useState<{ tags: string[] }[]>([])
+  useEffect(() => {
+    supabase
+      .from('workspace_notes')
+      .select('tags')
+      .then(({ data }) => setRows((data ?? []) as { tags: string[] }[]))
+  }, [])
+  return rows
 }

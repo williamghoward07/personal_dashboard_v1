@@ -2,23 +2,25 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import type { Todo } from '@/lib/types'
+import { londonDateKey } from '@/lib/google/london-day'
+import type { WorkspaceTag } from '@/lib/workspaces/use-workspace-lookup'
 import TodoRow from './TodoRow'
-
-function completionDateKey(completedAt: string): string {
-  return completedAt.slice(0, 10)
-}
 
 export default function CompletedTodosList({
   todos,
   todayDateKey,
+  workspaces,
   onToggle,
+  onToggleStar,
   onOpen,
   onEdit,
   onDelete,
 }: {
   todos: Todo[]
   todayDateKey: string
+  workspaces: Map<string, WorkspaceTag>
   onToggle: (id: string) => void
+  onToggleStar: (id: string) => void
   onOpen: (todo: Todo) => void
   onEdit: (todo: Todo) => void
   onDelete: (todo: Todo) => void
@@ -29,7 +31,9 @@ export default function CompletedTodosList({
     const byDate = new Map<string, Todo[]>()
     for (const todo of todos) {
       if (!todo.completed_at) continue
-      const key = completionDateKey(todo.completed_at)
+      // London day, not the UTC date — a todo ticked at 00:30 BST belongs
+      // to that day, not the one before.
+      const key = londonDateKey(todo.completed_at)
       const bucket = byDate.get(key) ?? []
       bucket.push(todo)
       byDate.set(key, bucket)
@@ -61,7 +65,9 @@ export default function CompletedTodosList({
                 key={todo.id}
                 todo={todo}
                 todayDateKey={todayDateKey}
+                workspace={todo.workspace_id ? workspaces.get(todo.workspace_id) : undefined}
                 onToggle={() => onToggle(todo.id)}
+                onToggleStar={() => onToggleStar(todo.id)}
                 onOpen={() => onOpen(todo)}
                 onEdit={() => onEdit(todo)}
                 onDelete={() => onDelete(todo)}

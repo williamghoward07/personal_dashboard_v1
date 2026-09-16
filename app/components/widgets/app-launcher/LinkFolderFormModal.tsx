@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import Modal from '../../Modal'
 import type { Accent } from '@/lib/theme'
-import { ACCENT_BAR } from '@/lib/theme'
 import type { LinkFolder } from '@/lib/types'
+import AccentPicker from '../../AccentPicker'
 import { inputClass, labelClass } from './shared'
 
 export interface LinkFolderFormValues {
@@ -12,6 +12,7 @@ export interface LinkFolderFormValues {
   color: Accent
 }
 
+// No teal — link_folders' check constraint predates that accent.
 const COLOR_OPTIONS: Accent[] = ['neutral', 'mint', 'blue', 'orange', 'pink', 'purple', 'amber', 'crimson']
 
 const EMPTY: LinkFolderFormValues = { name: '', color: 'neutral' }
@@ -67,22 +68,11 @@ export default function LinkFolderFormModal({
 
         <div className={labelClass}>
           Color
-          <div className="flex flex-wrap gap-2 pt-1">
-            {COLOR_OPTIONS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setValues((v) => ({ ...v, color: c }))}
-                aria-label={`Color ${c}`}
-                aria-pressed={values.color === c}
-                className={`h-7 w-7 rounded-full ${ACCENT_BAR[c]}`}
-                style={{
-                  outline: values.color === c ? '2px solid #dae5da' : 'none',
-                  outlineOffset: 2,
-                }}
-              />
-            ))}
-          </div>
+          <AccentPicker
+            value={values.color}
+            options={COLOR_OPTIONS}
+            onChange={(c) => setValues((v) => ({ ...v, color: c ?? 'neutral' }))}
+          />
         </div>
 
         <div className="flex justify-end gap-2 pt-1">

@@ -1,4 +1,5 @@
-// Thin, read-only Microsoft Graph OneNote client. Mirrors the inline
+// Thin Microsoft Graph client: read-only OneNote here, plus the generic
+// graphRequest used by the To Do sync (lib/microsoft/todo.ts). Mirrors the inline
 // "decrypt refresh token -> refresh access token -> call the API" pattern
 // used by app/api/google/contacts/sync/route.ts rather than a cached-token
 // approach — every call here is already made on-demand (a user opening a
@@ -18,9 +19,11 @@ export class MicrosoftNotConnectedError extends Error {
 }
 
 export class GraphApiError extends Error {
-  constructor(message: string) {
+  status: number | null
+  constructor(message: string, status: number | null = null) {
     super(message)
     this.name = 'GraphApiError'
+    this.status = status
   }
 }
 
@@ -37,8 +40,37 @@ async function graphGetJson<T>(accessToken: string, path: string): Promise<T> {
   })
   if (!res.ok) {
     const detail = await res.text()
-    throw new GraphApiError(`Graph request failed (${res.status}): ${detail}`)
+    throw new GraphApiError(`Graph request failed (${res.status}): ${detail}`, res.status)
   }
+  return res.json()
+}
+
+/**
+ * General Graph call for the To Do client: any method, optional JSON body,
+ * absolute (@odata.nextLink) or relative path. Asks for London times in
+ * responses. Returns null for 204 No Content.
+ */
+export async function graphRequest<T>(
+  accessToken: string,
+  pathOrUrl: string,
+  init: { method?: string; body?: unknown } = {}
+): Promise<T | null> {
+  const url = pathOrUrl.startsWith('https://') ? pathOrUrl : `${GRAPH_BASE}${pathOrUrl}`
+  const res = await fetch(url, {
+    method: init.method ?? 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Prefer: 'outlook.timezone="Europe/London"',
+      ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  })
+  if (!res.ok) {
+    const detail = await res.text()
+    console.error(`Graph ${init.method ?? 'GET'} ${url} -> ${res.status}: ${detail}`)
+    throw new GraphApiError(`Graph request failed (${res.status}) on ${init.method ?? 'GET'} ${url}: ${detail}`, res.status)
+  }
+  if (res.status === 204) return null
   return res.json()
 }
 

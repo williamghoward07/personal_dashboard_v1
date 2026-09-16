@@ -85,7 +85,7 @@ export default function LinksGrid({
         if (url) handleAddUrl(url)
       }}
       className={`flex flex-col gap-2 rounded-xl transition-colors ${
-        isDropTarget ? 'bg-workspace-teal/5 outline-2 outline-dashed outline-workspace-teal/40' : ''
+        isDropTarget ? 'bg-ws-accent/5 outline-2 outline-dashed outline-ws-accent/40' : ''
       }`}
     >
       {links.map((link) => (
@@ -110,7 +110,7 @@ export default function LinksGrid({
             e.preventDefault()
             if (urlInput.trim()) handleAddUrl(urlInput)
           }}
-          className="flex items-center gap-2 rounded-xl border border-dashed border-workspace-teal/40 bg-surface-container-low/40 p-2.5"
+          className="flex items-center gap-2 rounded-xl border border-dashed border-ws-accent/40 bg-surface-container-low/40 p-2.5"
         >
           <input
             autoFocus
@@ -133,7 +133,7 @@ export default function LinksGrid({
         <button
           type="button"
           onClick={() => setAddingUrl(true)}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-outline-variant px-3 py-2.5 text-xs text-on-surface-variant transition-colors hover:border-workspace-teal/50 hover:text-workspace-teal"
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-outline-variant px-3 py-2.5 text-xs text-on-surface-variant transition-colors hover:border-ws-accent/50 hover:text-ws-accent"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2} />
           Add a source, or drop a link here

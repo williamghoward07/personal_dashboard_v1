@@ -51,7 +51,7 @@ export default function LinkTodoAttachPanel({
                   type="checkbox"
                   checked={selected.has(todo.id)}
                   onChange={() => toggle(todo.id)}
-                  className="accent-workspace-teal"
+                  className="accent-ws-accent"
                 />
                 <span className="truncate">{todo.title}</span>
               </label>

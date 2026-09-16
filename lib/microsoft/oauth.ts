@@ -2,17 +2,35 @@
 // lib/google/oauth.ts's shape (four fetch calls, no SDK). Server-only:
 // MICROSOFT_CLIENT_SECRET must never reach the browser.
 
+// One Microsoft connection (one integrations row) serves both OneNote and
+// To Do. The provider key predates To Do and is kept so existing
+// connections still resolve.
 export const MICROSOFT_ONENOTE_PROVIDER = 'microsoft_onenote'
 // Read-only on personal Microsoft accounts only supports Notes.Read (no
-// .All variant exists for personal accounts). offline_access is required
-// to get a refresh token; openid/profile let us show the signed-in
-// account's display name without an extra Graph call.
-export const MICROSOFT_ONENOTE_SCOPES = [
+// .All variant exists for personal accounts). Tasks.ReadWrite is the To
+// Do sync (lib/microsoft/todo.ts). offline_access is required to get a
+// refresh token; openid/profile let us show the signed-in account's
+// display name without an extra Graph call.
+export const MICROSOFT_SCOPES = [
   'https://graph.microsoft.com/Notes.Read',
+  'https://graph.microsoft.com/Tasks.ReadWrite',
   'offline_access',
   'openid',
   'profile',
 ]
+
+// Where to land after the consent round trip (?next= on /api/microsoft/connect).
+export const NEXT_COOKIE = 'microsoft_oauth_next'
+
+/** Same-site relative path only (never an open redirect); defaults to Education. */
+export function safeNextPath(value: string | null | undefined): string {
+  return value && value.startsWith('/') && !value.startsWith('//') ? value : '/education'
+}
+
+/** Whether a stored connection was granted To Do access (older ones weren't). */
+export function hasTodoScope(scopes: string[] | null | undefined): boolean {
+  return (scopes ?? []).some((scope) => scope.toLowerCase().endsWith('tasks.readwrite'))
+}
 
 // "consumers" (not "common") because the Azure app registration is
 // "Personal Microsoft accounts only" — common is for apps that also
@@ -46,7 +64,7 @@ export function consentUrl({ origin, state }: { origin: string; state: string })
     redirect_uri: redirectUriFor(origin),
     response_type: 'code',
     response_mode: 'query',
-    scope: MICROSOFT_ONENOTE_SCOPES.join(' '),
+    scope: MICROSOFT_SCOPES.join(' '),
     // Forces the consent screen every time, same reasoning as Google's
     // prompt=consent — makes sure a scope change is actually re-consented.
     prompt: 'consent',

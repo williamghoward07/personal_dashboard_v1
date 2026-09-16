@@ -6,6 +6,8 @@ import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo } from '@/lib/types'
 import AttachExistingTodoPanel from './AttachExistingTodoPanel'
 import TodoLinkAttachPanel from './TodoLinkAttachPanel'
+import StarButton from '../daily-goals/StarButton'
+import { CollapseButton } from './SectionChrome'
 import {
   actionButtonClass,
   filterChipActiveClass,
@@ -15,6 +17,7 @@ import {
   iconButtonClass,
   inputClass,
   primaryButtonClass,
+  wsAccentStyle,
 } from './shared'
 
 type TaskFilter = 'all' | 'linked' | 'done'
@@ -26,24 +29,27 @@ export default function TodosSection({
   attachTodos,
   detachTodo,
   toggleTodo,
+  toggleStar,
   deleteTodo,
   links,
   linkTodos,
   attachLinksToTodo,
   detachLinkTodo,
+  onCollapse,
 }: {
-  workspaceId: string
   todos: Todo[]
   loading: boolean
   addTodo: (title: string) => Promise<void>
   attachTodos: (todoIds: string[]) => Promise<void>
   detachTodo: (id: string) => Promise<void>
   toggleTodo: (id: string) => Promise<void>
+  toggleStar: (id: string) => Promise<void>
   deleteTodo: (id: string) => Promise<void>
   links: WorkspaceLink[]
   linkTodos: WorkspaceLinkTodo[]
   attachLinksToTodo: (todoId: string, linkIds: string[]) => Promise<void>
   detachLinkTodo: (junctionId: string) => Promise<void>
+  onCollapse: () => void
 }) {
   const [title, setTitle] = useState('')
   const [attachingExisting, setAttachingExisting] = useState(false)
@@ -68,22 +74,21 @@ export default function TodosSection({
   }
 
   return (
-    <ModuleGlassCard accent="teal" size="sm" className="flex flex-col gap-3">
+    <ModuleGlassCard style={wsAccentStyle} size="sm" className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
-          <ListChecks className="h-4 w-4 text-workspace-teal" strokeWidth={1.75} />
+          <ListChecks className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
           Scoped next actions
           <span className="rounded-full border border-outline-variant px-1.5 py-0.5 text-[11px] tabular-nums text-on-surface-variant">
             {todos.length}
           </span>
         </h2>
-        <span className="rounded-full border border-outline-variant px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-on-surface-variant">
-          Isolated scope
-        </span>
+        <CollapseButton label="Scoped next actions" onClick={onCollapse} />
       </div>
 
       <p className="text-xs leading-relaxed text-on-surface-variant">
-        Scoped strictly to this workspace — never mixed into your general todos.
+        Ordinary todos filed under this workspace — they also show in Todos (and Daily Goals when dated), tagged
+        with this workspace&apos;s name.
       </p>
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -154,6 +159,7 @@ export default function TodosSection({
               links={links}
               linkTodos={linkTodos}
               toggleTodo={toggleTodo}
+              toggleStar={toggleStar}
               detachTodo={detachTodo}
               deleteTodo={deleteTodo}
               attachLinksToTodo={attachLinksToTodo}
@@ -175,6 +181,7 @@ function TodoRow({
   links,
   linkTodos,
   toggleTodo,
+  toggleStar,
   detachTodo,
   deleteTodo,
   attachLinksToTodo,
@@ -186,6 +193,7 @@ function TodoRow({
   links: WorkspaceLink[]
   linkTodos: WorkspaceLinkTodo[]
   toggleTodo: (id: string) => Promise<void>
+  toggleStar: (id: string) => Promise<void>
   detachTodo: (id: string) => Promise<void>
   deleteTodo: (id: string) => Promise<void>
   attachLinksToTodo: (todoId: string, linkIds: string[]) => Promise<void>
@@ -208,7 +216,7 @@ function TodoRow({
   const isDone = !!todo.completed_at
 
   return (
-    <li className="group rounded-xl border border-outline-variant bg-surface-container-low/60 p-3 transition-colors hover:border-workspace-teal/40">
+    <li className="group rounded-xl border border-outline-variant bg-surface-container-low/60 p-3 transition-colors hover:border-ws-accent/40">
       <div className="flex items-start gap-2.5">
         <button
           type="button"
@@ -216,8 +224,8 @@ function TodoRow({
           aria-label={isDone ? `Mark ${todo.title} incomplete` : `Mark ${todo.title} complete`}
           className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
             isDone
-              ? 'border-workspace-teal bg-workspace-teal text-surface-container-lowest'
-              : 'border-outline hover:border-workspace-teal'
+              ? 'border-ws-accent bg-ws-accent text-surface-container-lowest'
+              : 'border-outline hover:border-ws-accent'
           }`}
         >
           {isDone && <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} />}
@@ -228,9 +236,9 @@ function TodoRow({
             <span className={`text-sm ${isDone ? 'text-on-surface-variant/60 line-through' : 'text-on-surface'}`}>
               {todo.title}
             </span>
-            {todo.caldav_uid && (
+            {todo.mstodo_task_id && (
               <span className="rounded-full border border-outline-variant px-1.5 py-0.5 text-[10px] text-on-surface-variant">
-                Reminders
+                To Do
               </span>
             )}
             {todo.due_date && (
@@ -248,7 +256,7 @@ function TodoRow({
                 return (
                   <li
                     key={link.id}
-                    className="flex items-center gap-1 rounded-md border border-workspace-teal/30 bg-workspace-teal/10 px-2 py-0.5 text-[11px] text-workspace-teal"
+                    className="flex items-center gap-1 rounded-md border border-ws-accent/30 bg-ws-accent/10 px-2 py-0.5 text-[11px] text-ws-accent"
                   >
                     <Link2 className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden />
                     <span className="max-w-40 truncate">{link.title}</span>
@@ -306,6 +314,10 @@ function TodoRow({
               onClose={onToggleManaging}
             />
           )}
+        </div>
+
+        <div className="-my-1 -mr-1">
+          <StarButton starred={todo.starred} title={todo.title} onToggle={() => toggleStar(todo.id)} />
         </div>
       </div>
     </li>

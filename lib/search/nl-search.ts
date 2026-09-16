@@ -12,8 +12,7 @@ export interface NlSearchExtraction {
 }
 
 // Bare module names / a leading module word — resolved locally with zero
-// API calls (see the AI Search & Token Budget plan's "Regex fast path"
-// token-saving measure).
+// API calls — a token-saving fast path.
 const MODULE_ALIASES: Record<string, SearchModule> = {
   people: 'people',
   contacts: 'people',
@@ -49,19 +48,6 @@ function localFastPath(query: string): NlSearchExtraction | null {
   }
 
   return null
-}
-
-const QUESTION_WORDS = ['how', 'what', 'when', 'where', 'why', 'who', 'which', 'is', 'are', 'does', 'do', 'did', 'can', 'should', 'was', 'were']
-
-// Local heuristic gating Search mode 2 (Answer) — never trigger the extra
-// smart-tier call on a plain keyword search, only on something that reads
-// as an actual question about the user's own data.
-export function isQuestion(query: string): boolean {
-  const trimmed = query.trim().toLowerCase()
-  if (!trimmed) return false
-  if (trimmed.endsWith('?')) return true
-  const firstWord = trimmed.split(/\s+/)[0]
-  return QUESTION_WORDS.includes(firstWord)
 }
 
 const SCHEMA: AiSchema = {

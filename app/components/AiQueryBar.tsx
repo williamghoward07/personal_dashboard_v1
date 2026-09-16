@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import type { FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
 import Link from 'next/link'
-import { Sparkles, Send, Check, X } from 'lucide-react'
+import { ArrowRight, Send, Sparkles, Square, X } from 'lucide-react'
 import LoadingGlowBorder from './LoadingGlowBorder'
+import LiquidSwitch from './LiquidSwitch'
+import DraftList from './capture/DraftList'
 import type { SearchModule } from '@/lib/search/nl-search'
 import type { SearchResultItem } from '@/lib/search/types'
-import type { ActDraft, ActEntity } from '@/lib/search/act'
-import { looksLikeCommand } from '@/lib/search/act-heuristics'
+import { resolveQueryMode, type QueryMode, type ResolvedQueryMode } from '@/lib/search/query-mode'
+import { captureStore } from '@/lib/braindump/store'
 
 const MODULE_HREF: Record<SearchModule, string> = {
   people: '/people',
@@ -17,6 +19,13 @@ const MODULE_HREF: Record<SearchModule, string> = {
   transactions: '/money',
   habits: '/habits',
   prompts: '/research',
+}
+
+// PeopleDirectoryCard deep-links straight to a person's detail view via
+// ?person=<id> (see app/people/page.tsx); other modules land on the page only.
+function resultHref(result: SearchResultItem): string {
+  if (result.module === 'people') return `/people?person=${result.id}`
+  return MODULE_HREF[result.module]
 }
 
 const MODULE_LABEL: Record<SearchModule, string> = {
@@ -28,134 +37,142 @@ const MODULE_LABEL: Record<SearchModule, string> = {
   prompts: 'Prompt',
 }
 
-const ACT_ENTITY_LABEL: Record<ActEntity, string> = {
-  todo: 'Todo',
-  education_task: 'Education task',
-  calendar_event: 'Calendar event',
+const MODE_OPTIONS = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'find', label: 'Find' },
+  { value: 'ask', label: 'Ask' },
+  { value: 'capture', label: 'Capture' },
+] as const satisfies readonly { value: QueryMode; label: string }[]
+
+const MODE_HINT: Record<QueryMode, string> = {
+  auto: 'Picks for you: questions get answered, instructions and lists get captured, anything else is searched.',
+  find: 'Searches your modules for matching items. Changes nothing.',
+  ask: 'Searches, then answers your question from what it found. Changes nothing.',
+  capture:
+    'Splits what you type into todos, deadlines, events and people updates. Nothing is saved until you confirm.',
 }
 
-// Minimum length is a token-saving measure from the AI Search & Token
-// Budget plan (2026-08-18). Search only fires on submit (Enter/Send) —
-// no debounce-on-type, so a half-typed query never costs a call.
+const PLACEHOLDER: Record<QueryMode, string> = {
+  auto: 'Search, ask a question, or jot down things to add…',
+  find: 'Search people, todos, tasks, money, habits, prompts…',
+  ask: 'e.g. what did I spend on food this month?',
+  capture: 'e.g. essay plan due friday, call mum tomorrow, met Sam at church',
+}
+
+const RESOLVED_LABEL: Record<ResolvedQueryMode, string> = { find: 'Find', ask: 'Ask', capture: 'Capture' }
+
+// Token-saving: a search only fires on submit (Enter/Send), never on
+// type, and nothing shorter than this is sent at all.
 const MIN_QUERY_LENGTH = 3
+const MAX_TEXTAREA_PX = 160
 
 interface SearchResponse {
   results: SearchResultItem[]
   answer: string | null
 }
 
-interface ActResponse {
-  draft: ActDraft | null
-}
-
-// Session-lifetime cache of identical (normalised) queries — a second
-// search for the same text costs nothing. Deliberately module-scope, not
-// component state, so it survives navigating away from and back to the
-// home page within the same tab.
+// Session-lifetime cache of identical (normalised) queries per mode — a
+// repeat costs nothing. Module scope so it survives navigating away from
+// and back to the home page within the same tab.
 const searchCache = new Map<string, SearchResponse>()
 
+// The home "System Query" box. One input, four explicit modes (see
+// lib/search/query-mode.ts): Find and Ask go to app/api/search; Capture
+// goes to the same extractor as the Brain Dump page, and every draft it
+// produces needs a Confirm (or "Confirm all") before anything is written.
 export default function AiQueryBar() {
   const [query, setQuery] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [results, setResults] = useState<SearchResultItem[] | null>(null)
-  const [answer, setAnswer] = useState<string | null>(null)
+  const [mode, setMode] = useState<QueryMode>('auto')
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [search, setSearch] = useState<(SearchResponse & { mode: ResolvedQueryMode }) | null>(null)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const [actDraft, setActDraft] = useState<ActDraft | null>(null)
-  const [actConfirming, setActConfirming] = useState(false)
-  const [actMessage, setActMessage] = useState<string | null>(null)
+  const capture = useSyncExternalStore(captureStore.subscribe, captureStore.getSnapshot, captureStore.getSnapshot)
 
-  const runSearch = async (trimmed: string) => {
-    const cacheKey = trimmed.toLowerCase()
-    const cached = searchCache.get(cacheKey)
-    if (cached) {
-      setResults(cached.results)
-      setAnswer(cached.answer)
-      setActDraft(null)
-      setActMessage(null)
-      setError(null)
-      return
-    }
-
-    setLoading(true)
-    setError(null)
-    setActDraft(null)
-    setActMessage(null)
-
-    try {
-      const searchPromise = fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: trimmed }),
-      })
-
-      // Zero-cost local gate — only spend a second API call on something
-      // that already reads as a command, never on an ordinary search.
-      const actPromise = looksLikeCommand(trimmed)
-        ? fetch('/api/search/act', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: trimmed }),
-          })
-        : null
-
-      const [searchRes, actRes] = await Promise.all([searchPromise, actPromise])
-
-      if (!searchRes.ok) {
-        const body = await searchRes.json().catch(() => null)
-        setError(body?.error ?? "Couldn't search right now.")
-        return
-      }
-      const searchData = (await searchRes.json()) as SearchResponse
-      searchCache.set(cacheKey, searchData)
-      setResults(searchData.results)
-      setAnswer(searchData.answer)
-
-      if (actRes?.ok) {
-        const actData = (await actRes.json()) as ActResponse
-        setActDraft(actData.draft)
-      }
-    } catch {
-      setError("Couldn't reach the search service — try again in a moment.")
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Grow with the text, up to a cap, then scroll.
+  useLayoutEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_PX)}px`
+  }, [query])
 
   const trimmedQuery = query.trim()
   const queryLongEnough = trimmedQuery.length >= MIN_QUERY_LENGTH
+  const loading = searchLoading || capture.loading
+  const autoTarget = mode === 'auto' && queryLongEnough ? resolveQueryMode('auto', trimmedQuery) : null
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!queryLongEnough || loading) return
-    void runSearch(trimmedQuery)
-  }
+  const runSearch = async (text: string, resolved: 'find' | 'ask') => {
+    const cacheKey = `${resolved}:${text.toLowerCase()}`
+    const cached = searchCache.get(cacheKey)
+    if (cached) {
+      setSearch({ ...cached, mode: resolved })
+      setSearchError(null)
+      return
+    }
 
-  const handleConfirmAct = async () => {
-    if (!actDraft) return
-    setActConfirming(true)
-    setActMessage(null)
+    setSearchLoading(true)
+    setSearchError(null)
     try {
-      const res = await fetch('/api/search/act/confirm', {
+      const res = await fetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draft: actDraft }),
+        body: JSON.stringify({ query: text, mode: resolved }),
       })
-      const body = await res.json().catch(() => null)
       if (!res.ok) {
-        setActMessage(body?.message ?? body?.error ?? "Couldn't create that.")
+        const body = await res.json().catch(() => null)
+        setSearchError(body?.error ?? "Couldn't search right now.")
         return
       }
-      setActMessage(`${ACT_ENTITY_LABEL[actDraft.entity]} created.`)
-      setActDraft(null)
+      const data = (await res.json()) as SearchResponse
+      searchCache.set(cacheKey, data)
+      setSearch({ ...data, mode: resolved })
     } catch {
-      setActMessage("Couldn't reach the server — try again in a moment.")
+      setSearchError("Couldn't reach the search service — try again in a moment.")
     } finally {
-      setActConfirming(false)
+      setSearchLoading(false)
     }
   }
 
-  const showDropdown = queryLongEnough && Boolean(results || answer || actDraft || actMessage)
+  const submit = async () => {
+    if (!queryLongEnough || loading) return
+    const resolved = resolveQueryMode(mode, trimmedQuery)
+    setPanelOpen(true)
+    if (resolved === 'capture') {
+      setSearch(null)
+      setSearchError(null)
+      if (await captureStore.submit(trimmedQuery)) setQuery('')
+    } else {
+      await runSearch(trimmedQuery, resolved)
+    }
+  }
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault()
+    void submit()
+  }
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      void submit()
+    }
+  }
+
+  const closePanel = () => {
+    setPanelOpen(false)
+    captureStore.setError(null)
+  }
+
+  const hasDrafts = capture.drafts.length > 0
+  const showPanel = panelOpen && Boolean(search || hasDrafts || capture.error)
+  const loadingLabel = capture.loading
+    ? 'Reading that…'
+    : resolveQueryMode(mode, trimmedQuery) === 'ask'
+      ? 'Searching and answering…'
+      : 'Searching…'
 
   return (
     <div className="relative">
@@ -164,106 +181,118 @@ export default function AiQueryBar() {
           onSubmit={handleSubmit}
           className="overflow-hidden rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-6 transition-all hover:border-academic-orange/40 hover:shadow-[0_0_15px_rgba(255,107,0,0.15)]"
         >
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-academic-orange bg-academic-orange/20 text-academic-orange">
-              <Sparkles className="h-4 w-4" />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-academic-orange bg-academic-orange/20 text-academic-orange">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <h2 className="font-display text-headline-md text-on-surface">System Query</h2>
             </div>
-            <h2 className="font-display text-headline-md text-on-surface">System Query</h2>
+            <LiquidSwitch options={MODE_OPTIONS} value={mode} onChange={setMode} accent="orange" />
           </div>
+
           <div className="relative mt-4">
-            <input
-              type="text"
+            <textarea
+              ref={textareaRef}
+              rows={1}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask across your modules, or tell it to add something..."
+              onKeyDown={handleKeyDown}
+              placeholder={PLACEHOLDER[mode]}
               disabled={loading}
-              aria-label="Search across modules"
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest py-3.5 pl-4 pr-12 text-sm text-on-surface outline-none placeholder:text-on-surface-variant focus:border-academic-orange disabled:opacity-60"
+              aria-label="Search, ask or capture"
+              className="block w-full resize-none rounded-lg border border-outline-variant bg-surface-container-lowest py-3.5 pl-4 pr-12 text-sm leading-5 text-on-surface outline-none placeholder:text-on-surface-variant focus:border-academic-orange disabled:opacity-60"
             />
-            <button
-              type="submit"
-              disabled={loading || !queryLongEnough}
-              aria-label="Search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-academic-orange disabled:opacity-40"
-            >
-              <Send className="h-4 w-4" />
-            </button>
+            {capture.loading ? (
+              <button
+                type="button"
+                onClick={captureStore.stop}
+                aria-label="Stop"
+                className="absolute bottom-3.5 right-3 text-academic-orange"
+              >
+                <Square className="h-4 w-4" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={loading || !queryLongEnough}
+                aria-label="Submit"
+                className="absolute bottom-3.5 right-3 text-academic-orange disabled:opacity-40"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          {loading && <p className="mt-2 text-xs text-on-surface-variant">Searching…</p>}
-          {error && <p className="mt-2 text-xs text-error">{error}</p>}
+
+          <div className="mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-on-surface-variant">
+            <p className="min-w-0 flex-1">{MODE_HINT[mode]}</p>
+            {autoTarget && (
+              <span className="flex shrink-0 items-center gap-1 rounded-full border border-academic-orange/40 px-2 py-0.5 text-academic-orange">
+                <ArrowRight className="h-3 w-3" />
+                {RESOLVED_LABEL[autoTarget]}
+              </span>
+            )}
+          </div>
+          {loading && <p className="mt-1 text-xs text-on-surface-variant">{loadingLabel}</p>}
+          {searchError && <p className="mt-1 text-xs text-error">{searchError}</p>}
         </form>
       </LoadingGlowBorder>
 
-      {showDropdown && (
-        <div className="absolute inset-x-0 top-full z-20 mt-2 max-h-96 overflow-y-auto rounded-xl border border-outline-variant bg-surface-container-low p-2 shadow-2xl shadow-black/50">
-          {actDraft && (
-            <div className="mb-2 rounded-lg border border-academic-orange/40 bg-academic-orange/10 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-academic-orange">
-                Create {ACT_ENTITY_LABEL[actDraft.entity]}
-              </p>
-              <p className="mt-1 text-sm text-on-surface">{actDraft.title}</p>
-              {(actDraft.due_date || actDraft.due_time) && (
-                <p className="text-xs text-on-surface-variant">
-                  {actDraft.due_date}
-                  {actDraft.due_time ? ` · ${actDraft.due_time}` : ''}
-                </p>
-              )}
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={actConfirming}
-                  onClick={handleConfirmAct}
-                  className="flex items-center gap-1 rounded-md bg-academic-orange px-2.5 py-1.5 text-xs font-semibold text-surface disabled:opacity-60"
-                >
-                  <Check className="h-3 w-3" />
-                  {actConfirming ? 'Creating…' : 'Confirm'}
-                </button>
-                <button
-                  type="button"
-                  disabled={actConfirming}
-                  onClick={() => setActDraft(null)}
-                  className="flex items-center gap-1 rounded-md border border-outline-variant px-2.5 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high"
-                >
-                  <X className="h-3 w-3" />
-                  Dismiss
-                </button>
-              </div>
-            </div>
+      {showPanel && (
+        <div className="absolute inset-x-0 top-full z-20 mt-2 flex max-h-[70vh] flex-col gap-3 overflow-y-auto rounded-xl border border-outline-variant bg-surface-container-low p-3 shadow-2xl shadow-black/50">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+              {hasDrafts ? 'Captured' : search ? RESOLVED_LABEL[search.mode] : 'Capture'}
+            </p>
+            <button
+              type="button"
+              onClick={closePanel}
+              aria-label="Close results"
+              className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          {capture.error && <p className="text-xs text-error">{capture.error}</p>}
+
+          {hasDrafts && (
+            <DraftList store={captureStore} tone="orange" gridClassName="grid grid-cols-1 gap-2 md:grid-cols-2" />
           )}
 
-          {actMessage && !actDraft && <p className="p-2 text-xs text-on-surface-variant">{actMessage}</p>}
-
-          {answer && <p className="mb-2 rounded-lg bg-surface-container-high p-3 text-sm text-on-surface">{answer}</p>}
-
-          {results && results.length === 0 && !answer && !actDraft ? (
-            <p className="p-3 text-sm text-on-surface-variant">No matches.</p>
-          ) : (
-            results &&
-            results.length > 0 && (
-              <ul className="flex flex-col gap-1">
-                {results.map((result) => (
-                  <li key={`${result.module}-${result.id}`}>
-                    <Link
-                      href={MODULE_HREF[result.module]}
-                      onClick={() => {
-                        setResults(null)
-                        setAnswer(null)
-                        setActDraft(null)
-                      }}
-                      className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-surface-container-high"
-                    >
-                      <span className="min-w-0 flex-1 truncate text-sm text-on-surface">{result.title}</span>
-                      {result.subtitle && (
-                        <span className="shrink-0 truncate text-xs text-on-surface-variant">{result.subtitle}</span>
-                      )}
-                      <span className="shrink-0 rounded-full bg-surface-container-highest px-1.5 py-0.5 text-[10px] text-on-surface-variant">
-                        {MODULE_LABEL[result.module]}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )
+          {search && (
+            <div className={hasDrafts ? 'border-t border-outline-variant/50 pt-3' : undefined}>
+              {search.answer && (
+                <p className="mb-2 rounded-lg bg-surface-container-high p-3 text-sm text-on-surface">{search.answer}</p>
+              )}
+              {search.results.length === 0 ? (
+                !search.answer && (
+                  <p className="p-1 text-sm text-on-surface-variant">
+                    {search.mode === 'ask' ? "Couldn't find anything to answer that from." : 'No matches.'}
+                  </p>
+                )
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {search.results.map((result) => (
+                    <li key={`${result.module}-${result.id}`}>
+                      <Link
+                        href={resultHref(result)}
+                        onClick={closePanel}
+                        className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-surface-container-high"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-sm text-on-surface">{result.title}</span>
+                        {result.subtitle && (
+                          <span className="shrink-0 truncate text-xs text-on-surface-variant">{result.subtitle}</span>
+                        )}
+                        <span className="shrink-0 rounded-full bg-surface-container-highest px-1.5 py-0.5 text-[10px] text-on-surface-variant">
+                          {MODULE_LABEL[result.module]}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </div>
       )}

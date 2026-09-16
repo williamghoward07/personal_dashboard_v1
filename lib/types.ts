@@ -149,11 +149,17 @@ export interface Todo {
   due_time: string | null
   completed_at: string | null
   created_at: string
-  // Set only for a todo pulled from Apple Reminders via CalDAV — null for
-  // everything created directly in the app. See lib/caldav/reminders.ts.
+  // Legacy Apple Reminders (CalDAV) link — that sync was removed (iCloud
+  // never served upgraded reminders); the column remains, always null.
   caldav_uid: string | null
+  // Set for a todo pulled from Microsoft To Do — null for everything
+  // created directly in the app. See app/api/microsoft/todo/pull.
+  mstodo_task_id: string | null
+  mstodo_list_id: string | null
+  // Syncs with To Do's "important" flag for linked todos.
+  starred: boolean
   list_id: string | null
-  // Self-referencing, single-level only — a CalDAV-linked todo can never
+  // Self-referencing, single-level only — a To Do-linked todo can never
   // be a parent or a child (enforced by a DB trigger, not just app code).
   parent_id: string | null
   // Set when this todo is attached to a specific Education notes document
@@ -208,6 +214,27 @@ export interface DailyGoalHabitCompletion {
   habit_id: string
   completed_on: string
   value: number | null
+  created_at: string
+}
+
+// A checklist step on a habit (e.g. the morning routine). Ticking every
+// core step for a day logs the habit's completion for that day (RPC
+// set_habit_step_check); bonus steps are extra. Not the same thing as a
+// Calendar Routine below.
+export interface HabitStep {
+  id: string
+  habit_id: string
+  title: string
+  is_core: boolean
+  sort_order: number
+  created_at: string
+}
+
+export interface HabitStepCheck {
+  id: string
+  step_id: string
+  habit_id: string
+  checked_on: string
   created_at: string
 }
 
@@ -327,6 +354,43 @@ export interface Person {
   updated_at: string
 }
 
+// People > Instagram log. Filled only by pasting a Claude-read snapshot of
+// screenshots (RPC import_instagram_snapshot) — there is no Instagram API.
+export interface InstagramAccount {
+  id: string
+  username: string
+  display_name: string | null
+  i_follow: boolean
+  follows_me: boolean
+  i_follow_since: string | null
+  follows_me_since: string | null
+  person_id: string | null
+  note: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type InstagramEventKind = 'you_followed' | 'followed_you'
+
+export interface InstagramEvent {
+  id: string
+  account_id: string
+  kind: InstagramEventKind
+  occurred_on: string
+  import_id: string | null
+  created_at: string
+}
+
+export interface InstagramImport {
+  id: string
+  captured_on: string
+  is_baseline: boolean
+  following_count: number
+  followers_count: number
+  new_events: number
+  created_at: string
+}
+
 export type InteractionChannel =
   | 'in_person'
   | 'call'
@@ -392,6 +456,10 @@ export interface QuickLink {
   title: string
   url: string
   favicon_path: string | null
+  // A user-supplied image URL that overrides the auto-detected favicon;
+  // rendered directly, not cached into the link-favicons bucket (that
+  // bucket is keyed by domain and shared across links to the same site).
+  favicon_custom_url: string | null
   is_pinned: boolean
   sort_order: number
   last_opened_at: string | null
@@ -400,6 +468,9 @@ export interface QuickLink {
 
 export type WorkspaceLinkKind = 'paper' | 'data' | 'doc' | 'other'
 export type WorkspaceNoteKind = 'realization' | 'discarded' | 'argument' | 'meeting' | 'note'
+// The workspace page's sections, as stored in hidden_sections /
+// collapsed_sections (DB check constraint uses the same four keys).
+export type WorkspaceSectionKey = 'stats' | 'sources' | 'actions' | 'log'
 
 export interface Workspace {
   id: string
@@ -408,6 +479,21 @@ export interface Workspace {
   // Not a FK to modules — Workspaces stays decoupled from Education.
   subtitle: string | null
   archived_at: string | null
+  created_at: string
+  folder_id: string | null
+  // An Accent key; null = inherit from the folder chain (then teal).
+  color: string | null
+  hidden_sections: WorkspaceSectionKey[]
+  collapsed_sections: WorkspaceSectionKey[]
+}
+
+export interface WorkspaceFolder {
+  id: string
+  name: string
+  // An Accent key; null = inherit from the parent folder.
+  color: string | null
+  parent_id: string | null
+  sort_order: number
   created_at: string
 }
 
@@ -435,6 +521,8 @@ export interface WorkspaceNote {
   // workspace_notes is append-only at the DB level.
   kind: WorkspaceNoteKind
   footnote: string | null
+  // Custom #tags, lowercase, without the '#'. Insert-time only.
+  tags: string[]
   created_at: string
 }
 

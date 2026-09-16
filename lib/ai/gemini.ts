@@ -5,7 +5,7 @@ import { assertUnderDailyBudget, recordUsage, AiDisabledError } from './usage'
 
 export type Tier = 'fast' | 'smart'
 
-// Two tiers, one key — see the AI Search & Token Budget plan (2026-08-18).
+// Two tiers, one key (see CLAUDE.md, Tech stack).
 // fast: cheap extraction (search keywords, quick-add parsing). smart:
 // judgement calls worth paying more for (answers over your own data,
 // transaction categorisation, essay breakdowns).

@@ -70,11 +70,14 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
 
 ### Todos & Reminders (`/todos`)
 - ✅ Todos with lists (colour chips), one level of subtasks, due-time,
-  List / Extended / Completed views.
-- 🐛 **Apple Reminders sync (CalDAV)** — pull works (reads iCloud
-  reminders in), completion push works (marks them done in iCloud). But
-  pull failures are silent, and there's **no way to create a reminder** —
-  app todos stay app-only, nothing writes new items into Reminders.
+  List / Extended / Completed views, stars (+ Starred filter), a
+  workspace chip on todos filed under a workspace.
+- ⚠️ **Microsoft To Do sync** (replaced Apple Reminders/CalDAV, which never
+  worked — iCloud only serves placeholder lists for upgraded Reminders).
+  Pull on /todos load (and every 5 min from Daily Goals); ticks, stars,
+  title/notes/due-date edits and deletes push straight back. Status line
+  with Connect/Reconnect on /todos. Written and unit-tested, **not yet
+  run against a real Microsoft account**. App-created todos stay app-only.
 - ❌ Natural-language "add a reminder" (vs todo), showing the reminder's
   time in the list, multi-select → move to another list.
 

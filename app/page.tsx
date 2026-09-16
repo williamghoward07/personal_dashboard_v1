@@ -7,6 +7,8 @@ import HabitsGlance from './components/widgets/home/HabitsGlance'
 import DailyGoals from './components/widgets/home/DailyGoals'
 import PeopleGlance from './components/widgets/home/PeopleGlance'
 import AiUsageGlance from './components/widgets/home/AiUsageGlance'
+import WorkspacesGlance from './components/widgets/home/WorkspacesGlance'
+import MorningRoutineCard from './components/widgets/home/MorningRoutineCard'
 import AppLauncherGlance from './components/widgets/app-launcher/AppLauncherGlance'
 
 export default function Home() {
@@ -16,7 +18,9 @@ export default function Home() {
 
       <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <DailyGoals />
+        <MorningRoutineCard />
         <EducationGlance />
+        <WorkspacesGlance />
         <MoneyGlance />
         <AiUsageGlance />
         <ResearchGlance />

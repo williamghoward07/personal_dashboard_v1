@@ -16,7 +16,7 @@ const SOURCE_LABEL: Record<TimeBlockDraft['candidate']['source'], string> = {
   education_task: 'Education task',
 }
 
-// Pending/accepted/rejected three-way render, mirroring the brain-dump
+// Pending/accepted/rejected three-way render, mirroring capture/
 // DraftCard's pattern — simpler here since Confirm writes directly (no
 // secondary review-form branch, nothing was AI-extracted).
 export default function TimeBlockDraftCard({

@@ -1,67 +1,16 @@
 import 'server-only'
 import { generateStructured } from '@/lib/ai/gemini'
 import type { AiSchema } from '@/lib/ai/schema'
-import type { ActDraft, ActEntity } from '@/lib/search/act'
-import type {
-  NlExtractedInteraction,
-  NlExtractedPerson,
-  NlPersonMatch,
-  PersonCandidate,
-} from '@/lib/people/nl-extract'
+import type { PersonCandidate } from '@/lib/people/nl-extract'
+import type { BrainDumpExtractResult } from './types'
 
-export type BrainDumpDraftKind =
-  | 'todo'
-  | 'education_task'
-  | 'calendar_event'
-  | 'new_person'
-  | 'update_person'
-  | 'log_interaction'
+export type { BrainDumpActFields, BrainDumpDraft, BrainDumpDraftKind, BrainDumpExtractResult } from './types'
 
-export interface BrainDumpActFields {
-  title: string
-  due_date: string | null
-  due_time: string | null
-  notes: string | null
-}
-
-export interface BrainDumpDraft {
-  kind: BrainDumpDraftKind
-  // Set only when kind is todo/education_task/calendar_event.
-  act: BrainDumpActFields | null
-  // Set only when kind is update_person/log_interaction.
-  person_match: NlPersonMatch | null
-  // Set only when kind is new_person/update_person.
-  person: NlExtractedPerson | null
-  // Set only when kind is log_interaction.
-  interaction: NlExtractedInteraction | null
-}
-
-export interface BrainDumpExtractResult {
-  drafts: BrainDumpDraft[]
-}
-
-const ACT_KINDS: ActEntity[] = ['todo', 'education_task', 'calendar_event']
-
-// Maps a draft back onto the exact shape app/api/search/act/confirm
-// already knows how to write — the brain dump reuses that write path
-// rather than introducing a second one.
-export function toActDraft(draft: BrainDumpDraft): ActDraft | null {
-  if (!draft.act) return null
-  if (!ACT_KINDS.includes(draft.kind as ActEntity)) return null
-  return {
-    entity: draft.kind as ActEntity,
-    title: draft.act.title,
-    due_date: draft.act.due_date,
-    due_time: draft.act.due_time,
-    notes: draft.act.notes,
-  }
-}
-
-// One array item's schema reuses the exact field definitions from
-// lib/search/act.ts's ActDraft schema and lib/people/nl-extract.ts's
+// One array item's schema reuses the field definitions of the capture
+// write shape (lib/search/act-types.ts) and lib/people/nl-extract.ts's
 // person/interaction schemas — the only new part is the array wrapper
-// and the `kind` discriminator that replaces ActDraft's `entity` (kind
-// already says todo/education_task/calendar_event vs. a people intent).
+// and the `kind` discriminator (todo/education_task/calendar_event vs. a
+// people intent).
 const SCHEMA: AiSchema = {
   type: 'object',
   required: ['drafts'],
@@ -154,9 +103,10 @@ const SCHEMA: AiSchema = {
   },
 }
 
-// A longer, mixed-intent dump is a harder extraction task than either of
-// the single-intent calls this composes (lib/search/act.ts,
-// lib/people/nl-extract.ts), so this deliberately spends more per call
+// Used by both the Brain Dump page and the home query box's Capture mode.
+// A longer, mixed-intent dump is a harder extraction task than the
+// single-intent People quick-add (lib/people/nl-extract.ts), so this
+// deliberately spends more per call
 // (smart tier, larger output budget) in exchange for handling many items
 // in one call instead of one call per item.
 export async function extractBrainDump(

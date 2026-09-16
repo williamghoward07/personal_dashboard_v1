@@ -1,76 +1,74 @@
-# Execution State — Calendar/Routines/Education batch
+# Execution State — Workspaces / App Library / To Do / Capture / Routine / Instagram batch (2026-09-16)
+
+Plan: `C:\Users\William\.claude\plans\allow-me-to-hide-replicated-possum.md`
 
 ## Current task
-None — all 5 tasks + a follow-up zoom feature done and committed.
+None: every phase is written. Nothing after the baseline commit `ddadccf` is committed yet (William hasn't asked for a commit).
 
-## Follow-up: hour grid zoom control (commits 7f8c68a, c1a6db3)
-- Fixed .claude/launch.json (was pointing at a nonexistent Mac path —
-  npm run dev directly now; pinned autoPort:false since OAuth redirect
-  URIs need port 3000 specifically) and got the dev server actually
-  running for the first time this session.
-- Added a Day/Week hour-grid zoom slider + "Fit day" button so the whole
-  24h grid can fit on screen with no scrolling. grid-math.ts's PX_PER_MIN
-  became a MIN/DEFAULT/MAX range threaded through as a prop; scroll
-  container height is now dynamic (shrinks to fit once the grid is short
-  enough) instead of a fixed 480px.
-- With the dev server actually running, got a live (if login-gated)
-  browser check for the first time this session: fresh tab, zero console
-  errors, confirms the build is genuinely clean, not just tsc/lint-clean.
+## Done (uncommitted)
+- **Phase 1: bug fixes.**
+  - `onActivateKey` stops Space/Enter inside inputs from triggering the whole row (rename a source; todo rows; App Library tiles and others).
+  - The link editor no longer drags, so text can be selected.
+  - "Launch set" reports blocked tabs and offers "Open next".
+- **Phase 2:** `Popover` / `InfoPopover` and the Workspaces (i) help.
+- **Phase 3: App Library.**
+  - All folders open by default.
+  - A **+** in each folder toolbar adds a link straight into that folder.
+  - Drag and drop reorders folders and links, including moving links across folders.
+- **Phase 4: Workspaces.**
+  - Nested folders.
+  - A colour for each workspace and each folder.
+  - Hide and collapse for sections.
+  - Custom #tags on the thinking log.
+- **Phase 5:** Workspaces home widget, and a workspace chip on todos (Todos rows, detail view, Daily Goals).
+- **Phase 6: Microsoft To Do replaces Apple Reminders.** The CalDAV sync never worked because iCloud only serves placeholder lists.
+  - Stars on todos.
+  - "Starred" filter.
+  - Sync status bar with Connect/Reconnect.
+  - Daily Goals capped at 5 open rows, with starred todos included.
+  - Throttled pull from the home page.
+  - The `tsdav` package was removed.
+- **Phase 7: the query box has Auto/Find/Ask/Capture modes.**
+  - Capture reuses the brain-dump extractor.
+  - Every draft needs a confirm, with "Confirm all".
+  - Shared `DraftList`.
+  - The old single-item Act route was deleted.
+  - Confirm moved to `/api/capture/confirm`.
+- **Phase 8: habit steps and the morning routine.**
+  - Core and bonus steps.
+  - The RPC logs a completion once every core step is ticked.
+  - Home card, setup modal, and a steps editor in the habit form.
+  - London dates in the habits UI.
+  - The `habits:changed` event.
+- **Phase 9: Instagram log.**
+  - Screenshots go to Claude, and its JSON is pasted into the app.
+  - RPC import, a preview before import, and "Add to People" or link to an existing contact.
+  - `.claude/skills/instagram-log`.
+- **Phase 10:** CLAUDE.md rewritten; `.env.example` updated; the `docs/FEATURE_INVENTORY.md` todo entry updated.
 
-## Completed tasks (all committed)
-1+2. Full 24h Day/Week calendar grid + overlap columns (67bf23d)
-3. Grid/Agenda view toggle for Day/Week (adaa29c)
-4. Routine editor stale-closure fix — first step now appears immediately
-   (1ff799f)
-5. Education: todos-per-notes-document + progress bar (a3db0df) — needs
-   migration 20260826000000_notes_documents.sql run by the user
+## Migrations: all applied to the live DB via the Supabase connector (with William's approval)
+- `20260917000000_workspace_folders_layout_tags.sql`
+- `20260917010000_todos_starred_and_mstodo.sql`
+- `20260917020000_habit_steps.sql`: RPC checked with a test that rolled itself back.
+- `20260917030000_instagram_log.sql`: RPC checked with a test that rolled itself back.
 
-## Read-only, delivered to user in chat (no code changes)
-- iCloud CalDAV sync diagnosis — findings given directly in conversation,
-  not repeated here. Summary: implemented correctly, but pull/push
-  failures are silently swallowed (no UI surfacing at all) at
-  lib/daily-goals/use-todos.ts's pullReminders — that's the most likely
-  reason it "looks broken" with zero diagnostic signal. Did not touch
-  lib/caldav/ or its routes.
+## Blockers: all need William
+- **Microsoft To Do has never run against a real account.**
+  - Add the `Tasks.ReadWrite` delegated permission to the Azure app registration.
+  - Then reconnect: `/todos` → Connect/Reconnect.
+- **Not checked in a browser.** The app needs a login and there's no browser tool, so the dev-server smoke test only reached `/login`. Pages to click through:
+  - `/workspaces` and a workspace detail page: folders, colours, layout, tags, launch set
+  - `/apps`: drag and drop, and **+** on a folder
+  - `/todos`: stars, filter, sync bar
+  - Home: Daily Goals cap, Morning routine setup, query box modes, Capture → Confirm all
+  - `/habits`: steps editor, "Morning routine" button
+  - `/people`: Instagram import, baseline first
+- **Still open, not part of this batch:**
+  - `tasks` / `education_tasks` split: a captured education task counts on Daily Goals but doesn't show in Education.
+  - `20260826000000_notes_documents.sql` is still unapplied on the live DB.
 
-## Explicitly out of scope this batch (per user instruction)
-- Alexa reminders bridging, cross-device Apple Reminders visibility.
-
-## Key decisions from user (mid-session)
-- Tasks 1+2: user confirmed via screenshot that the existing Week tab was
-  genuinely the plain WeekRow mini-box view (not a different branch) —
-  neither Day nor Week had a real hour grid before. Built one from
-  scratch for both (see time-grid/ module).
-- Task 5: chose "new local notes_documents table" over "link todos to
-  whole module" — implemented accordingly.
-
-## Blockers — all require the user
-- **Migration not run**: `supabase/migrations/20260826000000_notes_documents.sql`
-  needs hand-running in the Supabase SQL Editor (same convention as
-  Todo Phase A earlier). Until then, Education's notes-document-todos
-  feature degrades gracefully (every page shows 0 linked todos, no
-  crash) rather than working.
-- **Statement import** (from prior batch, still outstanding): real
-  multi-year PDF re-upload test not done.
-- **Live browser verification**: not possible this session — dev-tooling
-  (Claude_Browser navigate) was unresponsive on top of the pre-existing
-  no-login-access limitation. Everything was verified via tsc/lint/
-  vitest/production-build only. Recommend the user click through:
-  /calendar (Day + Week grids, overlap with a real double-booked
-  afternoon, Grid/Agenda toggle, current-time line), the Routines tab
-  (create a brand-new routine, add its first step, confirm it appears
-  without reopening), and /education (a module with a linked OneNote
-  section — attach a todo to a page, confirm the progress bar updates).
-
-## Cumulative test/build status
-tsc clean, full vitest suite 198/198 (34 new this batch — 7 overlap-
-layout, 6 grid-math, 5 timed-range, plus test-helper updates for the new
-notes_document_id field), production build succeeds, lint has only
-pre-existing errors (confirmed via git diff hunks each time, no new
-categories introduced — one genuine new lint issue was caught and fixed
-in lib/education/use-notes-document-todos.ts before commit).
-
-## Not part of my work, left untouched
-app/components/widgets/people/PeopleDirectoryCard.tsx has an uncommitted
-diff that predates this session and was never touched — not part of any
-task list given to me.
+## Test/build status
+- `tsc` is clean.
+- vitest: 325/325 pass.
+- `npm run build` succeeds. The stale `.next/dev/types` had to be cleared first.
+- Lint: 35 errors, all `react-hooks/set-state-in-effect`, all already present at HEAD. Files I touched were checked against their HEAD versions. No new errors.

@@ -23,8 +23,10 @@ interface AiUsageRow {
 const FEATURE_LABEL: Record<string, string> = {
   search: 'Search',
   search_answer: 'Search answers',
+  // Retired single-item Act call — kept so older rows still get a label.
   search_act: 'Search actions',
   people_quick_add: 'People quick-add',
+  brain_dump: 'Capture / brain dump',
 }
 
 const ROW_LIMIT = 100

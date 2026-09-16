@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react'
 import Modal from '../../Modal'
 import type { DailyGoalHabit } from '@/lib/types'
+import { londonDayBoundsUTC } from '@/lib/google/london-day'
 
+// Europe/London calendar day, like the rest of the app.
 function todayISO() {
-  return new Date().toISOString().slice(0, 10)
+  return londonDayBoundsUTC().startDateKey
 }
 
 export default function HabitLogValueModal({

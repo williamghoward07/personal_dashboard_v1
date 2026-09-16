@@ -17,9 +17,10 @@ interface AiUsageRow {
 const FEATURE_LABEL: Record<string, string> = {
   search: 'Search',
   search_answer: 'Search answers',
+  // Retired single-item Act call — kept so older rows still get a label.
   search_act: 'Search actions',
   people_quick_add: 'People quick-add',
-  brain_dump: 'Brain dump',
+  brain_dump: 'Capture / brain dump',
 }
 
 function londonMonthStartISO(): string {
@@ -37,8 +38,8 @@ function londonMonthStartISO(): string {
   return new Date(Date.UTC(year, month - 1, 1)).toISOString()
 }
 
-// Tracking your own AI usage is itself a "stat of my life" — see the AI
-// Search & Token Budget plan (2026-08-18). Reads ai_usage directly like
+// Tracking your own AI usage is itself a "stat of my life" (the tiers and
+// daily cap are described in CLAUDE.md). Reads ai_usage directly like
 // every other glance widget reads its own table; RLS scopes it to the
 // signed-in user.
 export default function AiUsageGlance() {

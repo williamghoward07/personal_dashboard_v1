@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Todo } from '@/lib/types'
+import type { TodoSyncChanges } from '@/lib/microsoft/todo-mapping'
+import { pushTodoChange, pushTodoDelete, syncWarning } from '@/lib/todos/sync-client'
 
 export interface UseWorkspaceTodosResult {
   todos: Todo[]
@@ -13,6 +15,7 @@ export interface UseWorkspaceTodosResult {
   attachTodos: (todoIds: string[]) => Promise<void>
   detachTodo: (id: string) => Promise<void>
   toggleTodo: (id: string) => Promise<void>
+  toggleStar: (id: string) => Promise<void>
   deleteTodo: (id: string) => Promise<void>
 }
 
@@ -62,6 +65,9 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
         completed_at: null,
         created_at: new Date().toISOString(),
         caldav_uid: null,
+        mstodo_task_id: null,
+        mstodo_list_id: null,
+        starred: false,
         list_id: null,
         parent_id: null,
         notes_document_id: null,
@@ -131,19 +137,17 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
     [todos]
   )
 
-  const toggleTodo = useCallback(
-    async (id: string) => {
+  // Optimistic single-field update, rolled back on failure, then mirrored
+  // to To Do for linked todos.
+  const patchAndPush = useCallback(
+    async (id: string, patch: Partial<Todo>, changes: TodoSyncChanges) => {
       const target = todos.find((t) => t.id === id)
       if (!target) return
-      const nextCompletedAt = target.completed_at ? null : new Date().toISOString()
 
-      setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, completed_at: nextCompletedAt } : t)))
+      setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
       setError(null)
 
-      const { error: updateError } = await supabase
-        .from('todos')
-        .update({ completed_at: nextCompletedAt })
-        .eq('id', id)
+      const { error: updateError } = await supabase.from('todos').update(patch).eq('id', id)
 
       if (updateError) {
         setTodos((prev) => prev.map((t) => (t.id === id ? target : t)))
@@ -151,20 +155,31 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
         return
       }
 
-      if (target.caldav_uid) {
-        try {
-          const res = await fetch('/api/caldav/reminders/push-completion', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ caldav_uid: target.caldav_uid, completed: nextCompletedAt !== null }),
-          })
-          if (!res.ok) setError("Updated here, but couldn't sync that to Reminders.")
-        } catch {
-          setError("Updated here, but couldn't sync that to Reminders.")
-        }
+      if (target.mstodo_task_id) {
+        const pushError = await pushTodoChange(id, changes)
+        if (pushError) setError(syncWarning(pushError))
       }
     },
     [todos]
+  )
+
+  const toggleTodo = useCallback(
+    async (id: string) => {
+      const target = todos.find((t) => t.id === id)
+      if (!target) return
+      const nextCompletedAt = target.completed_at ? null : new Date().toISOString()
+      await patchAndPush(id, { completed_at: nextCompletedAt }, { completed: nextCompletedAt !== null })
+    },
+    [todos, patchAndPush]
+  )
+
+  const toggleStar = useCallback(
+    async (id: string) => {
+      const target = todos.find((t) => t.id === id)
+      if (!target) return
+      await patchAndPush(id, { starred: !target.starred }, { starred: !target.starred })
+    },
+    [todos, patchAndPush]
   )
 
   const deleteTodo = useCallback(
@@ -172,6 +187,16 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
       const index = todos.findIndex((t) => t.id === id)
       if (index === -1) return
       const target = todos[index]
+
+      // Same rule as the Todos page: delete the To Do task first, or the
+      // next pull would bring the todo back.
+      if (target.mstodo_task_id) {
+        const pushError = await pushTodoDelete(id)
+        if (pushError) {
+          setError(`Not deleted — Microsoft To Do: ${pushError}`)
+          return
+        }
+      }
 
       setTodos((prev) => prev.filter((t) => t.id !== id))
       setError(null)
@@ -190,5 +215,5 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
     [todos]
   )
 
-  return { todos, loading, error, refresh, addTodo, attachTodos, detachTodo, toggleTodo, deleteTodo }
+  return { todos, loading, error, refresh, addTodo, attachTodos, detachTodo, toggleTodo, toggleStar, deleteTodo }
 }

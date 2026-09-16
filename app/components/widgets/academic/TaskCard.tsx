@@ -2,6 +2,7 @@
 
 import { Pencil, Trash2 } from 'lucide-react'
 import type { Task } from '@/lib/types'
+import { onActivateKey } from '@/lib/utils/a11y'
 
 export default function TaskCard({
   task,
@@ -19,12 +20,7 @@ export default function TaskCard({
       role="button"
       tabIndex={0}
       onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onOpen()
-        }
-      }}
+      onKeyDown={onActivateKey(onOpen)}
       className="flex cursor-pointer flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container-low p-3 text-left transition-colors hover:border-academic-orange/40"
     >
       <div className="flex items-start justify-between gap-2">

@@ -12,6 +12,9 @@ function todo(overrides: Partial<Todo> = {}): Todo {
     completed_at: null,
     created_at: '2026-08-01T00:00:00.000Z',
     caldav_uid: null,
+    mstodo_task_id: null,
+    mstodo_list_id: null,
+    starred: false,
     list_id: null,
     parent_id: null,
     notes_document_id: null,
@@ -44,6 +47,7 @@ function note(createdAt: string): WorkspaceNote {
     body: 'Entry',
     kind: 'note',
     footnote: null,
+    tags: [],
     created_at: createdAt,
   }
 }

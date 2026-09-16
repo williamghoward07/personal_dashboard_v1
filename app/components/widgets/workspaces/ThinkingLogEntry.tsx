@@ -5,7 +5,15 @@ import { logTimestamp } from './shared'
 // One dated entry on the log's vertical rail. Read-only by construction —
 // workspace_notes is append-only at the database level, so there is
 // deliberately no edit or delete affordance anywhere in this component.
-export default function ThinkingLogEntry({ note }: { note: WorkspaceNote }) {
+export default function ThinkingLogEntry({
+  note,
+  activeTag,
+  onTagClick,
+}: {
+  note: WorkspaceNote
+  activeTag: string | null
+  onTagClick: (tag: string) => void
+}) {
   const meta = NOTE_KINDS[note.kind]
   const Icon = meta.Icon
 
@@ -30,6 +38,27 @@ export default function ThinkingLogEntry({ note }: { note: WorkspaceNote }) {
         </div>
 
         <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-on-surface">{note.body}</p>
+
+        {note.tags?.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {note.tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => onTagClick(tag)}
+                aria-pressed={activeTag === tag}
+                title={activeTag === tag ? 'Clear this filter' : `Show only #${tag}`}
+                className={`rounded-full border px-1.5 py-0.5 font-mono text-[10px] transition-colors ${
+                  activeTag === tag
+                    ? 'border-ws-accent/50 bg-ws-accent/10 text-ws-accent'
+                    : 'border-outline-variant text-on-surface-variant hover:border-ws-accent/40 hover:text-ws-accent'
+                }`}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
 
         {note.footnote && (
           <p className="mt-2 border-t border-outline-variant/40 pt-2 text-[11px] italic text-on-surface-variant/80">

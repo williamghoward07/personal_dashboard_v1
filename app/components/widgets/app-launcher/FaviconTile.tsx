@@ -10,23 +10,31 @@ export default function FaviconTile({
   title,
   url,
   faviconPath,
+  faviconCustomUrl,
   size = 'md',
 }: {
   title: string
   url: string
   faviconPath: string | null
+  faviconCustomUrl?: string | null
   size?: 'sm' | 'md'
 }) {
-  const [failed, setFailed] = useState(false)
+  const [customFailed, setCustomFailed] = useState(false)
+  const [cachedFailed, setCachedFailed] = useState(false)
   const box = SIZE_CLASS[size]
 
-  if (faviconPath && !failed) {
+  // A custom override wins; if it 404s or the host blocks hotlinking, fall
+  // back to the auto-detected favicon, then to the initial-letter tile.
+  const useCustom = Boolean(faviconCustomUrl) && !customFailed
+  const src = useCustom ? faviconCustomUrl! : faviconPath && !cachedFailed ? faviconPublicUrl(faviconPath) : null
+
+  if (src) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- Storage public host isn't in next.config remotePatterns (see PersonAvatar.tsx)
       <img
-        src={faviconPublicUrl(faviconPath)}
+        src={src}
         alt=""
-        onError={() => setFailed(true)}
+        onError={() => (useCustom ? setCustomFailed(true) : setCachedFailed(true))}
         className={`${box} shrink-0 rounded-lg border border-outline-variant bg-surface-container-lowest object-contain p-1`}
       />
     )

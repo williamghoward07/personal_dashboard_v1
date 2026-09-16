@@ -51,7 +51,7 @@ export default function TodoLinkAttachPanel({
                   type="checkbox"
                   checked={selected.has(link.id)}
                   onChange={() => toggle(link.id)}
-                  className="accent-workspace-teal"
+                  className="accent-ws-accent"
                 />
                 <span className={`h-2 w-2 shrink-0 rounded-full ${SOURCE_KINDS[link.kind].dotClass}`} aria-hidden />
                 <span className="truncate">{link.title}</span>

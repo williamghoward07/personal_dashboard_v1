@@ -7,13 +7,18 @@ import { supabase } from '@/lib/supabase'
 import type { DailyGoalHabit, DailyGoalHabitCompletion, EducationTask, FollowUp } from '@/lib/types'
 import { londonDayBoundsUTC, londonWeekBoundsUTC } from '@/lib/google/london-day'
 import { computeHabitSchedule, computeDailyGoalsRollup } from '@/lib/daily-goals/rollup'
-import { selectChecklistTodos } from '@/lib/daily-goals/checklist'
+import { capChecklist, selectChecklistTodos } from '@/lib/daily-goals/checklist'
 import { useTodos } from '@/lib/daily-goals/use-todos'
+import { HOME_PULL_INTERVAL_MS, TODO_CONNECT_HREF, pullIsDue } from '@/lib/todos/sync-client'
+import { useHabitsVersion } from '@/lib/habits/events'
+import { useWorkspaceLookup } from '@/lib/workspaces/use-workspace-lookup'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import StarButton from '../daily-goals/StarButton'
+import WorkspaceChip from '../workspaces/WorkspaceChip'
 
 interface DomainData {
   educationTasksDueToday: EducationTask[]
@@ -29,7 +34,18 @@ export default function DailyGoals() {
     return { todayDateKey: day.startDateKey, weekStartKey: week.startDateKey, weekEndKeyExclusive: week.endDateKey }
   }, [])
 
-  const { todos, loading: todosLoading, error: todosError, addTodo, toggleTodo } = useTodos(todayDateKey)
+  const {
+    todos,
+    loading: todosLoading,
+    error: todosError,
+    addTodo,
+    toggleTodo,
+    toggleStar,
+    syncTodos,
+    syncStatus,
+  } = useTodos(todayDateKey)
+  const workspaces = useWorkspaceLookup()
+  const habitsVersion = useHabitsVersion()
 
   const [domain, setDomain] = useState<DomainData | null>(null)
   const [domainLoading, setDomainLoading] = useState(true)
@@ -37,6 +53,14 @@ export default function DailyGoals() {
   const [newTodoText, setNewTodoText] = useState('')
   const [adding, setAdding] = useState(false)
   const [announcement, setAnnouncement] = useState('')
+  // Ticked or added during this visit — these stay in place past the cap.
+  const [keepIds, setKeepIds] = useState<ReadonlySet<string>>(new Set())
+  const keep = (id: string) => setKeepIds((prev) => new Set(prev).add(id))
+
+  // Pick up tasks added on the phone, at most every few minutes.
+  useEffect(() => {
+    if (pullIsDue(HOME_PULL_INTERVAL_MS)) syncTodos()
+  }, [syncTodos])
 
   useEffect(() => {
     // No setDomainLoading(true) here: `domainLoading` already starts
@@ -78,7 +102,9 @@ export default function DailyGoals() {
     return () => {
       cancelled = true
     }
-  }, [todayDateKey, weekStartKey, weekEndKeyExclusive])
+    // habitsVersion: refetch when another widget (the morning routine
+    // card) logs or removes a habit completion.
+  }, [todayDateKey, weekStartKey, weekEndKeyExclusive, habitsVersion])
 
   const habitSchedule = useMemo(
     () => (domain ? computeHabitSchedule(domain.habits, domain.completionsThisWeek, todayDateKey) : []),
@@ -98,7 +124,10 @@ export default function DailyGoals() {
     [todosDueToday, domain, habitSchedule]
   )
 
-  const checklistTodos = useMemo(() => selectChecklistTodos(todos, todayDateKey), [todos, todayDateKey])
+  const checklist = useMemo(
+    () => capChecklist(selectChecklistTodos(todos, todayDateKey, { includeStarred: true, keepIds }), keepIds),
+    [todos, todayDateKey, keepIds]
+  )
 
   const error = todosError ?? domainError
   const ringPercent = rollup.total > 0 ? Math.round((rollup.completed / rollup.total) * 100) : 0
@@ -107,15 +136,27 @@ export default function DailyGoals() {
     e.preventDefault()
     if (!newTodoText.trim()) return
     setAdding(true)
-    await addTodo(newTodoText)
+    const added = await addTodo(newTodoText)
+    if (added) keep(added.id)
     setAdding(false)
     setNewTodoText('')
   }
 
   const handleToggle = async (id: string, title: string, wasCompleted: boolean) => {
     setAnnouncement(wasCompleted ? `Marked "${title}" not done` : `Marked "${title}" done`)
+    keep(id)
     await toggleTodo(id)
   }
+
+  const handleStar = async (id: string) => {
+    keep(id)
+    await toggleStar(id)
+  }
+
+  const moreParts = [
+    checklist.doneCount > 0 ? `✓ ${checklist.doneCount} done` : null,
+    checklist.hiddenCount > 0 ? `+${checklist.hiddenCount} more` : null,
+  ].filter(Boolean)
 
   return (
     <ModuleGlassCard accent="neutral" className="flex flex-col gap-4">
@@ -178,15 +219,20 @@ export default function DailyGoals() {
             </ul>
           ) : todosError ? (
             <p className="text-xs text-on-surface-variant">Couldn&apos;t load todos.</p>
-          ) : checklistTodos.length === 0 ? (
-            <p className="text-xs text-on-surface-variant">Nothing due or overdue.</p>
+          ) : checklist.rows.length === 0 ? (
+            <p className="text-xs text-on-surface-variant">
+              {checklist.doneCount > 0 && checklist.hiddenCount === 0
+                ? 'All done for today.'
+                : 'Nothing due, overdue or starred.'}
+            </p>
           ) : (
-            <ul className="flex flex-col gap-2">
-              {checklistTodos.map((todo) => {
+            <ul className="flex flex-col gap-1">
+              {checklist.rows.map((todo) => {
                 const completed = todo.completed_at !== null
                 const inputId = `daily-goals-todo-${todo.id}`
+                const workspace = todo.workspace_id ? workspaces.get(todo.workspace_id) : undefined
                 return (
-                  <li key={todo.id} className="flex items-center gap-2">
+                  <li key={todo.id} className="group flex min-h-7 items-center gap-2">
                     <input
                       id={inputId}
                       type="checkbox"
@@ -202,13 +248,33 @@ export default function DailyGoals() {
                     >
                       {todo.title}
                     </label>
+                    {workspace && <WorkspaceChip workspace={workspace} />}
                     {todo.overdue && !completed && (
                       <span className="shrink-0 text-xs font-medium text-academic-orange">Overdue</span>
                     )}
+                    <StarButton starred={todo.starred} title={todo.title} onToggle={() => handleStar(todo.id)} />
                   </li>
                 )
               })}
             </ul>
+          )}
+
+          {!todosLoading && !todosError && moreParts.length > 0 && (
+            <Link
+              href="/todos"
+              className="w-fit text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline"
+            >
+              {moreParts.join(' · ')} →
+            </Link>
+          )}
+
+          {syncStatus.state === 'needs_reconnect' && (
+            <p className="text-xs text-on-surface-variant">
+              Microsoft To Do needs reconnecting.{' '}
+              <a href={TODO_CONNECT_HREF} className="font-medium text-on-surface hover:underline">
+                Reconnect
+              </a>
+            </p>
           )}
 
           {error && <p className="text-xs text-academic-orange">{error}</p>}

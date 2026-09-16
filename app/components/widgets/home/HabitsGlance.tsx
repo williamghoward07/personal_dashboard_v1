@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import type { DailyGoalHabit, DailyGoalHabitCompletion } from '@/lib/types'
 import { londonDayBoundsUTC, londonWeekBoundsUTC } from '@/lib/google/london-day'
 import { computeHabitSchedule } from '@/lib/habits/schedule'
+import { useHabitsVersion } from '@/lib/habits/events'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import HomeSectionCard from './HomeSectionCard'
 
@@ -20,6 +21,7 @@ export default function HabitsGlance() {
     }
   }, [])
 
+  const habitsVersion = useHabitsVersion()
   const [habits, setHabits] = useState<DailyGoalHabit[]>([])
   const [completions, setCompletions] = useState<DailyGoalHabitCompletion[]>([])
   const [loading, setLoading] = useState(true)
@@ -54,7 +56,8 @@ export default function HabitsGlance() {
     return () => {
       cancelled = true
     }
-  }, [weekStartKey, weekEndKeyExclusive])
+    // habitsVersion: refetch when the morning routine card logs a completion.
+  }, [weekStartKey, weekEndKeyExclusive, habitsVersion])
 
   const schedule = useMemo(
     () => computeHabitSchedule(habits, completions, todayDateKey),

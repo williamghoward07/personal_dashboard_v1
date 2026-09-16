@@ -75,7 +75,7 @@ export function buildWorkspaceMarkdown({
       const box = todo.completed_at ? '[x]' : '[ ]'
       const detail = [
         todo.due_date ? `due ${todo.due_date}${todo.due_time ? ` ${todo.due_time}` : ''}` : null,
-        todo.caldav_uid ? 'from Reminders' : null,
+        todo.mstodo_task_id ? 'from To Do' : null,
       ]
         .filter(Boolean)
         .join(' · ')
@@ -96,6 +96,10 @@ export function buildWorkspaceMarkdown({
       if (note.footnote) {
         lines.push('')
         lines.push(`_${note.footnote}_`)
+      }
+      if (note.tags?.length) {
+        lines.push('')
+        lines.push(`Tags: ${note.tags.map((t) => `#${t}`).join(' ')}`)
       }
       lines.push('')
     }

@@ -5,8 +5,7 @@
 //
 // Read/write events on the primary calendar — not the broader `calendar`
 // scope, which would also grant managing calendar list/settings
-// themselves. Needed so Search mode 3 (Act) can create real events, not
-// just read today's. Anyone connected under the old .readonly scope needs
-// to hit Reconnect once to re-consent — see the AI Search & Token Budget
-// plan (2026-08-18) for why this was widened.
+// themselves. Needed so Capture (query box / Brain Dump) can create real
+// events, not just read today's. Anyone connected under the old .readonly
+// scope needs to hit Reconnect once to re-consent.
 export const GOOGLE_CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events'

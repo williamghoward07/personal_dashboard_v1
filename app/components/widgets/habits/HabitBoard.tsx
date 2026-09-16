@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ListChecks } from 'lucide-react'
+import { Plus, ListChecks, Sunrise } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -14,20 +14,23 @@ import {
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates, arrayMove } from '@dnd-kit/sortable'
 import { supabase } from '@/lib/supabase'
 import type { DailyGoalHabit, DailyGoalHabitCompletion } from '@/lib/types'
+import { londonDayBoundsUTC } from '@/lib/google/london-day'
+import { shiftDateKey } from '@/lib/habits/steps'
 import type { HabitDayStatus } from './HabitHeatmap'
 import ConfirmDialog from '../../ConfirmDialog'
 import HabitCard from './HabitCard'
 import HabitFormModal from './HabitFormModal'
 import HabitLogValueModal from './HabitLogValueModal'
+import MorningRoutineSetupModal from './MorningRoutineSetupModal'
 
+// Europe/London calendar days, like the rest of the app (the UTC date is
+// a day behind between midnight and 1am in summer).
 function todayISO() {
-  return new Date().toISOString().slice(0, 10)
+  return londonDayBoundsUTC().startDateKey
 }
 
 function daysAgoISO(n: number) {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
+  return shiftDateKey(todayISO(), -n)
 }
 
 const MIGRATION_HINT =
@@ -44,6 +47,7 @@ export default function HabitBoard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isRoutineSetupOpen, setIsRoutineSetupOpen] = useState(false)
   const [editingHabit, setEditingHabit] = useState<DailyGoalHabit | null>(null)
   const [deletingHabit, setDeletingHabit] = useState<DailyGoalHabit | null>(null)
   const [loggingCell, setLoggingCell] = useState<HabitCell | null>(null)
@@ -213,16 +217,28 @@ export default function HabitBoard() {
             <ListChecks className="h-6 w-6" />
             Habits
           </h1>
-          <p className="mt-1 text-sm text-on-surface-variant">Daily and weekly habit tracking.</p>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Daily and weekly habit tracking. Edit a habit to give it steps (core + bonus).
+          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsAddOpen(true)}
-          aria-label="Add habit"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-habit-purple"
-        >
-          <Plus className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setIsRoutineSetupOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container-high hover:text-habit-purple"
+          >
+            <Sunrise className="h-4 w-4" />
+            Morning routine
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsAddOpen(true)}
+            aria-label="Add habit"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-habit-purple"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -285,6 +301,12 @@ export default function HabitBoard() {
             refresh()
           }
         }}
+      />
+
+      <MorningRoutineSetupModal
+        isOpen={isRoutineSetupOpen}
+        onClose={() => setIsRoutineSetupOpen(false)}
+        onCreated={refresh}
       />
 
       <HabitLogValueModal

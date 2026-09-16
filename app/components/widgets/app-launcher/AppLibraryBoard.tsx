@@ -1,35 +1,100 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { LayoutGrid, Plus } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronsDownUp, ChevronsUpDown, LayoutGrid, Plus } from 'lucide-react'
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { supabase } from '@/lib/supabase'
 import type { Accent } from '@/lib/theme'
-import { ACCENT_TEXT } from '@/lib/theme'
+import { ACCENT_BAR, ACCENT_TEXT } from '@/lib/theme'
 import type { LinkFolder, QuickLink } from '@/lib/types'
+import {
+  applyPatches,
+  displayOrder,
+  folderKeyOf,
+  folderOrderPatches,
+  groupLinks,
+  linkOrderPatches,
+  moveLink,
+} from '@/lib/app-launcher/order'
+import { useStoredIdSet } from '@/lib/utils/use-stored-id-set'
 import ConfirmDialog from '../../ConfirmDialog'
-import FolderTile, { type FolderGroup } from './FolderTile'
+import FolderTile, { folderDragId, type FolderGroup } from './FolderTile'
 import LinkFolderFormModal, { type LinkFolderFormValues } from './LinkFolderFormModal'
 import QuickLinkFormModal, { type QuickLinkFormValues } from './QuickLinkFormModal'
 import DeleteFolderModal, { type DeleteFolderAction } from './DeleteFolderModal'
-import { UNFILED_FOLDER_ID, resolveFaviconPath, swapSortOrder } from './shared'
+import FaviconTile from './FaviconTile'
+import { UNFILED_FOLDER_ID, resolveFaviconPath, saveRowPatches } from './shared'
 
 const MIGRATION_HINT =
   'Have you run supabase/migrations/20260827000000_link_folders_and_quick_links.sql in the Supabase SQL editor yet?'
+
+const COLLAPSED_STORAGE_KEY = 'app-library:collapsed-folders'
+
+type DragType = 'folder' | 'link'
+
+type LinkPreset = Pick<QuickLink, 'title' | 'url' | 'folder_id' | 'is_pinned' | 'favicon_custom_url' | 'favicon_path'>
+
+const idOf = (dragId: string | number) => String(dragId).replace(/^(folder|link|drop):/, '')
+const typeOf = (data: unknown): string | undefined => (data as { type?: string } | undefined)?.type
+
+// Folders only collide with folders; links collide with links first (for
+// in-list positioning), then with whole folder tiles (to drop into a
+// collapsed or empty folder).
+const collisionDetection: CollisionDetection = (args) => {
+  const activeType = typeOf(args.active.data.current)
+  const droppableContainers = args.droppableContainers.filter((container) => {
+    const t = typeOf(container.data.current)
+    return activeType === 'folder' ? t === 'folder' : t === 'link' || t === 'folder-drop'
+  })
+  if (activeType === 'folder') return closestCenter({ ...args, droppableContainers })
+
+  const hits = pointerWithin({ ...args, droppableContainers })
+  const linkHits = hits.filter((hit) => String(hit.id).startsWith('link:'))
+  if (linkHits.length > 0) return linkHits
+  if (hits.length > 0) return hits
+  return closestCenter({ ...args, droppableContainers })
+}
 
 export default function AppLibraryBoard() {
   const [folders, setFolders] = useState<LinkFolder[]>([])
   const [links, setLinks] = useState<QuickLink[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [expandedFolderId, setExpandedFolderId] = useState<string | null>(null)
+  const [collapsedIds, setCollapsedIds] = useStoredIdSet(COLLAPSED_STORAGE_KEY)
 
   const [isAddFolderOpen, setIsAddFolderOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState<LinkFolder | null>(null)
   const [deletingFolder, setDeletingFolder] = useState<LinkFolder | null>(null)
 
-  const [isAddLinkOpen, setIsAddLinkOpen] = useState(false)
+  // Kept as a state object (not built inline) — QuickLinkFormModal resets
+  // its fields whenever initialValues changes identity.
+  const [addLinkPreset, setAddLinkPreset] = useState<LinkPreset | null>(null)
   const [editingLink, setEditingLink] = useState<QuickLink | null>(null)
   const [deletingLink, setDeletingLink] = useState<QuickLink | null>(null)
+
+  const [dragType, setDragType] = useState<DragType | null>(null)
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
+  const [overFolderKey, setOverFolderKey] = useState<string | null>(null)
+  const linksAtDragStart = useRef<QuickLink[]>([])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   const refresh = () => {
     setLoading(true)
@@ -52,14 +117,10 @@ export default function AppLibraryBoard() {
 
   useEffect(refresh, [])
 
-  const folderGroups = useMemo<FolderGroup[]>(() => {
-    const byFolder = new Map<string, QuickLink[]>()
-    for (const link of links) {
-      const key = link.folder_id ?? UNFILED_FOLDER_ID
-      if (!byFolder.has(key)) byFolder.set(key, [])
-      byFolder.get(key)!.push(link)
-    }
+  const folderIds = useMemo(() => folders.map((f) => f.id), [folders])
 
+  const folderGroups = useMemo<FolderGroup[]>(() => {
+    const byFolder = groupLinks(links)
     const real: FolderGroup[] = folders.map((f) => ({
       id: f.id,
       name: f.name,
@@ -69,10 +130,21 @@ export default function AppLibraryBoard() {
     }))
 
     const unfiledLinks = byFolder.get(UNFILED_FOLDER_ID) ?? []
-    if (unfiledLinks.length === 0) return real
+    // Unfiled always shows while a link is being dragged, so a link can be
+    // taken out of every folder.
+    if (unfiledLinks.length === 0 && dragType !== 'link') return real
 
     return [...real, { id: UNFILED_FOLDER_ID, name: 'Unfiled', color: 'neutral', isVirtual: true, links: unfiledLinks }]
-  }, [folders, links])
+  }, [folders, links, dragType])
+
+  const allCollapsed = folderGroups.length > 0 && folderGroups.every((g) => collapsedIds.has(g.id))
+
+  const toggleExpanded = (id: string) => {
+    const next = new Set(collapsedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setCollapsedIds(next)
+  }
 
   const runMutation = async (fn: () => PromiseLike<{ error: { message: string } | null }>) => {
     const { error: mutationError } = await fn()
@@ -108,7 +180,6 @@ export default function AppLibraryBoard() {
     const ok = await runMutation(() => supabase.from('link_folders').delete().eq('id', folderId))
     if (ok) {
       setDeletingFolder(null)
-      setExpandedFolderId((id) => (id === folderId ? null : id))
       refresh()
     }
   }
@@ -126,10 +197,19 @@ export default function AppLibraryBoard() {
     })
     if (ok) {
       setDeletingFolder(null)
-      setExpandedFolderId((id) => (id === folderId ? null : id))
       refresh()
     }
   }
+
+  const openAddLink = (folderId: string | null) =>
+    setAddLinkPreset({
+      title: '',
+      url: '',
+      folder_id: folderId,
+      is_pinned: false,
+      favicon_custom_url: null,
+      favicon_path: null,
+    })
 
   const handleAddLink = async (values: QuickLinkFormValues) => {
     const faviconPath = await resolveFaviconPath(values.url)
@@ -138,7 +218,8 @@ export default function AppLibraryBoard() {
       supabase.from('quick_links').insert({ ...values, favicon_path: faviconPath, sort_order: maxSort + 1 }),
     )
     if (ok) {
-      setIsAddLinkOpen(false)
+      setAddLinkPreset(null)
+      if (values.folder_id && collapsedIds.has(values.folder_id)) toggleExpanded(values.folder_id)
       refresh()
     }
   }
@@ -163,24 +244,104 @@ export default function AppLibraryBoard() {
     if (ok) refresh()
   }
 
-  const handleMoveLink = async (folderLinks: QuickLink[], link: QuickLink, direction: 'up' | 'down') => {
-    const index = folderLinks.findIndex((l) => l.id === link.id)
-    if (index === -1) return
-    const { error: reorderError } = await swapSortOrder('quick_links', folderLinks, index, direction)
-    if (reorderError) setError(`Couldn't reorder: ${reorderError.message}`)
-    refresh()
+  // ---- drag and drop ----
+
+  const endDrag = () => {
+    setDragType(null)
+    setActiveDragId(null)
+    setOverFolderKey(null)
   }
 
-  const handleMoveFolder = async (folder: LinkFolder, direction: 'up' | 'down') => {
-    const index = folders.findIndex((f) => f.id === folder.id)
-    if (index === -1) return
-    const { error: reorderError } = await swapSortOrder('link_folders', folders, index, direction)
-    if (reorderError) setError(`Couldn't reorder: ${reorderError.message}`)
-    refresh()
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    const type = typeOf(active.data.current)
+    setDragType(type === 'folder' ? 'folder' : 'link')
+    setActiveDragId(idOf(active.id))
+    linksAtDragStart.current = links
   }
+
+  // Moving a link into another folder happens while hovering, so the
+  // target list opens up a gap for it; ordering within a list is left to
+  // dnd-kit's sortable preview until the drop.
+  const handleDragOver = ({ active, over }: DragOverEvent) => {
+    if (typeOf(active.data.current) !== 'link' || !over) {
+      setOverFolderKey(null)
+      return
+    }
+    const activeId = idOf(active.id)
+    const overType = typeOf(over.data.current)
+    const overLink = overType === 'link' ? links.find((l) => l.id === idOf(over.id)) : undefined
+    const targetKey = overLink
+      ? folderKeyOf(overLink)
+      : overType === 'folder-drop'
+        ? (over.data.current as { folderKey: string }).folderKey
+        : null
+    setOverFolderKey(targetKey)
+    if (!targetKey) return
+
+    const activeLink = links.find((l) => l.id === activeId)
+    if (!activeLink || folderKeyOf(activeLink) === targetKey) return
+    const targetFolderId = targetKey === UNFILED_FOLDER_ID ? null : targetKey
+    setLinks((prev) => moveLink(prev, activeId, targetFolderId, overLink?.id ?? null))
+  }
+
+  const handleDragEnd = async ({ active, over }: DragEndEvent) => {
+    const type = typeOf(active.data.current)
+    endDrag()
+    if (!over) {
+      if (type === 'link') setLinks(linksAtDragStart.current)
+      return
+    }
+
+    if (type === 'folder') {
+      const from = folders.findIndex((f) => f.id === idOf(active.id))
+      const to = folders.findIndex((f) => f.id === idOf(over.id))
+      if (from === -1 || to === -1 || from === to) return
+      const patches = folderOrderPatches(arrayMove(folders, from, to))
+      const previous = folders
+      setFolders(applyPatches(arrayMove(folders, from, to), patches))
+      const { error: saveError } = await saveRowPatches('link_folders', patches)
+      if (saveError) {
+        setError(`Couldn't save the new folder order: ${saveError.message}`)
+        setFolders(previous)
+      }
+      return
+    }
+
+    const activeId = idOf(active.id)
+    const activeLink = links.find((l) => l.id === activeId)
+    if (!activeLink) return
+    let next = links
+    if (typeOf(over.data.current) === 'link' && idOf(over.id) !== activeId) {
+      next = moveLink(links, activeId, activeLink.folder_id, idOf(over.id))
+    }
+
+    const ordered = displayOrder(next, folderIds)
+    const patches = linkOrderPatches(ordered, linksAtDragStart.current)
+    if (patches.length === 0) {
+      setLinks(linksAtDragStart.current)
+      return
+    }
+    setLinks(applyPatches(ordered, patches))
+    const { error: saveError } = await saveRowPatches('quick_links', patches)
+    if (saveError) {
+      setError(`Couldn't save the new link order: ${saveError.message}`)
+      refresh()
+    }
+  }
+
+  const handleDragCancel = () => {
+    if (dragType === 'link') setLinks(linksAtDragStart.current)
+    endDrag()
+  }
+
+  const draggedLink = dragType === 'link' ? links.find((l) => l.id === activeDragId) : undefined
+  const draggedFolder = dragType === 'folder' ? folders.find((f) => f.id === activeDragId) : undefined
 
   const linksInDeletingFolder = deletingFolder ? links.filter((l) => l.folder_id === deletingFolder.id) : []
   const otherFoldersForReassign = deletingFolder ? folders.filter((f) => f.id !== deletingFolder.id) : []
+  const presetFolderName = addLinkPreset?.folder_id
+    ? folders.find((f) => f.id === addLinkPreset.folder_id)?.name
+    : null
 
   return (
     <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
@@ -191,25 +352,28 @@ export default function AppLibraryBoard() {
             App Library
           </h1>
           <p className="mt-1 text-sm text-on-surface-variant">
-            Your pinned and filed apps and links, in one place.
+            Your pinned and filed apps and links, in one place. Use + on a folder to add a link to it, and drag the
+            grips to reorder.
           </p>
         </div>
         <div className="flex gap-2">
+          {folderGroups.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setCollapsedIds(allCollapsed ? new Set() : new Set(folderGroups.map((g) => g.id)))}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+            >
+              {allCollapsed ? <ChevronsUpDown className="h-4 w-4" /> : <ChevronsDownUp className="h-4 w-4" />}
+              {allCollapsed ? 'Expand all' : 'Collapse all'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setIsAddFolderOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-          >
-            <Plus className="h-4 w-4" />
-            Add folder
-          </button>
-          <button
-            type="button"
-            onClick={() => setIsAddLinkOpen(true)}
             className="flex items-center gap-1.5 rounded-lg bg-outline px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110"
           >
             <Plus className="h-4 w-4" />
-            Add link
+            Add folder
           </button>
         </div>
       </div>
@@ -218,46 +382,79 @@ export default function AppLibraryBoard() {
         <div className="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">{error}</div>
       )}
 
-      {loading ? (
+      {loading && links.length === 0 && folders.length === 0 ? (
         <p className="text-sm text-on-surface-variant">Loading...</p>
       ) : folderGroups.length === 0 ? (
-        <p className="text-sm text-on-surface-variant">
-          No apps yet — add a link to get started, and a folder whenever you want to organize them.
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {folderGroups.map((group, index) => (
-            <FolderTile
-              key={group.id}
-              folder={group}
-              isExpanded={expandedFolderId === group.id}
-              onToggleExpand={() => setExpandedFolderId((id) => (id === group.id ? null : group.id))}
-              onEdit={() => {
-                const real = folders.find((f) => f.id === group.id)
-                if (real) setEditingFolder(real)
-              }}
-              onDelete={() => {
-                const real = folders.find((f) => f.id === group.id)
-                if (real) setDeletingFolder(real)
-              }}
-              canMoveUp={!group.isVirtual && index > 0}
-              canMoveDown={!group.isVirtual && index < folders.length - 1}
-              onMoveUp={() => {
-                const real = folders.find((f) => f.id === group.id)
-                if (real) handleMoveFolder(real, 'up')
-              }}
-              onMoveDown={() => {
-                const real = folders.find((f) => f.id === group.id)
-                if (real) handleMoveFolder(real, 'down')
-              }}
-              onEditLink={(link) => setEditingLink(link)}
-              onDeleteLink={(link) => setDeletingLink(link)}
-              onTogglePinLink={handleTogglePinLink}
-              onMoveLinkUp={(link) => handleMoveLink(group.links, link, 'up')}
-              onMoveLinkDown={(link) => handleMoveLink(group.links, link, 'down')}
-            />
-          ))}
+        <div className="flex flex-col items-start gap-3">
+          <p className="text-sm text-on-surface-variant">
+            No apps yet — add a link to get started, and a folder whenever you want to organize them.
+          </p>
+          <button
+            type="button"
+            onClick={() => openAddLink(null)}
+            className="flex items-center gap-1.5 rounded-lg border border-outline-variant px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+          >
+            <Plus className="h-4 w-4" />
+            Add link
+          </button>
         </div>
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collisionDetection}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <SortableContext items={folders.map((f) => folderDragId(f.id))} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {folderGroups.map((group) => (
+                <FolderTile
+                  key={group.id}
+                  folder={group}
+                  isExpanded={!collapsedIds.has(group.id)}
+                  isLinkDropTarget={dragType === 'link' && overFolderKey === group.id}
+                  onToggleExpand={() => toggleExpanded(group.id)}
+                  onAddLink={() => openAddLink(group.isVirtual ? null : group.id)}
+                  onEdit={() => {
+                    const real = folders.find((f) => f.id === group.id)
+                    if (real) setEditingFolder(real)
+                  }}
+                  onDelete={() => {
+                    const real = folders.find((f) => f.id === group.id)
+                    if (real) setDeletingFolder(real)
+                  }}
+                  onEditLink={(link) => setEditingLink(link)}
+                  onDeleteLink={(link) => setDeletingLink(link)}
+                  onTogglePinLink={handleTogglePinLink}
+                />
+              ))}
+            </div>
+          </SortableContext>
+
+          {/* A floating preview — the dragged link's own row can unmount
+              mid-drag when it moves into a collapsed folder. */}
+          <DragOverlay dropAnimation={null}>
+            {draggedLink ? (
+              <div className="flex max-w-72 items-center gap-2 rounded-lg border border-outline bg-surface-container-high p-1.5 shadow-2xl shadow-black/50">
+                <FaviconTile
+                  title={draggedLink.title}
+                  url={draggedLink.url}
+                  faviconPath={draggedLink.favicon_path}
+                  faviconCustomUrl={draggedLink.favicon_custom_url}
+                  size="sm"
+                />
+                <span className="truncate text-sm text-on-surface">{draggedLink.title}</span>
+              </div>
+            ) : draggedFolder ? (
+              <div className="flex max-w-72 items-center gap-2 rounded-lg border border-outline bg-surface-container-high px-3 py-2 shadow-2xl shadow-black/50">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${ACCENT_BAR[draggedFolder.color as Accent]}`} />
+                <span className="truncate text-sm font-semibold text-on-surface">{draggedFolder.name}</span>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       <LinkFolderFormModal
@@ -276,10 +473,11 @@ export default function AppLibraryBoard() {
       />
 
       <QuickLinkFormModal
-        isOpen={isAddLinkOpen}
-        heading="New link"
+        isOpen={addLinkPreset !== null}
+        heading={presetFolderName ? `New link in ${presetFolderName}` : 'New link'}
         folders={folders}
-        onClose={() => setIsAddLinkOpen(false)}
+        initialValues={addLinkPreset}
+        onClose={() => setAddLinkPreset(null)}
         onSave={handleAddLink}
       />
 

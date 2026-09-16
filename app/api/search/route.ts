@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { extractSearchQuery, isQuestion, SEARCH_MODULES, type SearchModule } from '@/lib/search/nl-search'
+import { extractSearchQuery, SEARCH_MODULES, type SearchModule } from '@/lib/search/nl-search'
 import { answerFromResults } from '@/lib/search/answer'
+import { isQuestion } from '@/lib/search/query-mode'
 import { ilikeAnyColumn } from '@/lib/search/postgrest-filter'
 import { formatPounds, minorUnitsOf } from '@/lib/money'
 import type { Transaction } from '@/lib/types'
@@ -12,8 +13,9 @@ const RESULTS_PER_MODULE = 5
 // Everything below is plain TypeScript running hand-written ilike queries —
 // no AI touches this part at all (see lib/search/nl-search.ts for the one
 // call that does, which only ever returns keywords + module names, never
-// SQL). The one exception is the optional Answer-mode call at the bottom,
-// which only ever runs for a query that already reads as a question.
+// SQL). The one exception is the Answer call at the bottom, which only
+// runs in Ask mode (chosen by the query box, see lib/search/query-mode.ts).
+// Capture mode never comes here — it goes to app/api/brain-dump/extract.
 export async function POST(request: Request) {
   const supabase = await createClient()
   const {
@@ -24,12 +26,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
   }
 
-  const body = (await request.json()) as { query?: string }
+  const body = (await request.json()) as { query?: string; mode?: 'find' | 'ask' }
   const query = body.query?.trim()
 
   if (!query) {
     return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
   }
+
+  // Older callers send no mode — fall back to the question heuristic.
+  const wantsAnswer = body.mode ? body.mode === 'ask' : isQuestion(query)
 
   let keywords: string[]
   let targetModules: SearchModule[]
@@ -46,7 +51,7 @@ export async function POST(request: Request) {
   // A bare module name (e.g. "todos") resolves locally with no keywords —
   // that's a browse-all, not "nothing to search for".
   if (keywords.length === 0 && targetModules.length === 0) {
-    return NextResponse.json({ results: [] })
+    return NextResponse.json({ results: [], answer: null })
   }
 
   const modules = targetModules.length > 0 ? targetModules : SEARCH_MODULES
@@ -146,10 +151,9 @@ export async function POST(request: Request) {
 
   const results = (await Promise.all(searches)).flat()
 
-  // Search mode 2 (Answer) — gated to questions only, never a plain
-  // keyword search or browse-all, since results entering the prompt makes
-  // this the pricier of the two extra calls a search can trigger.
-  const answer = isQuestion(query) ? await answerFromResults(query, results) : null
+  // Ask mode only — never a plain keyword search or browse-all, since
+  // results entering the prompt makes this the pricier call.
+  const answer = wantsAnswer ? await answerFromResults(query, results) : null
 
   return NextResponse.json({ results, answer })
 }

@@ -4,11 +4,13 @@ import { Check, GripVertical, Pencil, Trash2 } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import HabitHeatmap, { type HabitDayStatus } from './HabitHeatmap'
 import type { DailyGoalHabit } from '@/lib/types'
+import { londonDayBoundsUTC } from '@/lib/google/london-day'
 
 const DAY_ABBREV = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+// Europe/London calendar day, like the rest of the app.
 function todayISO() {
-  return new Date().toISOString().slice(0, 10)
+  return londonDayBoundsUTC().startDateKey
 }
 
 function frequencyLabel(habit: DailyGoalHabit) {

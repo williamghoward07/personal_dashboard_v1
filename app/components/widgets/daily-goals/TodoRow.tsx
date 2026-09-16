@@ -1,13 +1,19 @@
 'use client'
 
-import { Bell, Pencil, Trash2 } from 'lucide-react'
+import { Cloud, Pencil, Trash2 } from 'lucide-react'
 import type { Todo } from '@/lib/types'
+import type { WorkspaceTag } from '@/lib/workspaces/use-workspace-lookup'
+import { onActivateKey } from '@/lib/utils/a11y'
+import WorkspaceChip from '../workspaces/WorkspaceChip'
+import StarButton from './StarButton'
 
 export default function TodoRow({
   todo,
   todayDateKey,
   subtaskCount,
+  workspace,
   onToggle,
+  onToggleStar,
   onOpen,
   onEdit,
   onDelete,
@@ -15,7 +21,9 @@ export default function TodoRow({
   todo: Todo
   todayDateKey: string
   subtaskCount?: number
+  workspace?: WorkspaceTag
   onToggle: () => void
+  onToggleStar: () => void
   onOpen: () => void
   onEdit: () => void
   onDelete: () => void
@@ -28,12 +36,7 @@ export default function TodoRow({
       role="button"
       tabIndex={0}
       onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onOpen()
-        }
-      }}
+      onKeyDown={onActivateKey(onOpen)}
       className="flex cursor-pointer items-center gap-3 py-2.5"
     >
       <input
@@ -46,8 +49,8 @@ export default function TodoRow({
       />
       <div className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          {todo.caldav_uid && (
-            <Bell className="h-3 w-3 shrink-0 text-on-surface-variant" aria-label="Synced from Apple Reminders" />
+          {todo.mstodo_task_id && (
+            <Cloud className="h-3 w-3 shrink-0 text-on-surface-variant" aria-label="Synced with Microsoft To Do" />
           )}
           <span
             className={`block truncate text-sm ${completed ? 'text-on-surface-variant line-through' : 'text-on-surface'}`}
@@ -59,6 +62,7 @@ export default function TodoRow({
               {subtaskCount}
             </span>
           )}
+          {workspace && <WorkspaceChip workspace={workspace} />}
         </span>
         {todo.notes && <span className="block truncate text-xs text-on-surface-variant">{todo.notes}</span>}
       </div>
@@ -71,6 +75,7 @@ export default function TodoRow({
           {todo.due_time ? ` · ${todo.due_time}` : ''}
         </span>
       )}
+      <StarButton starred={todo.starred} title={todo.title} onToggle={onToggleStar} alwaysShow />
       <button
         type="button"
         onClick={(e) => {

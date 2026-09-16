@@ -2,6 +2,7 @@
 
 import type { Todo } from '@/lib/types'
 import { groupTodosForExtendedView, type ExtendedViewGroups } from '@/lib/todos/extended-view'
+import type { WorkspaceTag } from '@/lib/workspaces/use-workspace-lookup'
 import TodoRow from './TodoRow'
 
 const SECTIONS: { key: keyof ExtendedViewGroups; label: string }[] = [
@@ -16,14 +17,18 @@ const SECTIONS: { key: keyof ExtendedViewGroups; label: string }[] = [
 export default function TodosExtendedView({
   todos,
   todayDateKey,
+  workspaces,
   onToggle,
+  onToggleStar,
   onOpen,
   onEdit,
   onDelete,
 }: {
   todos: Todo[]
   todayDateKey: string
+  workspaces: Map<string, WorkspaceTag>
   onToggle: (id: string) => void
+  onToggleStar: (id: string) => void
   onOpen: (todo: Todo) => void
   onEdit: (todo: Todo) => void
   onDelete: (todo: Todo) => void
@@ -49,7 +54,9 @@ export default function TodosExtendedView({
                   key={todo.id}
                   todo={todo}
                   todayDateKey={todayDateKey}
+                  workspace={todo.workspace_id ? workspaces.get(todo.workspace_id) : undefined}
                   onToggle={() => onToggle(todo.id)}
+                  onToggleStar={() => onToggleStar(todo.id)}
                   onOpen={() => onOpen(todo)}
                   onEdit={() => onEdit(todo)}
                   onDelete={() => onDelete(todo)}

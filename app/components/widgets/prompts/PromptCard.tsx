@@ -2,6 +2,7 @@
 
 import { Pencil, Trash2 } from 'lucide-react'
 import type { Prompt } from '@/lib/types'
+import { onActivateKey } from '@/lib/utils/a11y'
 
 export default function PromptCard({
   prompt,
@@ -21,12 +22,7 @@ export default function PromptCard({
       role="button"
       tabIndex={0}
       onClick={onCopy}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onCopy()
-        }
-      }}
+      onKeyDown={onActivateKey(onCopy)}
       className="flex cursor-pointer flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container-low p-3 text-left transition-colors hover:border-research-pink/40"
     >
       <div className="flex items-start justify-between gap-2">

@@ -8,8 +8,8 @@ import { ghostButtonClass, primaryButtonClass } from './shared'
 // Candidate pool is todos with no workspace yet — a todo already in a
 // different workspace is never offered here, since attaching it would
 // silently move it out of that other workspace (no such reassignment UI
-// exists). CalDAV-synced todos are attachable like any other; nothing here
-// touches the Reminders sync path.
+// exists). To Do-synced todos are attachable like any other — workspace_id
+// is app-only and never touched by the To Do pull.
 export default function AttachExistingTodoPanel({
   onAttach,
   onClose,
@@ -61,12 +61,12 @@ export default function AttachExistingTodoPanel({
                   type="checkbox"
                   checked={selected.has(todo.id)}
                   onChange={() => toggle(todo.id)}
-                  className="accent-workspace-teal"
+                  className="accent-ws-accent"
                 />
                 <span className="truncate">{todo.title}</span>
-                {todo.caldav_uid && (
+                {todo.mstodo_task_id && (
                   <span className="shrink-0 rounded-full border border-outline-variant px-1.5 py-0.5 text-[10px] text-on-surface-variant">
-                    Reminders
+                    To Do
                   </span>
                 )}
               </label>

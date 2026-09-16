@@ -1,3 +1,4 @@
+import { londonDateKey } from '@/lib/google/london-day'
 import { isoWeekday } from './schedule'
 
 export interface HeatmapCell {
@@ -13,6 +14,12 @@ export const HEATMAP_DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Su
 
 function dateKeyOf(date: Date): string {
   return date.toISOString().slice(0, 10)
+}
+
+// "Today" is the Europe/London calendar day (as everywhere else in the
+// app) — the UTC date is a day behind between midnight and 1am in summer.
+function londonTodayKey(now: Date): string {
+  return londonDateKey(now.toISOString())
 }
 
 function keyToUTCDate(key: string): Date {
@@ -42,7 +49,7 @@ function addUTCDays(date: Date, days: number): Date {
 // deterministically testable function rather than reading the wall clock
 // itself.
 export function buildDateGrid(referenceDate: Date = new Date()): HeatmapCell[][] {
-  const todayKey = dateKeyOf(referenceDate)
+  const todayKey = londonTodayKey(referenceDate)
   const todayUTC = keyToUTCDate(todayKey)
 
   const daysSinceMonday = isoWeekday(todayKey) - 1

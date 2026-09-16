@@ -1,13 +1,14 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { FolderOpen, Rocket } from 'lucide-react'
+import { FolderOpen } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import type { Todo, WorkspaceLink, WorkspaceLinkKind, WorkspaceLinkTodo } from '@/lib/types'
 import { SOURCE_KINDS, SOURCE_KIND_ORDER } from '@/lib/workspaces/kinds'
 import type { WorkspaceLinkPatch } from '@/lib/workspaces/use-workspace-links'
 import LinksGrid from './LinksGrid'
-import { actionButtonClass, filterChipActiveClass, filterChipClass, filterChipInactiveClass } from './shared'
+import { CollapseButton } from './SectionChrome'
+import { filterChipActiveClass, filterChipClass, filterChipInactiveClass, wsAccentStyle } from './shared'
 
 type KindFilter = WorkspaceLinkKind | 'all'
 
@@ -24,6 +25,7 @@ export default function LinksSection({
   detachLinkTodo,
   addingUrl,
   setAddingUrl,
+  onCollapse,
 }: {
   links: WorkspaceLink[]
   loading: boolean
@@ -37,6 +39,7 @@ export default function LinksSection({
   detachLinkTodo: (junctionId: string) => Promise<void>
   addingUrl: boolean
   setAddingUrl: (open: boolean) => void
+  onCollapse: () => void
 }) {
   const [filter, setFilter] = useState<KindFilter>('all')
 
@@ -51,25 +54,17 @@ export default function LinksSection({
     [links, filter]
   )
 
-  const openAll = () => {
-    links.forEach((link) => window.open(link.url, '_blank', 'noopener,noreferrer'))
-  }
-
   return (
-    <ModuleGlassCard accent="teal" size="sm" className="flex flex-col gap-3">
+    <ModuleGlassCard style={wsAccentStyle} size="sm" className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
-          <FolderOpen className="h-4 w-4 text-workspace-teal" strokeWidth={1.75} />
+          <FolderOpen className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
           Scoped sources
           <span className="rounded-full border border-outline-variant px-1.5 py-0.5 text-[11px] tabular-nums text-on-surface-variant">
             {links.length}
           </span>
         </h2>
-
-        <button type="button" onClick={openAll} disabled={links.length === 0} className={actionButtonClass}>
-          <Rocket className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Launch set
-        </button>
+        <CollapseButton label="Scoped sources" onClick={onCollapse} />
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">

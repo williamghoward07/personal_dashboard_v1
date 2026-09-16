@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Modal from '../../Modal'
 import type { DailyGoalHabit, DailyGoalHabitFrequency } from '@/lib/types'
+import HabitStepsEditor from './HabitStepsEditor'
 
 export interface HabitFormValues {
   name: string
@@ -258,6 +259,10 @@ export default function HabitFormModal({
             </label>
           </div>
         )}
+
+        {/* Steps save on their own (not via this form's Save), so they're
+            only offered once the habit exists. */}
+        {initialValues?.id && !values.is_quantifiable && <HabitStepsEditor habitId={initialValues.id} />}
 
         <div className={labelClass}>
           Colour

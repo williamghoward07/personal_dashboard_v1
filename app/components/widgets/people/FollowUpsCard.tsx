@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { BellRing, Check, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { FollowUp, Person } from '@/lib/types'
+import { onActivateKey } from '@/lib/utils/a11y'
 import WidgetCard from '../../WidgetCard'
 import ConfirmDialog from '../../ConfirmDialog'
 import FollowUpFormModal from './FollowUpFormModal'
@@ -98,12 +99,7 @@ export default function FollowUpsCard({
                     role="button"
                     tabIndex={0}
                     onClick={() => openPerson(followUp.person_id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        openPerson(followUp.person_id)
-                      }
-                    }}
+                    onKeyDown={onActivateKey(() => openPerson(followUp.person_id))}
                     className="flex cursor-pointer items-start gap-2 rounded-lg border border-people-amber/30 bg-people-amber/5 p-2 hover:border-people-amber/50"
                   >
                     <button

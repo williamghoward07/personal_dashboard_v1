@@ -1,13 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ListTodo, Pencil, Plus, X } from 'lucide-react'
+import { ListTodo, Pencil, Plus, Star, X } from 'lucide-react'
 import { useTodos } from '@/lib/daily-goals/use-todos'
 import { useTodoLists } from '@/lib/todos/use-todo-lists'
 import { groupByParent } from '@/lib/todos/subtasks'
 import { londonDayBoundsUTC } from '@/lib/google/london-day'
+import { takeMicrosoftConnectResult } from '@/lib/microsoft/connect-errors'
 import type { Todo, TodoList } from '@/lib/types'
+import { onActivateKey } from '@/lib/utils/a11y'
+import { useWorkspaceLookup } from '@/lib/workspaces/use-workspace-lookup'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
@@ -18,6 +21,7 @@ import TodoListFormModal from './TodoListFormModal'
 import TodoRow from './TodoRow'
 import TodosExtendedView from './TodosExtendedView'
 import CompletedTodosList from './CompletedTodosList'
+import TodoSyncBar from './TodoSyncBar'
 
 type ViewMode = 'list' | 'extended' | 'completed'
 
@@ -29,9 +33,10 @@ const VIEW_MODES: { id: ViewMode; label: string }[] = [
 
 const RECENTLY_COMPLETED_MS = 5000
 
-// Incomplete first (overdue, then soonest due, undated last), completed
-// last (most recently completed first, so a just-finished item doesn't
-// vanish off the bottom of the list immediately).
+// Incomplete first (starred, then overdue, then soonest due, undated
+// last), completed last (most recently completed first, so a
+// just-finished item doesn't vanish off the bottom of the list
+// immediately).
 function sortTodos(todos: Todo[], todayDateKey: string): Todo[] {
   return todos.slice().sort((a, b) => {
     const aDone = a.completed_at !== null
@@ -40,6 +45,8 @@ function sortTodos(todos: Todo[], todayDateKey: string): Todo[] {
     if (aDone && bDone) {
       return (b.completed_at ?? '').localeCompare(a.completed_at ?? '')
     }
+
+    if (a.starred !== b.starred) return a.starred ? -1 : 1
 
     const aOverdue = a.due_date !== null && a.due_date < todayDateKey
     const bOverdue = b.due_date !== null && b.due_date < todayDateKey
@@ -58,11 +65,11 @@ function sortTodos(todos: Todo[], todayDateKey: string): Todo[] {
 
 export default function TodosBoard() {
   const todayDateKey = useMemo(() => londonDayBoundsUTC().startDateKey, [])
-  const { todos, loading, error, addTodo, toggleTodo, updateTodo, deleteTodo, pullReminders } = useTodos(
-    todayDateKey,
-    'all'
-  )
+  const { todos, loading, error, addTodo, toggleTodo, toggleStar, updateTodo, deleteTodo, syncTodos, syncStatus } =
+    useTodos(todayDateKey, 'all')
   const { lists, createList, updateList, deleteList } = useTodoLists()
+  const workspaces = useWorkspaceLookup()
+  const workspaceFor = (todo: Todo) => (todo.workspace_id ? workspaces.get(todo.workspace_id) : undefined)
 
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
@@ -73,19 +80,26 @@ export default function TodosBoard() {
   const [editingList, setEditingList] = useState<TodoList | null>(null)
   const [deletingList, setDeletingList] = useState<TodoList | null>(null)
   const [activeListId, setActiveListId] = useState<string | null>(null)
+  const [starredOnly, setStarredOnly] = useState(false)
 
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [recentlyCompletedIds, setRecentlyCompletedIds] = useState<Set<string>>(new Set())
   const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const [connectResult, setConnectResult] = useState<{ ok: boolean; message: string | null } | null>(null)
 
-  // CalDAV has no push/webhook support, so polling on load is how a
-  // Siri-created reminder actually shows up here — fires once per mount
-  // (i.e. once per visit to this tab). pullReminders is stable (from
-  // useCallback on stable deps), so this genuinely only fires once, not
-  // on every render.
+  // Pull from Microsoft To Do once per visit to this tab, so tasks added
+  // on the phone show up here. syncTodos is stable (useCallback on stable
+  // deps), so this genuinely only fires once, not on every render.
   useEffect(() => {
-    pullReminders()
-  }, [pullReminders])
+    syncTodos()
+  }, [syncTodos])
+
+  // Landing back here from the Microsoft consent screen.
+  useEffect(() => {
+    const result = takeMicrosoftConnectResult()
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reading the URL / history API, an external system
+    if (result) setConnectResult(result)
+  }, [])
 
   useEffect(() => {
     const timeouts = timeoutsRef.current
@@ -119,10 +133,14 @@ export default function TodosBoard() {
 
   const { topLevel, childrenByParent } = useMemo(() => groupByParent(todos), [todos])
 
-  const listFilteredTopLevel = useMemo(
-    () => (activeListId ? topLevel.filter((t) => t.list_id === activeListId) : topLevel),
-    [topLevel, activeListId]
+  const matchesFilters = useCallback(
+    (t: Todo) => (!activeListId || t.list_id === activeListId) && (!starredOnly || t.starred),
+    [activeListId, starredOnly]
   )
+
+  const starredCount = useMemo(() => topLevel.filter((t) => t.starred && t.completed_at === null).length, [topLevel])
+
+  const listFilteredTopLevel = useMemo(() => topLevel.filter(matchesFilters), [topLevel, matchesFilters])
 
   const visibleIncomplete = useMemo(
     () => listFilteredTopLevel.filter((t) => t.completed_at === null || recentlyCompletedIds.has(t.id)),
@@ -132,8 +150,8 @@ export default function TodosBoard() {
   const sorted = useMemo(() => sortTodos(visibleIncomplete, todayDateKey), [visibleIncomplete, todayDateKey])
 
   const completedTodos = useMemo(
-    () => todos.filter((t) => t.completed_at !== null && (!activeListId || t.list_id === activeListId)),
-    [todos, activeListId]
+    () => todos.filter((t) => t.completed_at !== null && matchesFilters(t)),
+    [todos, matchesFilters]
   )
 
   // Keeps the detail modal showing fresh data (e.g. a just-added subtask)
@@ -154,6 +172,9 @@ export default function TodosBoard() {
               Back to Daily Goals
             </Link>
           </p>
+          <div className="mt-1.5">
+            <TodoSyncBar status={syncStatus} onSync={syncTodos} connectResult={connectResult} />
+          </div>
         </div>
         <Button type="button" size="sm" onClick={() => setIsAddOpen(true)}>
           <Plus className="h-4 w-4" />
@@ -173,6 +194,20 @@ export default function TodosBoard() {
         >
           All
         </button>
+        <button
+          type="button"
+          onClick={() => setStarredOnly((v) => !v)}
+          aria-pressed={starredOnly}
+          className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+            starredOnly
+              ? 'border-people-amber/50 bg-people-amber/10 text-people-amber'
+              : 'border-outline-variant text-on-surface-variant hover:border-outline'
+          }`}
+        >
+          <Star className="h-3 w-3" fill={starredOnly ? 'currentColor' : 'none'} />
+          Starred{starredCount > 0 ? ` (${starredCount})` : ''}
+        </button>
+        <span className="mx-0.5 h-4 w-px bg-outline-variant" aria-hidden />
         {lists.map((list) => {
           const active = activeListId === list.id
           return (
@@ -181,12 +216,7 @@ export default function TodosBoard() {
               role="button"
               tabIndex={0}
               onClick={() => setActiveListId(active ? null : list.id)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  setActiveListId(active ? null : list.id)
-                }
-              }}
+              onKeyDown={onActivateKey(() => setActiveListId(active ? null : list.id))}
               className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
                 active
                   ? 'border-outline bg-surface-container-high text-on-surface'
@@ -270,7 +300,9 @@ export default function TodosBoard() {
             <CompletedTodosList
               todos={completedTodos}
               todayDateKey={todayDateKey}
+              workspaces={workspaces}
               onToggle={handleToggle}
+              onToggleStar={toggleStar}
               onOpen={setViewingTodo}
               onEdit={setEditingTodo}
               onDelete={setDeletingTodo}
@@ -279,13 +311,19 @@ export default function TodosBoard() {
             <TodosExtendedView
               todos={sorted}
               todayDateKey={todayDateKey}
+              workspaces={workspaces}
               onToggle={handleToggle}
+              onToggleStar={toggleStar}
               onOpen={setViewingTodo}
               onEdit={setEditingTodo}
               onDelete={setDeletingTodo}
             />
           ) : sorted.length === 0 ? (
-            <p className="text-sm text-on-surface-variant">No todos yet — add one to get started.</p>
+            <p className="text-sm text-on-surface-variant">
+              {starredOnly
+                ? 'No starred todos — star one to keep it on Daily Goals.'
+                : 'No todos yet — add one to get started.'}
+            </p>
           ) : (
             <ul className="flex flex-col divide-y divide-outline-variant/40">
               {sorted.map((todo) => (
@@ -294,7 +332,9 @@ export default function TodosBoard() {
                   todo={todo}
                   todayDateKey={todayDateKey}
                   subtaskCount={childrenByParent[todo.id]?.length ?? 0}
+                  workspace={workspaceFor(todo)}
                   onToggle={() => handleToggle(todo.id)}
+                  onToggleStar={() => toggleStar(todo.id)}
                   onOpen={() => setViewingTodo(todo)}
                   onEdit={() => setEditingTodo(todo)}
                   onDelete={() => setDeletingTodo(todo)}
@@ -337,7 +377,9 @@ export default function TodosBoard() {
           todo={viewing}
           todos={todos}
           lists={lists}
+          workspace={workspaceFor(viewing)}
           onToggle={handleToggle}
+          onToggleStar={() => toggleStar(viewing.id)}
           onAddSubtask={(title) => {
             addTodo(title, { parent_id: viewing.id, list_id: viewing.list_id })
           }}

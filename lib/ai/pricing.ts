@@ -1,6 +1,6 @@
 // USD per 1M tokens, from ai.google.dev pricing at time of writing. Kept as
 // the one place a model's price lives so ai_usage.est_cost_usd stays honest
-// when models change — see the AI Search & Token Budget plan (2026-08-18).
+// when models change.
 export const PRICING_PER_MILLION_TOKENS: Record<string, { input: number; output: number }> = {
   'gemini-3.5-flash-lite': { input: 0.3, output: 2.5 },
   'gemini-3.5-flash': { input: 1.5, output: 9.0 },

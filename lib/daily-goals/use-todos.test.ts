@@ -36,16 +36,22 @@ vi.mock('@/lib/supabase', () => {
     completed_at: null,
     created_at: '2026-08-01T00:00:00.000Z',
     caldav_uid: null,
+    mstodo_task_id: null,
+    mstodo_list_id: null,
+    starred: false,
   }
 
   const linkedTodo = {
     id: 'todo-2',
-    title: 'Reminders todo',
+    title: 'To Do task',
     notes: null,
     due_date: null,
     completed_at: null,
     created_at: '2026-08-01T00:00:00.000Z',
-    caldav_uid: 'uid-abc',
+    caldav_uid: null,
+    mstodo_task_id: 'task-abc',
+    mstodo_list_id: 'list-1',
+    starred: false,
   }
 
   return {
@@ -184,7 +190,8 @@ describe('useTodos deleteTodo', () => {
   })
 })
 
-describe('useTodos CalDAV integration', () => {
+
+describe('useTodos Microsoft To Do sync', () => {
   beforeEach(() => {
     mockState.updateShouldFail = false
     mockState.deleteShouldFail = false
@@ -193,36 +200,60 @@ describe('useTodos CalDAV integration', () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) })
   })
 
-  it('does not call the Reminders push route when toggling a todo with no caldav_uid', async () => {
+  const pushBody = (call: unknown[]) => JSON.parse((call[1] as { body: string }).body)
+
+  it('does not call the push route for an app-only todo', async () => {
     const { result } = renderHook(() => useTodos('2026-08-05'))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
       await result.current.toggleTodo('todo-1')
+      await result.current.toggleStar('todo-1')
     })
 
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(result.current.todos.find((t) => t.id === 'todo-1')?.starred).toBe(true)
   })
 
-  it('pushes the completion to Reminders when toggling a caldav-linked todo', async () => {
+  it('pushes completion and star changes for a linked todo', async () => {
     const { result } = renderHook(() => useTodos('2026-08-05'))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
       await result.current.toggleTodo('todo-2')
     })
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/caldav/reminders/push-completion', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ caldav_uid: 'uid-abc', completed: true }),
+    await act(async () => {
+      await result.current.toggleStar('todo-2')
     })
-    expect(result.current.todos.find((t) => t.id === 'todo-2')?.completed_at).not.toBeNull()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/microsoft/todo/push')
+    expect(pushBody(fetchMock.mock.calls[0])).toEqual({
+      todo_id: 'todo-2',
+      action: 'update',
+      changes: { completed: true },
+    })
+    expect(pushBody(fetchMock.mock.calls[1])).toEqual({
+      todo_id: 'todo-2',
+      action: 'update',
+      changes: { starred: true },
+    })
     expect(result.current.error).toBeNull()
   })
 
-  it('surfaces an error, without rolling back, when the Reminders push fails', async () => {
-    fetchMock.mockResolvedValue({ ok: false, json: async () => ({}) })
+  it('pushes only the synced fields of an edit', async () => {
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.updateTodo('todo-2', { title: 'Renamed', list_id: 'list-x' })
+    })
+
+    expect(pushBody(fetchMock.mock.calls[0]).changes).toEqual({ title: 'Renamed' })
+  })
+
+  it('keeps the change but warns when the push fails', async () => {
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ error: 'offline' }) })
     const { result } = renderHook(() => useTodos('2026-08-05'))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
@@ -231,31 +262,46 @@ describe('useTodos CalDAV integration', () => {
     })
 
     expect(result.current.todos.find((t) => t.id === 'todo-2')?.completed_at).not.toBeNull()
-    expect(result.current.error).toBe("Updated here, but couldn't sync that to Reminders.")
+    expect(result.current.error).toBe('Saved here, but not in Microsoft To Do: offline')
   })
 
-  it('pullReminders calls the pull route and refreshes on success', async () => {
+  it('deletes the To Do task first, and keeps the todo if that fails', async () => {
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ error: 'offline' }) })
     const { result } = renderHook(() => useTodos('2026-08-05'))
     await waitFor(() => expect(result.current.loading).toBe(false))
-    fetchMock.mockClear()
 
     await act(async () => {
-      await result.current.pullReminders()
+      await result.current.deleteTodo('todo-2')
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/caldav/reminders/pull', { method: 'POST' })
+    expect(pushBody(fetchMock.mock.calls[0])).toEqual({ todo_id: 'todo-2', action: 'delete' })
+    expect(result.current.todos.some((t) => t.id === 'todo-2')).toBe(true)
+    expect(result.current.error).toContain('Not deleted')
   })
 
-  it('pullReminders fails silently when the pull route is unreachable', async () => {
+  it('syncTodos reports the pull state', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ state: 'needs_reconnect', error: 'Reconnect' }) })
     const { result } = renderHook(() => useTodos('2026-08-05'))
     await waitFor(() => expect(result.current.loading).toBe(false))
-    fetchMock.mockClear()
+
+    await act(async () => {
+      await result.current.syncTodos()
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/microsoft/todo/pull', { method: 'POST' })
+    expect(result.current.syncStatus).toEqual({ state: 'needs_reconnect', message: 'Reconnect', syncedAt: undefined })
+  })
+
+  it('syncTodos reports an unreachable route without throwing', async () => {
     fetchMock.mockRejectedValue(new Error('network down'))
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
-      await result.current.pullReminders()
+      await result.current.syncTodos()
     })
 
+    expect(result.current.syncStatus.state).toBe('error')
     expect(result.current.error).toBeNull()
   })
 })

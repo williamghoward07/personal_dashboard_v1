@@ -4,13 +4,17 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Workspace } from '@/lib/types'
 
+export type WorkspacePatch = Partial<
+  Pick<Workspace, 'title' | 'subtitle' | 'folder_id' | 'color' | 'hidden_sections' | 'collapsed_sections'>
+>
+
 export interface UseWorkspacesResult {
   workspaces: Workspace[]
   loading: boolean
   error: string | null
   refresh: () => void
-  createWorkspace: (title: string) => Promise<Workspace | null>
-  updateWorkspace: (id: string, patch: Partial<Pick<Workspace, 'title' | 'subtitle'>>) => Promise<void>
+  createWorkspace: (title: string, folderId?: string | null) => Promise<Workspace | null>
+  updateWorkspace: (id: string, patch: WorkspacePatch) => Promise<void>
   archiveWorkspace: (id: string) => Promise<void>
   unarchiveWorkspace: (id: string) => Promise<void>
 }
@@ -44,7 +48,7 @@ export function useWorkspaces(): UseWorkspacesResult {
     refresh()
   }, [refresh])
 
-  const createWorkspace = useCallback(async (title: string) => {
+  const createWorkspace = useCallback(async (title: string, folderId: string | null = null) => {
     const trimmed = title.trim()
     if (!trimmed) return null
 
@@ -55,13 +59,17 @@ export function useWorkspaces(): UseWorkspacesResult {
       subtitle: null,
       archived_at: null,
       created_at: new Date().toISOString(),
+      folder_id: folderId,
+      color: null,
+      hidden_sections: [],
+      collapsed_sections: [],
     }
     setWorkspaces((prev) => [optimisticWorkspace, ...prev])
     setError(null)
 
     const { data, error: insertError } = await supabase
       .from('workspaces')
-      .insert({ title: trimmed })
+      .insert({ title: trimmed, folder_id: folderId })
       .select()
       .single()
 
@@ -77,7 +85,7 @@ export function useWorkspaces(): UseWorkspacesResult {
   }, [])
 
   const updateWorkspace = useCallback(
-    async (id: string, patch: Partial<Pick<Workspace, 'title' | 'subtitle'>>) => {
+    async (id: string, patch: WorkspacePatch) => {
       const target = workspaces.find((w) => w.id === id)
       if (!target) return
 

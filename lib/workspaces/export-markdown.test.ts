@@ -9,6 +9,10 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
     subtitle: 'AQA Geography Module 4',
     archived_at: null,
     created_at: '2026-08-01T00:00:00.000Z',
+    folder_id: null,
+    color: null,
+    hidden_sections: [],
+    collapsed_sections: [],
     ...overrides,
   }
 }
@@ -40,6 +44,9 @@ function todo(overrides: Partial<Todo> = {}): Todo {
     completed_at: null,
     created_at: '2026-08-03T00:00:00.000Z',
     caldav_uid: null,
+    mstodo_task_id: null,
+    mstodo_list_id: null,
+    starred: false,
     list_id: null,
     parent_id: null,
     notes_document_id: null,
@@ -55,6 +62,7 @@ function note(overrides: Partial<WorkspaceNote> = {}): WorkspaceNote {
     body: 'Key realization about the gas terminal trade-off.',
     kind: 'realization',
     footnote: null,
+    tags: [],
     created_at: '2026-08-04T14:15:00.000Z',
     ...overrides,
   }
@@ -130,19 +138,19 @@ describe('buildWorkspaceMarkdown', () => {
     expect(md).toContain('Linked todos: Review methodology')
   })
 
-  it('checks off completed todos and annotates due dates and Reminders origin', () => {
+  it('checks off completed todos and annotates due dates and To Do origin', () => {
     const md = buildWorkspaceMarkdown({
       workspace: workspace(),
       ...empty,
       todos: [
         todo({ title: 'Done thing', completed_at: '2026-08-06T00:00:00.000Z' }),
         todo({ title: 'Due thing', due_date: '2026-10-24', due_time: '09:00' }),
-        todo({ title: 'Synced thing', caldav_uid: 'abc' }),
+        todo({ title: 'Synced thing', mstodo_task_id: 'abc' }),
       ],
     })
     expect(md).toContain('- [x] Done thing')
     expect(md).toContain('- [ ] Due thing _(due 2026-10-24 09:00)_')
-    expect(md).toContain('- [ ] Synced thing _(from Reminders)_')
+    expect(md).toContain('- [ ] Synced thing _(from To Do)_')
   })
 
   it('renders log entries with their kind label, body and footnote', () => {
@@ -159,6 +167,16 @@ describe('buildWorkspaceMarkdown', () => {
     expect(md).toContain('_Corroborates the wave model_')
     expect(md).toContain('### Note')
     expect(md).toContain('Plain entry.')
+    expect(md).not.toContain('Tags:')
+  })
+
+  it('lists a log entry’s custom tags', () => {
+    const md = buildWorkspaceMarkdown({
+      workspace: workspace(),
+      ...empty,
+      notes: [note({ tags: ['pricing', 'logo'] })],
+    })
+    expect(md).toContain('Tags: #pricing #logo')
   })
 })
 

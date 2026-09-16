@@ -21,7 +21,9 @@ export default function LiquidSwitch<T extends string>({
   const count = options.length
 
   return (
-    <div className="relative flex w-fit shrink-0 rounded-full border border-outline-variant/60 bg-surface-container-highest/50 p-0.5 backdrop-blur-sm">
+    // Equal-width columns, so the sliding pill (sized as 1/count) lines up
+    // with every option whatever its label length.
+    <div className="relative grid w-fit shrink-0 auto-cols-fr grid-flow-col rounded-full border border-outline-variant/60 bg-surface-container-highest/50 p-0.5 backdrop-blur-sm">
       <div
         className="absolute top-0.5 bottom-0.5 rounded-full bg-gradient-to-b from-white/20 to-white/[0.04] shadow-[0_1px_3px_rgba(0,0,0,0.4),inset_0_1px_1px_rgba(255,255,255,0.35)] backdrop-blur-md transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
         style={{

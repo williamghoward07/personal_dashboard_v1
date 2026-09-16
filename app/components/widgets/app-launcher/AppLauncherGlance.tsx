@@ -65,7 +65,13 @@ export default function AppLauncherGlance() {
               title={link.title}
               className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-surface-container-high"
             >
-              <FaviconTile title={link.title} url={link.url} faviconPath={link.favicon_path} size="sm" />
+              <FaviconTile
+                title={link.title}
+                url={link.url}
+                faviconPath={link.favicon_path}
+                faviconCustomUrl={link.favicon_custom_url}
+                size="sm"
+              />
               <span className="w-full truncate text-center text-[10px] text-on-surface-variant">
                 {link.title}
               </span>

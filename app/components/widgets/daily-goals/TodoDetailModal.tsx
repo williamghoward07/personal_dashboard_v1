@@ -3,14 +3,19 @@
 import { useState } from 'react'
 import { Pencil, Plus, Trash2, X } from 'lucide-react'
 import type { Todo, TodoList } from '@/lib/types'
+import type { WorkspaceTag } from '@/lib/workspaces/use-workspace-lookup'
 import { groupByParent } from '@/lib/todos/subtasks'
 import Modal from '../../Modal'
+import WorkspaceChip from '../workspaces/WorkspaceChip'
+import StarButton from './StarButton'
 
 export default function TodoDetailModal({
   todo,
   todos,
   lists,
+  workspace,
   onToggle,
+  onToggleStar,
   onAddSubtask,
   onEdit,
   onDelete,
@@ -19,7 +24,9 @@ export default function TodoDetailModal({
   todo: Todo
   todos: Todo[]
   lists: TodoList[]
+  workspace?: WorkspaceTag
   onToggle: (id: string) => void
+  onToggleStar: () => void
   onAddSubtask: (title: string) => void
   onEdit: () => void
   onDelete: () => void
@@ -29,26 +36,29 @@ export default function TodoDetailModal({
   const { childrenByParent } = groupByParent(todos)
   const subtasks = childrenByParent[todo.id] ?? []
   const list = lists.find((l) => l.id === todo.list_id) ?? null
-  // Matches the DB guard trigger: only a top-level, non-CalDAV todo can
-  // gain subtasks (no grandchildren, no CalDAV-linked parents).
-  const canAddSubtasks = todo.parent_id === null && !todo.caldav_uid
+  // Matches the DB guard trigger: only a top-level, app-only todo can
+  // gain subtasks (no grandchildren, no To Do-linked parents).
+  const canAddSubtasks = todo.parent_id === null && !todo.mstodo_task_id
 
   return (
     <Modal onClose={onClose} size="lg">
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="font-display text-base font-bold text-on-surface">{todo.title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex shrink-0 items-center">
+            <StarButton starred={todo.starred} title={todo.title} onToggle={onToggleStar} alwaysShow />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-surface-variant">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-on-surface-variant">
           {todo.due_date && (
             <span>
               Due: {todo.due_date}
@@ -56,6 +66,12 @@ export default function TodoDetailModal({
             </span>
           )}
           {list && <span>List: {list.name}</span>}
+          {todo.mstodo_task_id && <span>Synced with Microsoft To Do</span>}
+          {workspace && (
+            <span className="flex items-center gap-1.5">
+              Workspace: <WorkspaceChip workspace={workspace} />
+            </span>
+          )}
         </div>
 
         {todo.notes && (

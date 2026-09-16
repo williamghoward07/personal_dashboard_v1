@@ -1,13 +1,14 @@
 import { supabase } from '@/lib/supabase'
 import type { Accent } from '@/lib/theme'
 import type { QuickLink } from '@/lib/types'
+import { UNFILED_KEY, type RowPatch } from '@/lib/app-launcher/order'
 
 export const FAVICON_BUCKET = 'link-favicons'
 
 // Real link_folders.id values are uuids — this sentinel can never collide,
 // so it's safe as the expand/collapse + reassignment-target key for the
 // virtual "Unfiled" folder, which has no row of its own.
-export const UNFILED_FOLDER_ID = 'unfiled'
+export const UNFILED_FOLDER_ID = UNFILED_KEY
 
 export const inputClass =
   'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-outline'
@@ -73,20 +74,13 @@ export async function resolveFaviconPath(url: string): Promise<string | null> {
   }
 }
 
-/** Swaps sort_order between item[index] and its neighbor — the up/down reorder UI. */
-export async function swapSortOrder(
+/** Writes drag-and-drop order/folder changes — one small UPDATE per changed row. */
+export async function saveRowPatches(
   table: 'quick_links' | 'link_folders',
-  items: { id: string; sort_order: number }[],
-  index: number,
-  direction: 'up' | 'down',
+  patches: RowPatch[],
 ): Promise<{ error: { message: string } | null }> {
-  const swapIndex = direction === 'up' ? index - 1 : index + 1
-  if (swapIndex < 0 || swapIndex >= items.length) return { error: null }
-  const a = items[index]
-  const b = items[swapIndex]
-  const [resA, resB] = await Promise.all([
-    supabase.from(table).update({ sort_order: b.sort_order }).eq('id', a.id),
-    supabase.from(table).update({ sort_order: a.sort_order }).eq('id', b.id),
-  ])
-  return { error: resA.error ?? resB.error ?? null }
+  const results = await Promise.all(
+    patches.map(({ id, patch }) => supabase.from(table).update(patch).eq('id', id)),
+  )
+  return { error: results.find((r) => r.error)?.error ?? null }
 }

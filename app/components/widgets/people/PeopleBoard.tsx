@@ -8,6 +8,7 @@ import FollowUpsCard from './FollowUpsCard'
 import InteractionsCard from './InteractionsCard'
 import PlacesCard from './PlacesCard'
 import GoogleContactsCard from './GoogleContactsCard'
+import InstagramLogCard from './InstagramLogCard'
 import QuickAddBar from './QuickAddBar'
 
 const MIGRATION_HINT =
@@ -129,6 +130,8 @@ export default function PeopleBoard() {
         runMutation={runMutation}
         onChange={refresh}
       />
+
+      <InstagramLogCard people={people} onChange={refresh} />
 
       <GoogleContactsCard onChange={refresh} />
     </>

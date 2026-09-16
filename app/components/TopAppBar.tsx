@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { LogOut } from 'lucide-react'
+import { LogOut, Maximize, Minimize2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useScrollDirection } from '@/lib/use-scroll-direction'
+import { useFullscreen } from '@/lib/use-fullscreen'
 
 export default function TopAppBar() {
   const router = useRouter()
@@ -13,6 +14,7 @@ export default function TopAppBar() {
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const scrollDirection = useScrollDirection()
+  const { isFullscreen, isSupported: fullscreenSupported, toggle: toggleFullscreen } = useFullscreen()
 
   useEffect(() => {
     const supabase = createClient()
@@ -58,6 +60,24 @@ export default function TopAppBar() {
         {error && <span className="text-xs text-error">{error}</span>}
         {email && (
           <span className="hidden text-xs text-on-surface-variant md:inline">{email}</span>
+        )}
+        {fullscreenSupported && (
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit full screen' : 'Enter full screen'}
+            aria-label={isFullscreen ? 'Exit full screen' : 'Enter full screen'}
+            className="flex items-center gap-2 rounded-xl border border-outline-variant bg-surface px-2 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors duration-200 hover:bg-surface-container hover:text-on-surface md:px-3"
+          >
+            {isFullscreen ? (
+              <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+            ) : (
+              <Maximize className="h-3.5 w-3.5" strokeWidth={1.75} />
+            )}
+            <span className="hidden md:inline">
+              {isFullscreen ? 'Exit full screen' : 'Full screen'}
+            </span>
+          </button>
         )}
         <button
           type="button"

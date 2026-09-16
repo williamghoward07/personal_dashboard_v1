@@ -354,41 +354,15 @@ export interface Person {
   updated_at: string
 }
 
-// People > Instagram log. Filled only by pasting a Claude-read snapshot of
-// screenshots (RPC import_instagram_snapshot) — there is no Instagram API.
-export interface InstagramAccount {
+// People > Instagram follows. Filled by importing Instagram's own
+// "Download your information" export (following.json) — no Instagram API.
+export interface InstagramFollow {
   id: string
-  username: string
+  handle: string
   display_name: string | null
-  i_follow: boolean
-  follows_me: boolean
-  i_follow_since: string | null
-  follows_me_since: string | null
-  person_id: string | null
   note: string | null
-  created_at: string
-  updated_at: string
-}
-
-export type InstagramEventKind = 'you_followed' | 'followed_you'
-
-export interface InstagramEvent {
-  id: string
-  account_id: string
-  kind: InstagramEventKind
-  occurred_on: string
-  import_id: string | null
-  created_at: string
-}
-
-export interface InstagramImport {
-  id: string
-  captured_on: string
-  is_baseline: boolean
-  following_count: number
-  followers_count: number
-  new_events: number
-  created_at: string
+  followed_at: string
+  person_id: string | null
 }
 
 export type InteractionChannel =

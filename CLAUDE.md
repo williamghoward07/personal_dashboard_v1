@@ -205,17 +205,15 @@ Markdown export (always complete, even for hidden sections).
 ### People (`/people`)
 - Contacts, interactions (+ attendees), places, follow-ups, Google Contacts
   sync (two-way for linked contacts), and the Gemini quick-add bar.
-- **Instagram log** (`instagram_accounts`, `instagram_imports`,
-  `instagram_events`): no Instagram API and no scraping or browser
-  automation (against Instagram's terms). Workflow: screenshot Following
-  (sorted "Date followed: Latest") and/or Activity "started following you"
-  → send them to Claude with the copied instructions (Claude Project on the
-  phone) or run the `instagram-log` skill in Claude Code → paste the JSON →
-  preview → import (RPC `import_instagram_snapshot`). An event is logged
-  only the first time a relationship is seen; the first import should be a
-  **baseline** (no events); unfollows are never inferred. Accounts can be
-  added to People or linked to a same-name contact. Logic:
-  `lib/people/instagram-import.ts`, `instagram-prompt.ts`.
+- **Instagram follows** (`instagram_follows`): no Instagram API and no
+  scraping or browser automation (against Instagram's terms). Workflow:
+  request Instagram's "Download your information" export, unzip it, paste
+  or upload `following.json` → `/api/instagram/import` parses
+  `relationships_following` and upserts by handle, using the export's own
+  timestamp as `followed_at`. Re-importing is additive-only: a handle
+  already stored is never touched (its `note`/`display_name`/`person_id`
+  are preserved), so re-running the same or a newer export is always safe.
+  Follows can be linked to a `people` row. Logic: `lib/instagram/follows.ts`.
 
 ### App Library (`/apps`, `link_folders` + `quick_links`)
 - All folders open by default (collapse state remembered per browser),
@@ -285,9 +283,8 @@ actual values.
 - **Starling**: `STARLING_ACCESS_TOKEN`
 - **Gemini**: `GEMINI_API_KEY` (aistudio.google.com, free tier), optional
   `AI_ENABLED=false` kill switch
-- **Claude Project deep links** (optional, hidden when unset — the app never
-  calls Claude): `NEXT_PUBLIC_BIBLE_CLAUDE_PROJECT_URL`,
-  `NEXT_PUBLIC_INSTAGRAM_CLAUDE_PROJECT_URL`
+- **Claude Project deep link** (optional, hidden when unset — the app never
+  calls Claude): `NEXT_PUBLIC_BIBLE_CLAUDE_PROJECT_URL`
 - `ICLOUD_CALDAV_*` are no longer used.
 
 ## Using Education and Workspaces together

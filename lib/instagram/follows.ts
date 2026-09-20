@@ -2,9 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { InstagramFollow } from '@/lib/types'
 
 // Parses Instagram's own "Download your information" export
-// (following.json), which looks like:
+// (following.json). Instagram has used two shapes for this file:
 //   { "relationships_following": [
 //     { "string_list_data": [{ "value": "sam.k", "href": "...", "timestamp": 1737000000 }] }
+//   ] }
+// and (current, as of 2026-09), where the handle moved to "title" and
+// string_list_data only carries href/timestamp:
+//   { "relationships_following": [
+//     { "title": "sam.k", "string_list_data": [{ "href": "...", "timestamp": 1737000000 }] }
 //   ] }
 // Only the first string_list_data entry per relationship is used — that's
 // the account itself.
@@ -49,7 +54,7 @@ export function parseFollowingExport(json: string): ParseResult {
       return { ok: false, error: `Entry #${i + 1} has no "string_list_data".` }
     }
     const item = stringListData[0] as Record<string, unknown> | null
-    const rawValue = item?.value
+    const rawValue = typeof item?.value === 'string' ? item.value : (entry as Record<string, unknown>).title
     const timestamp = item?.timestamp
     if (typeof rawValue !== 'string' || !rawValue.trim()) {
       return { ok: false, error: `Entry #${i + 1} has no "value" (handle).` }
@@ -107,4 +112,34 @@ export async function linkFollow(supabase: SupabaseClient, id: string, personId:
 export async function unlinkFollow(supabase: SupabaseClient, id: string): Promise<void> {
   const { error } = await supabase.from('instagram_follows').update({ person_id: null }).eq('id', id)
   if (error) throw new Error(error.message)
+}
+
+export async function updateFollowNote(supabase: SupabaseClient, id: string, note: string | null): Promise<void> {
+  const { error } = await supabase.from('instagram_follows').update({ note }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+export async function updateFollowCategory(supabase: SupabaseClient, id: string, category: string | null): Promise<void> {
+  const { error } = await supabase.from('instagram_follows').update({ category }).eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+export async function bulkSetCategory(supabase: SupabaseClient, ids: string[], category: string): Promise<void> {
+  if (ids.length === 0) return
+  const { error } = await supabase.from('instagram_follows').update({ category }).in('id', ids)
+  if (error) throw new Error(error.message)
+}
+
+export async function bulkUnlinkFollows(supabase: SupabaseClient, ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+  const { error } = await supabase.from('instagram_follows').update({ person_id: null }).in('id', ids)
+  if (error) throw new Error(error.message)
+}
+
+/** Each row can link to a different person, so this can't be a single request. */
+export async function bulkLinkFollows(
+  supabase: SupabaseClient,
+  links: { id: string; personId: string }[]
+): Promise<void> {
+  await Promise.all(links.map((l) => linkFollow(supabase, l.id, l.personId)))
 }

@@ -1,154 +1,371 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { AtSign } from 'lucide-react'
+import { useEffect, useId, useMemo, useState } from 'react'
+import { AtSign, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { InstagramFollow, Person } from '@/lib/types'
+import {
+  listFollows,
+  linkFollow,
+  unlinkFollow,
+  updateFollowNote,
+  updateFollowCategory,
+  bulkSetCategory,
+  bulkUnlinkFollows,
+  bulkLinkFollows,
+} from '@/lib/instagram/follows'
+import { filterFollows, sortFollows, type FollowSort, type FollowStatusFilter } from '@/lib/instagram/list'
+import { suggestMatch, describeMatchBatch, type MatchSuggestion } from '@/lib/instagram/match'
+import { buildFollowsCsv, followsExportFilename, type FollowExportRow } from '@/lib/instagram/export'
+import { useStoredIdSet } from '@/lib/utils/use-stored-id-set'
 import WidgetCard from '../../WidgetCard'
+import ConfirmDialog from '../../ConfirmDialog'
+import InstagramFollowsStats from './InstagramFollowsStats'
+import InstagramFollowsFilters from './InstagramFollowsFilters'
+import InstagramFollowRow from './InstagramFollowRow'
+import InstagramBulkActionBar from './InstagramBulkActionBar'
+import InstagramImportPanel from './InstagramImportPanel'
 
 const MIGRATION_HINT = 'Has supabase/migrations/20260918000000_instagram_follows.sql been run?'
 
-// Imports Instagram's own "Download your information" export
-// (following.json) — no Instagram API, no screenshots. Plain markup,
-// no design pass yet.
+interface BatchCandidate {
+  follow: InstagramFollow
+  person: Person
+  score: number
+}
+
 export default function InstagramFollowsCard({ people }: { people: Person[] }) {
   const [follows, setFollows] = useState<InstagramFollow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const [text, setText] = useState('')
-  const [importing, setImporting] = useState(false)
+
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState<FollowStatusFilter>('all')
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
+  const [sort, setSort] = useState<FollowSort>('followed_desc')
+
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [dismissed, setDismissed] = useStoredIdSet('instagram-follows:dismissed-suggestions')
+  const [batchCandidates, setBatchCandidates] = useState<BatchCandidate[] | null>(null)
+  const [confirmingUnlink, setConfirmingUnlink] = useState(false)
+
+  const categoryListId = useId()
 
   const refresh = () => {
-    supabase
-      .from('instagram_follows')
-      .select('*')
-      .order('followed_at', { ascending: false })
-      .then(({ data, error: selectError }) => {
-        setError(selectError ? `Couldn't load follows: ${selectError.message}. ${MIGRATION_HINT}` : null)
-        setFollows((data ?? []) as InstagramFollow[])
-        setLoading(false)
+    listFollows(supabase)
+      .then((data) => {
+        setFollows(data)
+        setError(null)
       })
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : 'unknown error'
+        setError(`Couldn't load follows: ${msg}. ${MIGRATION_HINT}`)
+      })
+      .finally(() => setLoading(false))
   }
 
   useEffect(refresh, [])
 
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
 
-  const onFile = (file: File | null) => {
-    if (!file) return
-    file.text().then(setText)
-  }
+  const counts = useMemo(
+    () => ({
+      all: follows.length,
+      linked: follows.filter((f) => f.person_id).length,
+      unlinked: follows.filter((f) => !f.person_id).length,
+    }),
+    [follows]
+  )
 
-  const runImport = async () => {
-    if (!text.trim()) return
-    setImporting(true)
-    setError(null)
-    setMessage(null)
+  const categories = useMemo(
+    () => [...new Set(follows.map((f) => f.category).filter((c): c is string => Boolean(c)))].sort(),
+    [follows]
+  )
+
+  const filtered = useMemo(
+    () => sortFollows(filterFollows(follows, { query, status, category: categoryFilter }), sort),
+    [follows, query, status, categoryFilter, sort]
+  )
+
+  const suggestions = useMemo(() => {
+    const map = new Map<string, MatchSuggestion>()
+    for (const f of follows) {
+      if (f.person_id || dismissed.has(f.id)) continue
+      const s = suggestMatch(f, people)
+      if (s) map.set(f.id, s)
+    }
+    return map
+  }, [follows, people, dismissed])
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((f) => selectedIds.has(f.id))
+  const toggleSelectAllFiltered = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allFilteredSelected) filtered.forEach((f) => next.delete(f.id))
+      else filtered.forEach((f) => next.add(f.id))
+      return next
+    })
+
+  const link = async (id: string, personId: string) => {
     try {
-      const res = await fetch('/api/instagram/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ json: text }),
-      })
-      const result = (await res.json()) as { added?: number; error?: string }
-      if (!res.ok) {
-        setError(result.error ?? 'Import failed.')
-      } else {
-        setMessage(`Added ${result.added ?? 0} new follow${result.added === 1 ? '' : 's'}.`)
-        setText('')
-        refresh()
-      }
-    } catch {
-      setError('Import failed — check your connection.')
-    } finally {
-      setImporting(false)
+      await linkFollow(supabase, id, personId)
+      setFollows((prev) => prev.map((f) => (f.id === id ? { ...f, person_id: personId } : f)))
+    } catch (e) {
+      setError(`Couldn't link: ${(e as Error).message}`)
     }
   }
 
-  const link = async (id: string, personId: string) => {
-    if (!personId) return
-    const { error: linkError } = await supabase.from('instagram_follows').update({ person_id: personId }).eq('id', id)
-    if (linkError) setError(`Couldn't link: ${linkError.message}`)
-    else refresh()
+  const unlink = async (id: string) => {
+    try {
+      await unlinkFollow(supabase, id)
+      setFollows((prev) => prev.map((f) => (f.id === id ? { ...f, person_id: null } : f)))
+    } catch (e) {
+      setError(`Couldn't unlink: ${(e as Error).message}`)
+    }
   }
 
-  const unlink = async (id: string) => {
-    const { error: unlinkError } = await supabase.from('instagram_follows').update({ person_id: null }).eq('id', id)
-    if (unlinkError) setError(`Couldn't unlink: ${unlinkError.message}`)
-    else refresh()
+  const saveNote = async (id: string, note: string | null) => {
+    try {
+      await updateFollowNote(supabase, id, note)
+      setFollows((prev) => prev.map((f) => (f.id === id ? { ...f, note } : f)))
+    } catch (e) {
+      setError(`Couldn't save note: ${(e as Error).message}`)
+    }
   }
+
+  const saveCategory = async (id: string, category: string | null) => {
+    try {
+      await updateFollowCategory(supabase, id, category)
+      setFollows((prev) => prev.map((f) => (f.id === id ? { ...f, category } : f)))
+    } catch (e) {
+      setError(`Couldn't save category: ${(e as Error).message}`)
+    }
+  }
+
+  const dismissSuggestion = (id: string) => setDismissed(new Set(dismissed).add(id))
+
+  const openBatchAutoMatch = (scopeIds?: Set<string>) => {
+    const candidates: BatchCandidate[] = []
+    for (const f of follows) {
+      if (f.person_id) continue
+      if (scopeIds && !scopeIds.has(f.id)) continue
+      const s = suggestions.get(f.id)
+      if (s) candidates.push({ follow: f, person: s.person, score: s.score })
+    }
+    if (candidates.length > 0) setBatchCandidates(candidates)
+  }
+
+  const confirmBatchAutoMatch = async () => {
+    if (!batchCandidates) return
+    const candidates = batchCandidates
+    try {
+      await bulkLinkFollows(
+        supabase,
+        candidates.map((c) => ({ id: c.follow.id, personId: c.person.id }))
+      )
+      const linkedIds = new Map(candidates.map((c) => [c.follow.id, c.person.id]))
+      setFollows((prev) => prev.map((f) => (linkedIds.has(f.id) ? { ...f, person_id: linkedIds.get(f.id)! } : f)))
+      setMessage(`Linked ${candidates.length} follow${candidates.length === 1 ? '' : 's'}.`)
+    } catch (e) {
+      setError(`Couldn't batch-link: ${(e as Error).message}`)
+    } finally {
+      setBatchCandidates(null)
+      clearSelection()
+    }
+  }
+
+  const applyBulkCategory = async (category: string) => {
+    const ids = [...selectedIds]
+    try {
+      await bulkSetCategory(supabase, ids, category)
+      setFollows((prev) => prev.map((f) => (ids.includes(f.id) ? { ...f, category } : f)))
+      clearSelection()
+    } catch (e) {
+      setError(`Couldn't apply category: ${(e as Error).message}`)
+    }
+  }
+
+  const confirmBulkUnlink = async () => {
+    const ids = [...selectedIds]
+    try {
+      await bulkUnlinkFollows(supabase, ids)
+      setFollows((prev) => prev.map((f) => (ids.includes(f.id) ? { ...f, person_id: null } : f)))
+    } catch (e) {
+      setError(`Couldn't unlink: ${(e as Error).message}`)
+    } finally {
+      setConfirmingUnlink(false)
+      clearSelection()
+    }
+  }
+
+  const toExportRow = (f: InstagramFollow): FollowExportRow => ({
+    handle: f.handle,
+    display_name: f.display_name,
+    followed_at: f.followed_at,
+    category: f.category,
+    note: f.note,
+    person_full_name: f.person_id ? (peopleById.get(f.person_id)?.full_name ?? null) : null,
+  })
+
+  const exportCsv = (rows: InstagramFollow[]) => {
+    const csv = buildFollowsCsv(rows.map(toExportRow))
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = followsExportFilename('csv')
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const selectedHasSuggestion = [...selectedIds].some((id) => suggestions.has(id))
 
   return (
-    <WidgetCard title="Instagram follows" accent="amber" icon={<AtSign className="h-4 w-4" />}>
-      <div className="flex flex-col gap-2 text-xs">
-        <p>
-          Import Instagram&apos;s &quot;Download your information&quot; export: unzip it, find{' '}
-          <code>following.json</code>, then paste or upload it below.
-        </p>
-
-        <input type="file" accept="application/json" onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={5}
-          placeholder='{"relationships_following": [...]}'
-          className="w-full rounded border border-outline-variant bg-surface-container-low p-2 font-mono text-[11px]"
-        />
-        <button
-          type="button"
-          onClick={runImport}
-          disabled={importing || !text.trim()}
-          className="w-fit rounded border border-outline-variant px-2 py-1 disabled:opacity-40"
-        >
-          {importing ? 'Importing…' : 'Import'}
-        </button>
-
-        {error && <p role="alert">{error}</p>}
-        {message && <p>{message}</p>}
+    <WidgetCard
+      title="Instagram follows"
+      accent="amber"
+      icon={<AtSign className="h-4 w-4" />}
+      className="sm:col-span-2 xl:col-span-2"
+    >
+      <div className="flex flex-col gap-3">
+        {error && (
+          <p role="alert" className="text-xs text-error">
+            {error}
+          </p>
+        )}
+        {message && <p className="text-xs text-on-surface-variant">{message}</p>}
 
         {loading ? (
-          <p>Loading…</p>
+          <p className="text-xs">Loading…</p>
         ) : follows.length === 0 ? (
-          <p>No follows imported yet.</p>
+          <>
+            <p className="text-xs">No follows imported yet.</p>
+            <InstagramImportPanel onImported={refresh} />
+          </>
         ) : (
-          <ul className="flex flex-col divide-y divide-outline-variant/40">
-            {follows.map((f) => {
-              const person = f.person_id ? peopleById.get(f.person_id) : undefined
-              return (
-                <li key={f.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5">
-                  <a href={`https://www.instagram.com/${f.handle}/`} target="_blank" rel="noreferrer noopener">
-                    @{f.handle}
-                  </a>
-                  {f.display_name && <span>{f.display_name}</span>}
-                  <span>followed {new Date(f.followed_at).toLocaleDateString()}</span>
-                  {person ? (
-                    <span>
-                      linked to {person.full_name}{' '}
-                      <button type="button" onClick={() => unlink(f.id)}>
-                        Unlink
-                      </button>
-                    </span>
-                  ) : (
-                    <select defaultValue="" onChange={(e) => void link(f.id, e.target.value)}>
-                      <option value="" disabled>
-                        Link to…
-                      </option>
-                      {people
-                        .filter((p) => !p.archived)
-                        .map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.full_name}
-                          </option>
-                        ))}
-                    </select>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+          <>
+            <InstagramFollowsStats total={counts.all} linked={counts.linked} unlinked={counts.unlinked} />
+
+            <InstagramFollowsFilters
+              query={query}
+              onQueryChange={setQuery}
+              status={status}
+              onStatusChange={setStatus}
+              counts={counts}
+              category={categoryFilter}
+              onCategoryChange={setCategoryFilter}
+              categories={categories}
+              sort={sort}
+              onSortChange={setSort}
+            />
+
+            <datalist id={categoryListId}>
+              {categories.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <label className="flex items-center gap-1.5 text-on-surface-variant">
+                <input
+                  type="checkbox"
+                  checked={allFilteredSelected}
+                  onChange={toggleSelectAllFiltered}
+                  className="h-3.5 w-3.5 accent-people-amber"
+                />
+                Select all ({filtered.length})
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openBatchAutoMatch()}
+                  disabled={suggestions.size === 0}
+                  className="flex items-center gap-1 rounded border border-outline-variant px-2 py-1 text-on-surface-variant hover:border-people-amber/40 hover:text-people-amber disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  Auto-match all unlinked ({suggestions.size})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportCsv(filtered)}
+                  className="rounded border border-outline-variant px-2 py-1 text-on-surface-variant hover:border-people-amber/40 hover:text-people-amber"
+                >
+                  Export ({filtered.length})
+                </button>
+              </div>
+            </div>
+
+            {selectedIds.size > 0 && (
+              <InstagramBulkActionBar
+                selectedCount={selectedIds.size}
+                autoMatchAvailable={selectedHasSuggestion}
+                onAutoMatch={() => openBatchAutoMatch(selectedIds)}
+                categoryListId={categoryListId}
+                onApplyCategory={applyBulkCategory}
+                onExport={() => exportCsv(filtered.filter((f) => selectedIds.has(f.id)))}
+                onUnlink={() => setConfirmingUnlink(true)}
+                onClear={clearSelection}
+              />
+            )}
+
+            {filtered.length === 0 ? (
+              <p className="text-xs">No follows match the current search/filter.</p>
+            ) : (
+              <ul className="flex max-h-128 flex-col divide-y divide-outline-variant/40 overflow-y-auto">
+                {filtered.map((f) => (
+                  <InstagramFollowRow
+                    key={f.id}
+                    follow={f}
+                    people={people}
+                    linkedPerson={f.person_id ? (peopleById.get(f.person_id) ?? null) : null}
+                    selected={selectedIds.has(f.id)}
+                    onToggleSelect={() => toggleSelect(f.id)}
+                    onLink={(personId) => link(f.id, personId)}
+                    onUnlink={() => unlink(f.id)}
+                    onNoteChange={(note) => saveNote(f.id, note)}
+                    onCategoryChange={(cat) => saveCategory(f.id, cat)}
+                    categoryListId={categoryListId}
+                    suggestion={suggestions.get(f.id) ?? null}
+                    onAcceptSuggestion={() => {
+                      const s = suggestions.get(f.id)
+                      if (s) link(f.id, s.person.id)
+                    }}
+                    onDismissSuggestion={() => dismissSuggestion(f.id)}
+                  />
+                ))}
+              </ul>
+            )}
+
+            <InstagramImportPanel onImported={refresh} />
+          </>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={batchCandidates !== null}
+        message={batchCandidates ? describeMatchBatch(batchCandidates) : ''}
+        confirmLabel="Link all"
+        onCancel={() => setBatchCandidates(null)}
+        onConfirm={confirmBatchAutoMatch}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmingUnlink}
+        message={`Unlink ${selectedIds.size} follow${selectedIds.size === 1 ? '' : 's'} from their person records? Each can be re-linked individually.`}
+        confirmLabel="Unlink"
+        onCancel={() => setConfirmingUnlink(false)}
+        onConfirm={confirmBulkUnlink}
+      />
     </WidgetCard>
   )
 }

@@ -20,7 +20,7 @@ export default function ConfirmDialog({
   return (
     <Modal onClose={onCancel}>
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-on-surface-variant">{message}</p>
+        <p className="whitespace-pre-line text-sm text-on-surface-variant">{message}</p>
         <div className="flex justify-end gap-2">
           <button
             type="button"

@@ -361,6 +361,7 @@ export interface InstagramFollow {
   handle: string
   display_name: string | null
   note: string | null
+  category: string | null
   followed_at: string
   person_id: string | null
 }

@@ -15,6 +15,15 @@ describe('parseFollowingExport', () => {
     expect(result.follows).toEqual([{ handle: 'sam.k', followed_at: new Date(1_737_000_000 * 1000).toISOString() }])
   })
 
+  it('falls back to "title" for the current export format (no value field)', () => {
+    const result = parseFollowingExport(
+      exportJson([{ title: 'durhamcollegerunning', string_list_data: [{ href: 'https://www.instagram.com/_u/durhamcollegerunning', timestamp: 1789579867 }] }])
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.follows).toEqual([{ handle: 'durhamcollegerunning', followed_at: new Date(1789579867 * 1000).toISOString() }])
+  })
+
   it('drops duplicate handles', () => {
     const entry = { string_list_data: [{ value: 'jo_b', timestamp: 1_700_000_000 }] }
     const result = parseFollowingExport(exportJson([entry, entry]))

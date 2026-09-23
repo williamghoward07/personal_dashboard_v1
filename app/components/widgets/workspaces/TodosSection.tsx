@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import { CheckCircle2, Link2, ListChecks, Plus, Trash2, Unlink, X } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
+import { CountBadge } from '@/components/ui/count-badge'
+import { MetadataChip } from '@/components/ui/metadata-chip'
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo } from '@/lib/types'
 import AttachExistingTodoPanel from './AttachExistingTodoPanel'
 import TodoLinkAttachPanel from './TodoLinkAttachPanel'
@@ -79,9 +81,7 @@ export default function TodosSection({
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
           <ListChecks className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
           Scoped next actions
-          <span className="rounded-full border border-outline-variant px-1.5 py-0.5 text-[11px] tabular-nums text-on-surface-variant">
-            {todos.length}
-          </span>
+          <CountBadge accent="ws" count={todos.length} />
         </h2>
         <CollapseButton label="Scoped next actions" onClick={onCollapse} />
       </div>
@@ -236,11 +236,7 @@ function TodoRow({
             <span className={`text-sm ${isDone ? 'text-on-surface-variant/60 line-through' : 'text-on-surface'}`}>
               {todo.title}
             </span>
-            {todo.mstodo_task_id && (
-              <span className="rounded-full border border-outline-variant px-1.5 py-0.5 text-[10px] text-on-surface-variant">
-                To Do
-              </span>
-            )}
+            {todo.mstodo_task_id && <MetadataChip>To Do</MetadataChip>}
             {todo.due_date && (
               <span className="text-[11px] tabular-nums text-on-surface-variant">
                 Due {todo.due_date}

@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import { Brain, Hash, Send, X } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
+import { CountBadge } from '@/components/ui/count-badge'
+import { Timeline } from '@/components/ui/timeline'
 import type { WorkspaceNote, WorkspaceNoteKind } from '@/lib/types'
 import { NOTE_KINDS, NOTE_KIND_ORDER } from '@/lib/workspaces/kinds'
 import { extractHashtags, mergeTags, normalizeTag, tagSuggestions } from '@/lib/workspaces/tags'
@@ -80,9 +82,7 @@ export default function NotesSection({
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
           <Brain className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
           Thinking log
-          <span className="rounded-full border border-outline-variant px-1.5 py-0.5 text-[11px] tabular-nums text-on-surface-variant">
-            {notes.length}
-          </span>
+          <CountBadge accent="ws" count={notes.length} />
         </h2>
         <span className="flex items-center gap-1.5">
           <span
@@ -233,7 +233,7 @@ export default function NotesSection({
       ) : notes.length === 0 ? (
         <p className="text-sm text-on-surface-variant">Nothing logged yet — record your first observation above.</p>
       ) : (
-        <ul className="relative flex max-h-200 flex-col gap-3 overflow-y-auto border-l border-outline-variant/50 pl-0">
+        <Timeline className="max-h-200 overflow-y-auto pr-1">
           {visibleNotes.map((note) => (
             <ThinkingLogEntry
               key={note.id}
@@ -242,7 +242,7 @@ export default function NotesSection({
               onTagClick={(tag) => setActiveTag((current) => (current === tag ? null : tag))}
             />
           ))}
-        </ul>
+        </Timeline>
       )}
     </ModuleGlassCard>
   )

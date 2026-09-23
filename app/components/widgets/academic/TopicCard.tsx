@@ -13,7 +13,7 @@ export default function TopicCard({
   onDelete: () => void
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container-low p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container p-3">
       <div className="flex items-start justify-between gap-2">
         <h4 className="text-sm font-bold text-on-surface">{topic.name}</h4>
         <div className="flex shrink-0 gap-1">

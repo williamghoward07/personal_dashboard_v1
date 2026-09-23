@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Task, TaskResearchLink, Prompt, PerplexityLink } from '@/lib/types'
+import { EntityChip } from '@/components/ui/entity-chip'
+import { StatusBadge } from '@/components/ui/status-badge'
 import Modal from '../../Modal'
 import ResearchAttachModal from './ResearchAttachModal'
 import TaskTimeTracking from './TaskTimeTracking'
@@ -98,11 +100,15 @@ export default function TaskDetailModal({
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-on-surface-variant">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-on-surface-variant">
           {task.type && <span>Type: {task.type}</span>}
           {task.due_date && <span>Due: {task.due_date}</span>}
           {task.credit_weight != null && <span>Weight: {task.credit_weight}%</span>}
-          {task.status && <span>Status: {task.status}</span>}
+          {task.status && (
+            <StatusBadge accent="orange" size="sm">
+              {task.status}
+            </StatusBadge>
+          )}
           {task.grade && <span>Grade: {task.grade}</span>}
         </div>
 
@@ -140,21 +146,15 @@ export default function TaskDetailModal({
           ) : linkedItems.length === 0 ? (
             <p className="text-xs text-on-surface-variant">Nothing attached yet.</p>
           ) : (
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-wrap gap-1.5">
               {linkedItems.map((li) => (
-                <li
-                  key={li.linkId}
-                  className="flex items-center justify-between gap-2 rounded-md border border-research-pink/30 bg-research-pink/5 px-2 py-1.5 text-xs"
-                >
-                  <span className="truncate text-on-surface">{li.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => unlink(li.linkId)}
-                    aria-label="Unlink"
-                    className="shrink-0 rounded p-0.5 text-on-surface-variant hover:text-error"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                <li key={li.linkId}>
+                  <EntityChip
+                    name={li.label}
+                    accent="pink"
+                    onRemove={() => unlink(li.linkId)}
+                    removeLabel={`Unlink ${li.label}`}
+                  />
                 </li>
               ))}
             </ul>

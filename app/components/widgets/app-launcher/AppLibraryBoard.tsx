@@ -30,6 +30,8 @@ import {
   linkOrderPatches,
   moveLink,
 } from '@/lib/app-launcher/order'
+import { resolveLauncherIds, toggleLauncherLink } from '@/lib/app-launcher/launcher-selection'
+import { useSettings } from '@/lib/settings/use-settings'
 import { useStoredIdSet } from '@/lib/utils/use-stored-id-set'
 import ConfirmDialog from '../../ConfirmDialog'
 import FolderTile, { folderDragId, type FolderGroup } from './FolderTile'
@@ -46,7 +48,7 @@ const COLLAPSED_STORAGE_KEY = 'app-library:collapsed-folders'
 
 type DragType = 'folder' | 'link'
 
-type LinkPreset = Pick<QuickLink, 'title' | 'url' | 'folder_id' | 'is_pinned' | 'favicon_custom_url' | 'favicon_path'>
+type LinkPreset = Pick<QuickLink, 'title' | 'url' | 'folder_id' | 'favicon_custom_url' | 'favicon_path'>
 
 const idOf = (dragId: string | number) => String(dragId).replace(/^(folder|link|drop):/, '')
 const typeOf = (data: unknown): string | undefined => (data as { type?: string } | undefined)?.type
@@ -75,6 +77,7 @@ export default function AppLibraryBoard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [collapsedIds, setCollapsedIds] = useStoredIdSet(COLLAPSED_STORAGE_KEY)
+  const { settings, error: settingsError, updateSettings } = useSettings()
 
   const [isAddFolderOpen, setIsAddFolderOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState<LinkFolder | null>(null)
@@ -118,6 +121,14 @@ export default function AppLibraryBoard() {
   useEffect(refresh, [])
 
   const folderIds = useMemo(() => folders.map((f) => f.id), [folders])
+
+  // The launcher's ordered array, resolved against links that still exist —
+  // this is the "is a link pinned" answer everywhere on this page now;
+  // quick_links.is_pinned is retired and never read (CLAUDE.md App Library).
+  const pinnedIds = useMemo(() => {
+    const availableIds = new Set(links.map((l) => l.id))
+    return new Set(resolveLauncherIds(settings.launcher_link_ids, availableIds))
+  }, [settings.launcher_link_ids, links])
 
   const folderGroups = useMemo<FolderGroup[]>(() => {
     const byFolder = groupLinks(links)
@@ -206,7 +217,6 @@ export default function AppLibraryBoard() {
       title: '',
       url: '',
       folder_id: folderId,
-      is_pinned: false,
       favicon_custom_url: null,
       favicon_path: null,
     })
@@ -238,10 +248,7 @@ export default function AppLibraryBoard() {
   }
 
   const handleTogglePinLink = async (link: QuickLink) => {
-    const ok = await runMutation(() =>
-      supabase.from('quick_links').update({ is_pinned: !link.is_pinned }).eq('id', link.id),
-    )
-    if (ok) refresh()
+    await updateSettings({ launcher_link_ids: toggleLauncherLink([...pinnedIds], link.id) })
   }
 
   // ---- drag and drop ----
@@ -378,8 +385,10 @@ export default function AppLibraryBoard() {
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">{error}</div>
+      {(error || settingsError) && (
+        <div className="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">
+          {error ?? settingsError}
+        </div>
       )}
 
       {loading && links.length === 0 && folders.length === 0 ? (
@@ -415,6 +424,7 @@ export default function AppLibraryBoard() {
                   folder={group}
                   isExpanded={!collapsedIds.has(group.id)}
                   isLinkDropTarget={dragType === 'link' && overFolderKey === group.id}
+                  pinnedIds={pinnedIds}
                   onToggleExpand={() => toggleExpanded(group.id)}
                   onAddLink={() => openAddLink(group.isVirtual ? null : group.id)}
                   onEdit={() => {

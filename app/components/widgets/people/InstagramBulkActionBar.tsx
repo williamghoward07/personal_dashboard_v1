@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import { Download, Sparkles, Tag, Unlink, X } from 'lucide-react'
+import { DataTableBulkBar } from '@/components/ui/data-table'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 export default function InstagramBulkActionBar({
   selectedCount,
@@ -25,18 +28,13 @@ export default function InstagramBulkActionBar({
   const [category, setCategory] = useState('')
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border border-people-amber/30 bg-people-amber/5 px-2 py-1.5 text-xs">
-      <span className="font-medium text-people-amber">{selectedCount} selected</span>
+    <DataTableBulkBar>
+      <span className="label-caps text-people-amber">{selectedCount} selected</span>
 
-      <button
-        type="button"
-        onClick={onAutoMatch}
-        disabled={!autoMatchAvailable}
-        className="flex items-center gap-1 rounded border border-outline-variant px-2 py-1 text-on-surface-variant hover:border-people-amber/40 hover:text-people-amber disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <Sparkles className="h-3 w-3" />
+      <Button variant="outline" size="sm" onClick={onAutoMatch} disabled={!autoMatchAvailable}>
+        <Sparkles className="h-3.5 w-3.5" />
         Auto-match
-      </button>
+      </Button>
 
       <form
         onSubmit={(e) => {
@@ -46,52 +44,37 @@ export default function InstagramBulkActionBar({
             setCategory('')
           }
         }}
-        className="flex items-center gap-1"
+        className="flex items-center gap-1.5"
       >
-        <input
+        <Input
+          size="sm"
+          accent="amber"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           list={categoryListId}
           placeholder="Category…"
           aria-label="Apply category to selected"
-          className="w-24 rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-on-surface outline-none focus:border-people-amber"
+          className="w-28"
         />
-        <button
-          type="submit"
-          disabled={!category.trim()}
-          className="flex items-center gap-1 rounded border border-outline-variant px-2 py-1 text-on-surface-variant hover:border-people-amber/40 hover:text-people-amber disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <Tag className="h-3 w-3" />
+        <Button type="submit" variant="outline" size="sm" disabled={!category.trim()}>
+          <Tag className="h-3.5 w-3.5" />
           Apply
-        </button>
+        </Button>
       </form>
 
-      <button
-        type="button"
-        onClick={onExport}
-        className="flex items-center gap-1 rounded border border-outline-variant px-2 py-1 text-on-surface-variant hover:border-people-amber/40 hover:text-people-amber"
-      >
-        <Download className="h-3 w-3" />
+      <Button variant="outline" size="sm" onClick={onExport}>
+        <Download className="h-3.5 w-3.5" />
         Export
-      </button>
+      </Button>
 
-      <button
-        type="button"
-        onClick={onUnlink}
-        className="flex items-center gap-1 rounded border border-outline-variant px-2 py-1 text-on-surface-variant hover:border-error/40 hover:text-error"
-      >
-        <Unlink className="h-3 w-3" />
+      <Button variant="destructive" size="sm" onClick={onUnlink}>
+        <Unlink className="h-3.5 w-3.5" />
         Unlink
-      </button>
+      </Button>
 
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label="Clear selection"
-        className="ml-auto rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
-      >
+      <Button variant="icon" size="icon-sm" onClick={onClear} aria-label="Clear selection" className="ml-auto">
         <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
+      </Button>
+    </DataTableBulkBar>
   )
 }

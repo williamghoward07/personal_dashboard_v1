@@ -26,6 +26,7 @@ export default function FolderTile({
   folder,
   isExpanded,
   isLinkDropTarget,
+  pinnedIds,
   onToggleExpand,
   onAddLink,
   onEdit,
@@ -38,6 +39,8 @@ export default function FolderTile({
   isExpanded: boolean
   // A link is being dragged over this folder (or one of its links).
   isLinkDropTarget: boolean
+  // ids currently in the launcher's `launcher_link_ids` array.
+  pinnedIds: ReadonlySet<string>
   onToggleExpand: () => void
   onAddLink: () => void
   onEdit: () => void
@@ -139,6 +142,7 @@ export default function FolderTile({
                     key={link.id}
                     link={link}
                     folderKey={folder.id}
+                    isPinned={pinnedIds.has(link.id)}
                     onEdit={() => onEditLink(link)}
                     onDelete={() => onDeleteLink(link)}
                     onTogglePin={() => onTogglePinLink(link)}

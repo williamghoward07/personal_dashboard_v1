@@ -23,7 +23,7 @@ export default function PromptCard({
       tabIndex={0}
       onClick={onCopy}
       onKeyDown={onActivateKey(onCopy)}
-      className="flex cursor-pointer flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container-low p-3 text-left transition-colors hover:border-research-pink/40"
+      className="flex cursor-pointer flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container p-3 text-left transition-colors hover:border-research-pink/40"
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-bold text-on-surface">{prompt.title}</h3>

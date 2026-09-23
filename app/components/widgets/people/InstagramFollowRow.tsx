@@ -1,7 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, X } from 'lucide-react'
+import { Check, ExternalLink, X } from 'lucide-react'
+import { DataTableAvatar, DataTableCell, DataTableRow, DataTableRowActions } from '@/components/ui/data-table'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import type { InstagramFollow, Person } from '@/lib/types'
 import type { MatchSuggestion } from '@/lib/instagram/match'
 import { formatDate } from './shared'
@@ -23,7 +26,10 @@ function InlineTextField({
   const [draft, setDraft] = useState(value)
 
   return (
-    <input
+    <Input
+      variant="ghost"
+      size="sm"
+      accent="amber"
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
@@ -35,7 +41,7 @@ function InlineTextField({
       }}
       placeholder={placeholder}
       list={listId}
-      className={`w-full min-w-0 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-on-surface outline-none placeholder:text-on-surface-variant/60 hover:border-outline-variant focus:border-people-amber focus:bg-surface-container-lowest ${className}`}
+      className={`px-1 ${className}`}
     />
   )
 }
@@ -70,41 +76,81 @@ export default function InstagramFollowRow({
   onDismissSuggestion: () => void
 }) {
   return (
-    <li className="flex flex-col gap-1 py-2">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={onToggleSelect}
-          aria-label={`Select @${follow.handle}`}
-          className="h-3.5 w-3.5 shrink-0 accent-people-amber"
-        />
-        <a
-          href={`https://www.instagram.com/${follow.handle}/`}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="text-sm font-medium text-on-surface hover:text-people-amber"
-        >
-          @{follow.handle}
-        </a>
-        {follow.display_name && <span className="text-xs text-on-surface-variant">{follow.display_name}</span>}
-        <span className="text-xs text-on-surface-variant">{formatDate(follow.followed_at)}</span>
+    <DataTableRow selected={selected}>
+      <DataTableCell>
+        <span className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label={`Select @${follow.handle}`}
+            className="h-3.5 w-3.5 shrink-0 accent-people-amber"
+          />
+          <DataTableAvatar name={follow.display_name || follow.handle} accent="amber" />
+          <span className="flex min-w-0 flex-col">
+            <a
+              href={`https://www.instagram.com/${follow.handle}/`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="truncate font-mono text-sm text-on-surface hover:text-people-amber"
+            >
+              @{follow.handle}
+            </a>
+            <span className="text-xs text-on-surface-variant">{formatDate(follow.followed_at)}</span>
+          </span>
+        </span>
+      </DataTableCell>
 
+      <DataTableCell>
+        <span className={follow.display_name ? 'text-on-surface' : 'text-on-surface-variant/60'}>
+          {follow.display_name || 'No display name'}
+        </span>
+        {!follow.person_id && suggestion && (
+          <div className="mt-1 flex items-center gap-2 text-xs text-on-surface-variant">
+            <span>
+              Link to <span className="text-people-amber">{suggestion.person.full_name}</span>?{' '}
+              {Math.round(suggestion.score * 100)}%
+            </span>
+            <button
+              type="button"
+              onClick={onAcceptSuggestion}
+              aria-label={`Accept suggested link to ${suggestion.person.full_name}`}
+              className="rounded p-0.5 text-primary-container hover:bg-primary-container/10"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onDismissSuggestion}
+              aria-label="Dismiss suggestion"
+              className="rounded p-0.5 hover:bg-surface-container-high"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </DataTableCell>
+
+      <DataTableCell>
         <InlineTextField
           value={follow.category ?? ''}
           placeholder="+ category"
           onCommit={(next) => onCategoryChange(next.trim() || null)}
-          className="w-24"
+          className="w-28"
           listId={categoryListId}
         />
+      </DataTableCell>
 
+      <DataTableCell>
         <InlineTextField
           value={follow.note ?? ''}
           placeholder="+ note"
           onCommit={(next) => onNoteChange(next.trim() || null)}
-          className="min-w-32 flex-1"
+          className="min-w-32"
         />
+      </DataTableCell>
 
+      <DataTableCell>
         <InstagramPersonPicker
           handle={follow.handle}
           people={people}
@@ -112,31 +158,17 @@ export default function InstagramFollowRow({
           onLink={onLink}
           onUnlink={onUnlink}
         />
-      </div>
+      </DataTableCell>
 
-      {!follow.person_id && suggestion && (
-        <div className="ml-5 flex items-center gap-2 text-xs text-on-surface-variant">
-          <span>
-            Link to <span className="text-people-amber">{suggestion.person.full_name}</span>? {Math.round(suggestion.score * 100)}%
-          </span>
-          <button
-            type="button"
-            onClick={onAcceptSuggestion}
-            aria-label={`Accept suggested link to ${suggestion.person.full_name}`}
-            className="rounded p-0.5 text-primary-container hover:bg-primary-container/10"
-          >
-            <Check className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={onDismissSuggestion}
-            aria-label="Dismiss suggestion"
-            className="rounded p-0.5 hover:bg-surface-container-high"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-    </li>
+      <DataTableCell align="right">
+        <DataTableRowActions>
+          <Button variant="icon" size="icon-sm" aria-label={`Open @${follow.handle} on Instagram`} asChild>
+            <a href={`https://www.instagram.com/${follow.handle}/`} target="_blank" rel="noreferrer noopener">
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          </Button>
+        </DataTableRowActions>
+      </DataTableCell>
+    </DataTableRow>
   )
 }

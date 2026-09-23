@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
+import { CountBadge } from '@/components/ui/count-badge'
 import type { Todo, WorkspaceLink, WorkspaceLinkKind, WorkspaceLinkTodo } from '@/lib/types'
 import { SOURCE_KINDS, SOURCE_KIND_ORDER } from '@/lib/workspaces/kinds'
 import type { WorkspaceLinkPatch } from '@/lib/workspaces/use-workspace-links'
@@ -60,9 +61,7 @@ export default function LinksSection({
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
           <FolderOpen className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
           Scoped sources
-          <span className="rounded-full border border-outline-variant px-1.5 py-0.5 text-[11px] tabular-nums text-on-surface-variant">
-            {links.length}
-          </span>
+          <CountBadge accent="ws" count={links.length} />
         </h2>
         <CollapseButton label="Scoped sources" onClick={onCollapse} />
       </div>

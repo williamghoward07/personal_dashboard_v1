@@ -107,7 +107,7 @@ export default function MicrosoftOneNoteCard() {
               </p>
               <a
                 href="/api/microsoft/connect"
-                className="w-fit rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
+                className="w-fit rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110"
               >
                 Connect
               </a>

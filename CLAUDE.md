@@ -17,33 +17,39 @@ than relying on memory (e.g. `searchParams` is a Promise in pages).
 - Research prompts library is standalone, not nested under academics
 - Notion-style tailored views per task (e.g. clicking an essay shows a
   bespoke checklist for that task, not a generic template)
-- Visual design system: "BIO-SYSTEM" dark cyber-kinetic theme (committed
-  dark-only, not light/dark-adaptive). Deep charcoal/green surface scale,
-  Bricolage Grotesque for headings, Instrument Sans for body text, IBM
-  Plex Mono for data/tabular displays, glassy bento cards with a
-  hover glow in the active module's accent color. Per-module accent colors
-  (`lib/theme.ts` `MODULE_ACCENT`): mint = Health, electric blue = Money,
-  orange = Education (and the home query box), pink = Research, purple =
-  Habits/Todos, amber = People, crimson = Bible, teal = Workspaces (default —
-  each workspace/folder can pick its own). Tokens live in `app/globals.css`
-  (`@theme`) and `lib/theme.ts` (accent → class maps). Icons stay on
-  `lucide-react` (not the reference mockups' Material Symbols) to avoid a
-  second icon system — reskin new UI to match this rather than reverting to
-  the old neutral light/dark styling.
+- **All UI must follow `DESIGN.md`.** It is the single source of truth for
+  the visual design — colours, typography, spacing, component styles. Use
+  the shared design tokens and components; no hardcoded colours, fonts or
+  spacing. Tokens live in `app/globals.css` (`@theme`) and `lib/theme.ts`
+  (accent → class maps); shared components live in `components/ui/`, and
+  `/design-system-test` renders every one of them in every variant and
+  accent — read that page before building new UI. Icons stay on
+  `lucide-react` (the reference mockups use Material Symbols; translate
+  them) to avoid a second icon system.
 - Glass effects: prefer an existing component library over hand-rolled
   CSS (e.g. glinui — Radix + Tailwind, ships elevation/blur/motion
   tokens) so widgets consume shared tokens rather than each inventing
   the effect. Some glass/refraction effects render Chromium-only —
   verify Safari before relying on one for a shipped widget, since an
   iOS app is a planned future phase.
-- Shared building blocks — reuse, don't re-invent: `<ProgressRing />`
-  (`components/ui`), `LoadingGlowBorder` (the LED-strip loading border on
-  every AI/search input), `LiquidSwitch` (segmented toggle), `Popover` and
-  `InfoPopover` (in-place, not portalled — so per-workspace CSS variables
-  still apply), `Modal` (portalled), `ConfirmDialog`, `AccentPicker`,
-  `onActivateKey` (`lib/utils/a11y.ts` — Enter/Space on a clickable row
-  only when the row itself has focus, never from an input inside it),
-  `useStoredIdSet` (per-browser remembered id sets, e.g. collapsed folders).
+- Shared building blocks — reuse, don't re-invent. In `components/ui/`
+  (import per-file, there is no barrel): `Button`, `Input`, `Progress`,
+  `<ProgressRing />`, `StatusBadge`, `CountBadge`, `MetadataChip`,
+  `EntityChip`, `FilterTabs`, `StatTile`, the `DataTable*` set (tables) and
+  `Timeline`/`TimelineEntry` (log feeds). They take an `accent`, and
+  `accent="ws"` follows the surrounding workspace's `--ws-accent`.
+  In `app/components/`: `LoadingGlowBorder` (the LED-strip loading border on
+  every AI/search input), `LiquidSwitch` (the query bar's sliding mode
+  switch — distinct from `FilterTabs`), `Popover` and `InfoPopover`
+  (in-place, not portalled — so per-workspace CSS variables still apply),
+  `Modal` (portalled), `ConfirmDialog`, `AccentPicker`. Plus `onActivateKey`
+  (`lib/utils/a11y.ts` — Enter/Space on a clickable row only when the row
+  itself has focus, never from an input inside it), `useStoredIdSet`
+  (per-browser remembered id sets, e.g. collapsed folders) and
+  `lib/ui/pagination.ts` (pure page-window logic).
+- `cn()` (`lib/utils/cn.ts`) registers the custom type scale with
+  tailwind-merge. Add any new `--text-*` token to its `TYPE_SCALE`, or
+  `cn()` will silently drop that size when it meets a text colour.
 
 ## Tech stack
 - Frontend: Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4
@@ -66,13 +72,42 @@ Home · Calendar · Education · Workspaces · Money · Research · Tasks
 App Library (`/apps`). Also `/ai-usage`. `/health` exists but is hidden
 (`notFound()`, 2026-09-01 — Bevel already covers it; a one-line revert).
 
+Each tab can be shown or hidden from the settings menu (the gear in the top
+bar), stored in `user_settings.hidden_nav_items`. `Sidebar` and
+`MobileBottomNav` both read the same `useVisibleNavItems()` selector, so they
+never drift. `/todos` and `/ai-usage` are `hiddenByDefault` — present but off
+until switched on. Home can't be hidden.
+
+**Page titles are contextual.** A page publishes its own context once with
+`usePageTitle(...)` (`lib/page-title.ts`); both the top-bar breadcrumb
+(`BIO-SYSTEM v1.0 / MODULE // CONTEXT`) and the browser tab title read from
+it, falling back to the nav label when a route publishes nothing. See
+`WorkspaceDetailBoard.tsx` for the reference call — it's a hook, so it must
+stay above any early return.
+
 ## Home page (`app/page.tsx`)
 The **System Query** box on top, then the bento grid: Daily Goals, Morning
 routine, Education, Workspaces, Money, AI usage, Research, Habits, People,
 App Library (pinned links), Calendar.
 
-A home density/layout overhaul is **deferred** until it's clearer which
-widgets actually get used. Don't add home widgets casually.
+**The grid is user-arranged.** `HomeGrid` (`app/components/home/`) renders
+widgets in the user's saved order at their saved column span (1–4 of a
+4-column grid). Height auto-fits content by default (`auto-rows-min` +
+`items-start`); there is no fixed row height. An edit mode adds a grip
+handle (drag to reorder) and a corner handle (drag or arrow keys to resize,
+snapping to whole columns), plus per-widget show/hide with a list to restore
+hidden ones. Outside edit mode no handles are visible.
+
+Adding a widget means two edits: an entry in `HOME_WIDGETS`
+(`lib/home/layout.ts` — id, label, default span, default hidden) and one in
+`HOME_WIDGET_COMPONENTS` (`app/components/home/widget-registry.tsx`). Ids are
+stable strings because they persist to the DB; `mergeHomeLayout` tolerates a
+saved layout that names widgets which no longer exist and appends ones that
+are new, so neither side breaks the other. Every widget receives
+`span?: 1 | 2 | 3 | 4` and may use it; most ignore it. `health` is registered
+but hidden by default (`/health` still calls `notFound()`).
+
+Don't add home widgets casually.
 
 - **System Query** (`app/components/AiQueryBar.tsx`) — one input with four
   explicit modes (`LiquidSwitch`, one-line hint under the box explaining the
@@ -220,9 +255,18 @@ Markdown export (always complete, even for hidden sections).
   Expand/Collapse all. Folder toolbar: **+** (add a link straight into that
   folder), drag handle, edit, delete; the virtual "Unfiled" folder only has
   +. Folders and links reorder by drag and drop, and links can be dragged
-  between folders. `quick_links.sort_order` is global (the home launcher
-  sorts pinned links by it), so moves renumber all links in display order
-  (`lib/app-launcher/order.ts`). `link_folders.color` can't be teal.
+  between folders. `quick_links.sort_order` is global, so moves renumber all
+  links in display order (`lib/app-launcher/order.ts`).
+  `link_folders.color` can't be teal.
+- **The home launcher is a separate, ordered selection.**
+  `user_settings.launcher_link_ids` is a single ordered array holding both
+  which links appear and their order — the widget's menu edits it, and the
+  pin control on `/apps` writes to it too. It is seeded once from the old
+  `is_pinned` rows; **`quick_links.is_pinned` is retired** (still in the
+  schema, no longer read, like `todos.caldav_uid`). Logic in
+  `lib/app-launcher/launcher-selection.ts`. There is no cap on how many apps
+  the launcher can hold — how many tiles are shown is derived from the
+  widget's span, with the rest behind the "More" tile.
 
 ### Money (`/money`)
 - Starling (live balances + Spaces, transaction sync) and PDF bank-statement
@@ -250,6 +294,16 @@ Markdown export (always complete, even for hidden sections).
 - `todos` — general to-dos only, separate from education tasks.
 - `tasks` / `education_tasks` — see the known split under Education.
 - `habits` model — see Habits (completions as dated rows; steps separate).
+- `user_settings` — one row per user, all per-user UI layout and visibility:
+  `home_layout` (widget order, span, hidden), `hidden_nav_items`,
+  `launcher_link_ids`. Read and written through `useSettings()`
+  (`lib/settings/use-settings.ts`, optimistic with rollback); pure parsing
+  and merging in `lib/settings/schema.ts`. It falls back to defaults when the
+  row or the table is missing, so the app works before the migration is
+  applied — `20260920000000_user_settings.sql` was **still unapplied as of
+  2026-09-20**, meaning layout changes won't persist until it is run.
+  Throwaway per-browser state (collapsed folders, dismissed offers)
+  still belongs in `useStoredIdSet`, not here.
 - `ai_usage` — append-only, one row per `generateStructured()` call (token
   counts, tier, model, estimated USD). Feature keys: `search`,
   `search_answer`, `brain_dump` (Capture + Brain Dump), `people_quick_add`,
@@ -335,10 +389,10 @@ actual values.
   panel with saved conversation links.
 - **Calendar**: the basic Google Calendar event options when adding an event
   (all-day vs timed, etc.).
-- **Home**: edit mode (drag widgets to chosen positions, saved per user),
-  after the density overhaul decision; a whole-app UI pass using the
-  Perplexity home screen as the visual reference; a widget for Claude
-  session/weekly usage (no source for that data identified yet).
+- **Home**: a widget for Claude session/weekly usage (no source for that data
+  identified yet). Home edit mode and the whole-app UI pass are done — the
+  latter against `DESIGN.md`, not the Perplexity home screen originally
+  floated as the reference.
 - **Platform**: web push notifications to the phone (PWA). Approach
   undecided.
 

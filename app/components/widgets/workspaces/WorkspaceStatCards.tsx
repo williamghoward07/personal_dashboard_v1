@@ -2,53 +2,11 @@
 
 import { Fragment, useMemo } from 'react'
 import { CheckCircle2, Layers, Link2, Brain } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-import { ModuleGlassCard } from '@/components/ui/module-glass-card'
-import { ProgressRing } from '@/components/ui/progress-ring'
+import { StatTile } from '@/components/ui/stat-tile'
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo, WorkspaceNote } from '@/lib/types'
 import { recentLogShare, sourceCoupling, sourceFootprint, taskProgress } from '@/lib/workspaces/stats'
 import { STAT_GRID_CLASS, type StatCardKey } from '@/lib/workspaces/layout'
-import { logTimestamp, microLabelClass, wsAccentStyle } from './shared'
-
-function StatCard({
-  label,
-  value,
-  unit,
-  detail,
-  percent,
-  Icon,
-  ringTitle,
-}: {
-  label: string
-  value: string
-  unit?: string
-  detail: string
-  percent: number
-  Icon: LucideIcon
-  ringTitle: string
-}) {
-  return (
-    <ModuleGlassCard style={wsAccentStyle} size="sm" className="flex items-center justify-between gap-3">
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className={microLabelClass}>{label}</span>
-        <span className="flex items-baseline gap-1.5">
-          <span className="font-mono text-headline-lg font-bold tabular-nums text-on-surface">{value}</span>
-          {unit && <span className="text-xs text-on-surface-variant">{unit}</span>}
-        </span>
-        <span className="truncate text-xs text-on-surface-variant">{detail}</span>
-      </div>
-      <div title={ringTitle}>
-        <ProgressRing
-          style={wsAccentStyle}
-          value={percent}
-          size="md"
-          showValue
-          formatValue={() => <Icon className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />}
-        />
-      </div>
-    </ModuleGlassCard>
-  )
-}
+import { logTimestamp } from './shared'
 
 export default function WorkspaceStatCards({
   cards,
@@ -75,28 +33,30 @@ export default function WorkspaceStatCards({
 
   const rendered: Record<StatCardKey, React.ReactNode> = {
     tasks: (
-      <StatCard
+      <StatTile
         label="Task progress"
         value={`${tasks.percent}%`}
         detail={todos.length === 0 ? 'No scoped actions yet' : `${tasks.completed} of ${todos.length} done`}
         percent={tasks.percent}
-        Icon={CheckCircle2}
+        accent="ws"
+        icon={<CheckCircle2 className="h-5 w-5" strokeWidth={1.75} />}
         ringTitle="Share of this workspace's scoped actions completed"
       />
     ),
     footprint: (
-      <StatCard
+      <StatTile
         label="Working set footprint"
         value={String(links.length)}
         unit={links.length === 1 ? 'Source' : 'Sources'}
         detail={footprint.breakdown || 'No sources yet'}
         percent={footprint.percent}
-        Icon={Layers}
+        accent="ws"
+        icon={<Layers className="h-5 w-5" strokeWidth={1.75} />}
         ringTitle="Share of sources with a type assigned"
       />
     ),
     coupling: (
-      <StatCard
+      <StatTile
         label="Source coupling"
         value={`${coupling.percent}%`}
         detail={
@@ -105,18 +65,20 @@ export default function WorkspaceStatCards({
             : `${coupling.coupled} of ${todos.length} tasks linked to a source`
         }
         percent={coupling.percent}
-        Icon={Link2}
+        accent="ws"
+        icon={<Link2 className="h-5 w-5" strokeWidth={1.75} />}
         ringTitle="Share of scoped actions attached to at least one source"
       />
     ),
     log: (
-      <StatCard
+      <StatTile
         label="Thinking log"
         value={String(notes.length)}
         unit={notes.length === 1 ? 'Entry' : 'Entries'}
         detail={latest ? `Latest ${logTimestamp(latest)}` : 'Nothing logged yet'}
         percent={logShare}
-        Icon={Brain}
+        accent="ws"
+        icon={<Brain className="h-5 w-5" strokeWidth={1.75} />}
         ringTitle="Share of log entries written in the last 7 days"
       />
     ),

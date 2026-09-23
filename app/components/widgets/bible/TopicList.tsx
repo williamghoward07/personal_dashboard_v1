@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { listTopics } from '@/lib/bible/topics'
+import { ACCENT_CHIP } from '@/lib/theme'
+import { cn } from '@/lib/utils/cn'
 import type { BibleTopic } from '@/lib/bible/types'
 
 // Tap 1 of the topical index: the fixed 7-pill list of struggles. Tapping
@@ -35,11 +37,10 @@ export default function TopicList({
             type="button"
             onClick={() => onSelect(topic)}
             aria-pressed={active}
-            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-              active
-                ? 'border-bible-crimson/50 bg-bible-crimson/10 text-bible-crimson'
-                : 'border-outline-variant text-on-surface-variant hover:border-outline'
-            }`}
+            className={cn(
+              'label-caps rounded-full border px-3 py-1 transition-colors',
+              active ? ACCENT_CHIP.crimson : 'border-outline-variant text-on-surface-variant hover:border-outline'
+            )}
           >
             {topic.label}
           </button>

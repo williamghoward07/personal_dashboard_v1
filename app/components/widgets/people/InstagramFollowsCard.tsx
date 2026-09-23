@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useId, useMemo, useState } from 'react'
-import { AtSign, Sparkles } from 'lucide-react'
+import { AtSign, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { InstagramFollow, Person } from '@/lib/types'
 import {
@@ -18,6 +18,9 @@ import { filterFollows, sortFollows, type FollowSort, type FollowStatusFilter } 
 import { suggestMatch, describeMatchBatch, type MatchSuggestion } from '@/lib/instagram/match'
 import { buildFollowsCsv, followsExportFilename, type FollowExportRow } from '@/lib/instagram/export'
 import { useStoredIdSet } from '@/lib/utils/use-stored-id-set'
+import { getPageNumbers, getPageWindow, paginate } from '@/lib/ui/pagination'
+import { Button } from '@/components/ui/button'
+import { DataTable, DataTableBody, DataTableHead, DataTableHeaderCell } from '@/components/ui/data-table'
 import WidgetCard from '../../WidgetCard'
 import ConfirmDialog from '../../ConfirmDialog'
 import InstagramFollowsStats from './InstagramFollowsStats'
@@ -27,6 +30,7 @@ import InstagramBulkActionBar from './InstagramBulkActionBar'
 import InstagramImportPanel from './InstagramImportPanel'
 
 const MIGRATION_HINT = 'Has supabase/migrations/20260918000000_instagram_follows.sql been run?'
+const PAGE_SIZE = 25
 
 interface BatchCandidate {
   follow: InstagramFollow
@@ -44,6 +48,7 @@ export default function InstagramFollowsCard({ people }: { people: Person[] }) {
   const [status, setStatus] = useState<FollowStatusFilter>('all')
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null)
   const [sort, setSort] = useState<FollowSort>('followed_desc')
+  const [page, setPage] = useState(1)
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [dismissed, setDismissed] = useStoredIdSet('instagram-follows:dismissed-suggestions')
@@ -87,6 +92,23 @@ export default function InstagramFollowsCard({ people }: { people: Person[] }) {
     () => sortFollows(filterFollows(follows, { query, status, category: categoryFilter }), sort),
     [follows, query, status, categoryFilter, sort]
   )
+
+  const pageWindow = useMemo(() => getPageWindow(filtered.length, page, PAGE_SIZE), [filtered.length, page])
+  const pageItems = useMemo(() => paginate(filtered, page, PAGE_SIZE), [filtered, page])
+  const pageNumbers = useMemo(
+    () => (pageWindow.pageCount > 1 ? getPageNumbers(pageWindow.page, pageWindow.pageCount) : []),
+    [pageWindow.page, pageWindow.pageCount]
+  )
+
+  // Any change to the search/filter/sort inputs invalidates the current
+  // page — e.g. narrowing to "unlinked" while on page 4 of "all" would
+  // otherwise strand the view on a page that no longer exists.
+  function resetToFirstPage<T>(setter: (value: T) => void) {
+    return (value: T) => {
+      setter(value)
+      setPage(1)
+    }
+  }
 
   const suggestions = useMemo(() => {
     const map = new Map<string, MatchSuggestion>()
@@ -258,15 +280,15 @@ export default function InstagramFollowsCard({ people }: { people: Person[] }) {
 
             <InstagramFollowsFilters
               query={query}
-              onQueryChange={setQuery}
+              onQueryChange={resetToFirstPage(setQuery)}
               status={status}
-              onStatusChange={setStatus}
+              onStatusChange={resetToFirstPage(setStatus)}
               counts={counts}
               category={categoryFilter}
-              onCategoryChange={setCategoryFilter}
+              onCategoryChange={resetToFirstPage(setCategoryFilter)}
               categories={categories}
               sort={sort}
-              onSortChange={setSort}
+              onSortChange={resetToFirstPage(setSort)}
             />
 
             <datalist id={categoryListId}>
@@ -286,22 +308,13 @@ export default function InstagramFollowsCard({ people }: { people: Person[] }) {
                 Select all ({filtered.length})
               </label>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => openBatchAutoMatch()}
-                  disabled={suggestions.size === 0}
-                  className="flex items-center gap-1 rounded border border-outline-variant px-2 py-1 text-on-surface-variant hover:border-people-amber/40 hover:text-people-amber disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Sparkles className="h-3 w-3" />
+                <Button variant="outline" size="sm" onClick={() => openBatchAutoMatch()} disabled={suggestions.size === 0}>
+                  <Sparkles className="h-3.5 w-3.5" />
                   Auto-match all unlinked ({suggestions.size})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => exportCsv(filtered)}
-                  className="rounded border border-outline-variant px-2 py-1 text-on-surface-variant hover:border-people-amber/40 hover:text-people-amber"
-                >
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => exportCsv(filtered)}>
                   Export ({filtered.length})
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -321,29 +334,91 @@ export default function InstagramFollowsCard({ people }: { people: Person[] }) {
             {filtered.length === 0 ? (
               <p className="text-xs">No follows match the current search/filter.</p>
             ) : (
-              <ul className="flex max-h-128 flex-col divide-y divide-outline-variant/40 overflow-y-auto">
-                {filtered.map((f) => (
-                  <InstagramFollowRow
-                    key={f.id}
-                    follow={f}
-                    people={people}
-                    linkedPerson={f.person_id ? (peopleById.get(f.person_id) ?? null) : null}
-                    selected={selectedIds.has(f.id)}
-                    onToggleSelect={() => toggleSelect(f.id)}
-                    onLink={(personId) => link(f.id, personId)}
-                    onUnlink={() => unlink(f.id)}
-                    onNoteChange={(note) => saveNote(f.id, note)}
-                    onCategoryChange={(cat) => saveCategory(f.id, cat)}
-                    categoryListId={categoryListId}
-                    suggestion={suggestions.get(f.id) ?? null}
-                    onAcceptSuggestion={() => {
-                      const s = suggestions.get(f.id)
-                      if (s) link(f.id, s.person.id)
-                    }}
-                    onDismissSuggestion={() => dismissSuggestion(f.id)}
-                  />
-                ))}
-              </ul>
+              <>
+                <div className="max-h-128 overflow-y-auto rounded-xl border border-outline-variant bg-surface-container-low">
+                  <DataTable>
+                    <DataTableHead>
+                      <tr>
+                        <DataTableHeaderCell>Account</DataTableHeaderCell>
+                        <DataTableHeaderCell>Display name</DataTableHeaderCell>
+                        <DataTableHeaderCell>Category</DataTableHeaderCell>
+                        <DataTableHeaderCell>Note</DataTableHeaderCell>
+                        <DataTableHeaderCell>Person</DataTableHeaderCell>
+                        <DataTableHeaderCell align="right">Actions</DataTableHeaderCell>
+                      </tr>
+                    </DataTableHead>
+                    <DataTableBody>
+                      {pageItems.map((f) => (
+                        <InstagramFollowRow
+                          key={f.id}
+                          follow={f}
+                          people={people}
+                          linkedPerson={f.person_id ? (peopleById.get(f.person_id) ?? null) : null}
+                          selected={selectedIds.has(f.id)}
+                          onToggleSelect={() => toggleSelect(f.id)}
+                          onLink={(personId) => link(f.id, personId)}
+                          onUnlink={() => unlink(f.id)}
+                          onNoteChange={(note) => saveNote(f.id, note)}
+                          onCategoryChange={(cat) => saveCategory(f.id, cat)}
+                          categoryListId={categoryListId}
+                          suggestion={suggestions.get(f.id) ?? null}
+                          onAcceptSuggestion={() => {
+                            const s = suggestions.get(f.id)
+                            if (s) link(f.id, s.person.id)
+                          }}
+                          onDismissSuggestion={() => dismissSuggestion(f.id)}
+                        />
+                      ))}
+                    </DataTableBody>
+                  </DataTable>
+                </div>
+
+                {pageWindow.pageCount > 1 && (
+                  <div className="flex items-center justify-center gap-1">
+                    <Button
+                      variant="quiet"
+                      size="icon-sm"
+                      aria-label="Previous page"
+                      disabled={!pageWindow.hasPrevious}
+                      onClick={() => setPage(pageWindow.page - 1)}
+                      className="disabled:opacity-30"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    {pageNumbers.map((token, i) =>
+                      token === 'ellipsis' ? (
+                        <span key={`ellipsis-${i}`} className="px-1 text-xs text-outline">
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={token}
+                          type="button"
+                          onClick={() => setPage(token)}
+                          aria-current={token === pageWindow.page ? 'page' : undefined}
+                          className={`h-8 min-w-8 rounded-lg px-2 text-xs font-medium tabular-nums transition-colors ${
+                            token === pageWindow.page
+                              ? 'bg-primary-container text-on-primary-container'
+                              : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+                          }`}
+                        >
+                          {token}
+                        </button>
+                      )
+                    )}
+                    <Button
+                      variant="quiet"
+                      size="icon-sm"
+                      aria-label="Next page"
+                      disabled={!pageWindow.hasNext}
+                      onClick={() => setPage(pageWindow.page + 1)}
+                      className="disabled:opacity-30"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
 
             <InstagramImportPanel onImported={refresh} />

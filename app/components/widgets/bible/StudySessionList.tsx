@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { StatusBadge } from '@/components/ui/status-badge'
 import type { BibleStudySession } from '@/lib/bible/types'
 
 // Compact ordered rows for the active study's sessions — fixed
@@ -23,9 +24,14 @@ export default function StudySessionList({ sessions }: { sessions: BibleStudySes
               Session {session.session_number}
               {session.title ? ` — ${session.title}` : ''}
             </span>
-            <span className="shrink-0 text-xs text-on-surface-variant">
+            <StatusBadge
+              accent={session.completed_at ? 'crimson' : 'neutral'}
+              dot={session.completed_at ? 'static' : false}
+              size="sm"
+              className="shrink-0"
+            >
               {session.completed_at ? 'Completed' : 'Not started'}
-            </span>
+            </StatusBadge>
           </Link>
         </li>
       ))}

@@ -40,7 +40,7 @@ export default function AgendaView({
       {nonEmpty.map((dateKey) => (
         <div key={dateKey}>
           <h4
-            className={`pb-1.5 text-xs font-semibold uppercase tracking-wide ${
+            className={`label-caps pb-1.5 ${
               dateKey === todayKey ? 'text-secondary-container' : 'text-on-surface-variant'
             }`}
           >

@@ -10,7 +10,6 @@ export interface QuickLinkFormValues {
   title: string
   url: string
   folder_id: string | null
-  is_pinned: boolean
   favicon_custom_url: string | null
 }
 
@@ -18,7 +17,6 @@ const EMPTY: QuickLinkFormValues = {
   title: '',
   url: '',
   folder_id: null,
-  is_pinned: false,
   favicon_custom_url: null,
 }
 
@@ -33,10 +31,7 @@ export default function QuickLinkFormModal({
   isOpen: boolean
   heading: string
   folders: LinkFolder[]
-  initialValues?: Pick<
-    QuickLink,
-    'title' | 'url' | 'folder_id' | 'is_pinned' | 'favicon_custom_url' | 'favicon_path'
-  > | null
+  initialValues?: Pick<QuickLink, 'title' | 'url' | 'folder_id' | 'favicon_custom_url' | 'favicon_path'> | null
   onSave: (values: QuickLinkFormValues) => void
   onClose: () => void
 }) {
@@ -48,7 +43,6 @@ export default function QuickLinkFormModal({
         title: initialValues?.title ?? '',
         url: initialValues?.url ?? '',
         folder_id: initialValues?.folder_id ?? null,
-        is_pinned: initialValues?.is_pinned ?? false,
         favicon_custom_url: initialValues?.favicon_custom_url ?? null,
       })
     }
@@ -140,16 +134,6 @@ export default function QuickLinkFormModal({
               </option>
             ))}
           </select>
-        </label>
-
-        <label className="flex items-center gap-2 text-xs text-on-surface-variant">
-          <input
-            type="checkbox"
-            checked={values.is_pinned}
-            onChange={(e) => setValues((v) => ({ ...v, is_pinned: e.target.checked }))}
-            className="accent-outline"
-          />
-          Pin to homepage
         </label>
 
         <div className="flex justify-end gap-2 pt-1">

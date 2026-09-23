@@ -3,6 +3,7 @@
 import { Pencil, Trash2 } from 'lucide-react'
 import type { Task } from '@/lib/types'
 import { onActivateKey } from '@/lib/utils/a11y'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 export default function TaskCard({
   task,
@@ -21,7 +22,7 @@ export default function TaskCard({
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={onActivateKey(onOpen)}
-      className="flex cursor-pointer flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container-low p-3 text-left transition-colors hover:border-academic-orange/40"
+      className="flex cursor-pointer flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container p-3 text-left transition-colors hover:border-academic-orange/40"
     >
       <div className="flex items-start justify-between gap-2">
         <h4 className="text-sm font-bold text-on-surface">
@@ -52,10 +53,14 @@ export default function TaskCard({
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-on-surface-variant">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant">
         {task.type && <span>{task.type}</span>}
         {task.due_date && <span>Due {task.due_date}</span>}
-        {task.status && <span>{task.status}</span>}
+        {task.status && (
+          <StatusBadge accent="orange" size="sm">
+            {task.status}
+          </StatusBadge>
+        )}
       </div>
     </div>
   )

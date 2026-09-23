@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Archive, ArchiveRestore, ArrowLeft, BarChart3, Brain, FolderOpen, ListChecks, Pencil, Plus } from 'lucide-react'
+import { StatusBadge } from '@/components/ui/status-badge'
 import type { WorkspaceSectionKey } from '@/lib/types'
+import { usePageTitle } from '@/lib/page-title'
 import { useWorkspaces } from '@/lib/workspaces/use-workspaces'
 import { useWorkspaceFolders } from '@/lib/workspaces/use-workspace-folders'
 import { useWorkspaceLinks } from '@/lib/workspaces/use-workspace-links'
@@ -55,6 +57,11 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
   const [addingSource, setAddingSource] = useState(false)
 
   const workspace = workspaces.find((w) => w.id === workspaceId)
+
+  // Publishes the workspace name to the top-bar breadcrumb and the browser tab.
+  // Undefined while loading, so both fall back to the plain "Workspaces" module
+  // label. Must stay above the early returns below — it is a hook.
+  usePageTitle(workspace?.title)
 
   if (workspacesLoading) {
     return (
@@ -298,15 +305,9 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
 
           <WorkspaceLayoutMenu hidden={hidden} onToggle={toggleHidden} />
 
-          <span
-            className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
-              isArchived
-                ? 'border-outline-variant bg-surface-container-highest text-on-surface-variant'
-                : 'border-ws-accent/30 bg-ws-accent/10 text-ws-accent'
-            }`}
-          >
+          <StatusBadge accent={isArchived ? 'neutral' : 'ws'}>
             Lifecycle: {isArchived ? 'Archived' : 'Active'}
-          </span>
+          </StatusBadge>
 
           <button
             type="button"

@@ -4,62 +4,28 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils/cn"
 
-const progressVariants = cva("relative w-full overflow-hidden rounded-full", {
-  variants: {
-    variant: {
-      default: "bg-neutral-200 dark:bg-neutral-800",
-      glass:
-        "border border-white/25 [border-top-color:var(--glass-refraction-top)] bg-[var(--glass-2-surface)] backdrop-blur-md backdrop-saturate-[180%] shadow-[0_0_0_1px_rgb(255_255_255_/_0.06)_inset] dark:border-white/[0.14]",
-      liquid:
-        "border border-white/25 [border-top-color:var(--glass-refraction-top)] bg-[radial-gradient(circle_at_16%_12%,rgb(255_255_255_/_0.8),transparent_44%),linear-gradient(168deg,rgb(255_255_255_/_0.6),rgb(236_236_236_/_0.34))] dark:border-white/[0.14] dark:[border-top-color:rgb(255_255_255_/_0.3)] dark:bg-[linear-gradient(168deg,rgb(255_255_255_/_0.12),rgb(255_255_255_/_0.05))]",
-      matte:
-        "border border-black/10 bg-[linear-gradient(180deg,rgb(250_250_251),rgb(236_236_238))] dark:border-white/[0.14] dark:bg-[linear-gradient(180deg,rgb(50_55_64_/_0.9),rgb(35_39_47_/_0.9))]"
-    },
-    size: {
-      sm: "h-2",
-      md: "h-3",
-      lg: "h-4"
-    }
-  },
-  defaultVariants: {
-    variant: "default",
-    size: "md"
-  }
-})
-
-const indicatorVariants = cva(
-  "h-full rounded-full transition-[width] duration-[var(--duration-normal)] ease-standard motion-reduce:transition-none",
+/**
+ * BIO-SYSTEM progress bar and ring — DESIGN.md §4.7.
+ *
+ * Track is `surface-container-highest`; the value is drawn in the module
+ * accent, read from `--color-accent` so a caller can point it at any accent
+ * (that is exactly what `progress-ring.tsx` does). The glinui
+ * `glass` / `liquid` / `matte` variants were legacy light-mode recipes with
+ * no users and have been removed, so there is no longer a `variant` prop.
+ */
+const progressVariants = cva(
+  "relative w-full overflow-hidden rounded-full bg-surface-container-highest",
   {
     variants: {
-      variant: {
-        default: "bg-[var(--color-accent)]",
-        glass:
-          "bg-neutral-900/85 shadow-[0_0_10px_rgb(15_23_42_/_0.2)] dark:bg-white/85 dark:shadow-[0_0_10px_rgb(255_255_255_/_0.15)]",
-        liquid:
-          "bg-[linear-gradient(90deg,rgb(15_23_42_/_0.92),rgb(30_41_59_/_0.9))] shadow-[0_0_14px_rgb(15_23_42_/_0.26)] dark:bg-[linear-gradient(90deg,rgb(248_250_252_/_0.92),rgb(226_232_240_/_0.82))] dark:shadow-[0_0_16px_rgb(226_232_240_/_0.24)]",
-        matte: "bg-neutral-900 dark:bg-neutral-100"
-      }
+      size: {
+        sm: "h-2",
+        md: "h-3",
+        lg: "h-4",
+      },
     },
     defaultVariants: {
-      variant: "default"
-    }
-  }
-)
-
-const indeterminateIndicatorVariants = cva(
-  "w-1/2 motion-safe:animate-pulse motion-reduce:animate-none",
-  {
-    variants: {
-      variant: {
-        default: "opacity-85",
-        glass: "opacity-90",
-        liquid: "opacity-90",
-        matte: "opacity-90"
-      }
+      size: "md",
     },
-    defaultVariants: {
-      variant: "default"
-    }
   }
 )
 
@@ -68,47 +34,13 @@ const progressCircleVariants = cva("relative inline-flex shrink-0 items-center j
     size: {
       sm: "h-12 w-12 text-[11px]",
       md: "h-16 w-16 text-xs",
-      lg: "h-24 w-24 text-sm"
-    }
-  },
-  defaultVariants: {
-    size: "md"
-  }
-})
-
-const progressCircleTrackVariants = cva("fill-none", {
-  variants: {
-    variant: {
-      default: "stroke-neutral-300 dark:stroke-neutral-700",
-      glass: "stroke-neutral-300/70 dark:stroke-white/[0.22]",
-      liquid: "stroke-neutral-300/85 dark:stroke-white/[0.2]",
-      matte: "stroke-neutral-300 dark:stroke-white/[0.16]"
-    }
-  },
-  defaultVariants: {
-    variant: "default"
-  }
-})
-
-const progressCircleIndicatorVariants = cva(
-  "fill-none transition-[stroke-dashoffset,stroke] duration-[var(--duration-normal)] ease-standard motion-reduce:transition-none",
-  {
-    variants: {
-      variant: {
-        default:
-          "stroke-[var(--color-accent)] drop-shadow-[0_0_6px_color-mix(in_srgb,var(--color-accent)_50%,transparent)]",
-        glass:
-          "stroke-neutral-900/85 drop-shadow-[0_0_6px_rgb(15_23_42_/_0.2)] dark:stroke-white/85 dark:drop-shadow-[0_0_6px_rgb(255_255_255_/_0.15)]",
-        liquid:
-          "stroke-neutral-900 drop-shadow-[0_0_6px_rgb(15_23_42_/_0.25)] dark:stroke-neutral-100 dark:drop-shadow-[0_0_6px_rgb(255_255_255_/_0.18)]",
-        matte: "stroke-neutral-900 dark:stroke-neutral-100"
-      }
+      lg: "h-24 w-24 text-sm",
     },
-    defaultVariants: {
-      variant: "default"
-    }
-  }
-)
+  },
+  defaultVariants: {
+    size: "md",
+  },
+})
 
 export type ProgressProps = React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> &
   VariantProps<typeof progressVariants> & {
@@ -121,20 +53,20 @@ export type ProgressProps = React.ComponentPropsWithoutRef<typeof ProgressPrimit
 export const Progress = React.forwardRef<
   React.ComponentRef<typeof ProgressPrimitive.Root>,
   ProgressProps
->(({ className, value, variant, size, indeterminate = false, ...props }, ref) => {
+>(({ className, value, size, indeterminate = false, ...props }, ref) => {
   const clampedValue = Math.max(0, Math.min(100, value ?? 0))
 
   return (
     <ProgressPrimitive.Root
       ref={ref}
-      className={cn(progressVariants({ variant, size }), className)}
+      className={cn(progressVariants({ size }), className)}
       value={indeterminate ? undefined : clampedValue}
       {...props}
     >
       <ProgressPrimitive.Indicator
         className={cn(
-          indicatorVariants({ variant }),
-          indeterminate && indeterminateIndicatorVariants({ variant })
+          "h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-[var(--duration-normal)] ease-standard motion-reduce:transition-none",
+          indeterminate && "w-1/2 opacity-85 motion-safe:animate-pulse motion-reduce:animate-none"
         )}
         style={indeterminate ? undefined : { width: `${clampedValue}%` }}
       />
@@ -147,7 +79,6 @@ Progress.displayName = "Progress"
 export type ProgressCircleProps = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> &
   VariantProps<typeof progressCircleVariants> & {
     value?: number
-    variant?: NonNullable<VariantProps<typeof progressVariants>["variant"]>
     strokeWidth?: number
     cap?: "round" | "square" | "butt"
     indeterminate?: boolean
@@ -160,9 +91,9 @@ export const ProgressCircle = React.forwardRef<HTMLDivElement, ProgressCirclePro
     {
       className,
       value,
-      variant = "default",
       size,
-      strokeWidth = 4,
+      // DESIGN.md §4.7: viewBox "0 0 36 36" at stroke-width 3.
+      strokeWidth = 3,
       cap = "round",
       indeterminate = false,
       showValue = true,
@@ -173,7 +104,7 @@ export const ProgressCircle = React.forwardRef<HTMLDivElement, ProgressCirclePro
   ) => {
     const clampedValue = Math.max(0, Math.min(100, value ?? 0))
     const normalizedStrokeWidth = Math.max(2, Math.min(10, strokeWidth))
-    const viewBoxSize = 44
+    const viewBoxSize = 36
     const center = viewBoxSize / 2
     const radius = center - normalizedStrokeWidth / 2
     const circumference = 2 * Math.PI * radius
@@ -202,7 +133,7 @@ export const ProgressCircle = React.forwardRef<HTMLDivElement, ProgressCirclePro
             cy={center}
             r={radius}
             strokeWidth={normalizedStrokeWidth}
-            className={cn(progressCircleTrackVariants({ variant }))}
+            className="fill-none stroke-surface-container-highest"
           />
           <circle
             cx={center}
@@ -212,11 +143,11 @@ export const ProgressCircle = React.forwardRef<HTMLDivElement, ProgressCirclePro
             strokeLinecap={cap}
             strokeDasharray={dashArray}
             strokeDashoffset={dashOffset}
-            className={cn(progressCircleIndicatorVariants({ variant }))}
+            className="fill-none stroke-[var(--color-accent)] drop-shadow-[0_0_6px_color-mix(in_srgb,var(--color-accent)_50%,transparent)] transition-[stroke-dashoffset,stroke] duration-[var(--duration-normal)] ease-standard motion-reduce:transition-none"
           />
         </svg>
         {showValue && !indeterminate ? (
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center font-medium text-[var(--color-foreground)]">
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center font-display font-semibold text-on-surface">
             {formatValue ? formatValue(clampedValue) : `${Math.round(clampedValue)}%`}
           </span>
         ) : null}
@@ -226,5 +157,3 @@ export const ProgressCircle = React.forwardRef<HTMLDivElement, ProgressCirclePro
 )
 
 ProgressCircle.displayName = "ProgressCircle"
-
-export const CircularProgress = ProgressCircle

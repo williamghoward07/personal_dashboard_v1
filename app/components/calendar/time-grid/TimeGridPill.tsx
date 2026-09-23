@@ -42,7 +42,7 @@ export default function TimeGridPill({
     height,
     left: `calc(${leftPct}% + 2px)`,
     width: `calc(${widthPct}% - 4px)`,
-    backgroundColor: colour ? `${colour}33` : 'rgba(20,209,255,0.16)',
+    backgroundColor: colour ? `${colour}33` : 'color-mix(in srgb, var(--color-secondary-container) 16%, transparent)',
     borderColor: colour ?? 'var(--color-secondary-container)',
   }
 

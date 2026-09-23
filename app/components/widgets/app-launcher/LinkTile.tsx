@@ -12,12 +12,17 @@ export const linkDragId = (id: string) => `link:${id}`
 export default function LinkTile({
   link,
   folderKey,
+  isPinned,
   onEdit,
   onDelete,
   onTogglePin,
 }: {
   link: QuickLink
   folderKey: string
+  // Whether `link.id` is in the launcher's `launcher_link_ids` array — the
+  // retired `link.is_pinned` column is never read (see CLAUDE.md's App
+  // Library section), so this comes from the caller instead.
+  isPinned: boolean
   onEdit: () => void
   onDelete: () => void
   onTogglePin: () => void
@@ -73,10 +78,10 @@ export default function LinkTile({
             e.stopPropagation()
             onTogglePin()
           }}
-          aria-label={link.is_pinned ? `Unpin ${link.title}` : `Pin ${link.title}`}
+          aria-label={isPinned ? `Remove ${link.title} from the launcher` : `Add ${link.title} to the launcher`}
           className="rounded p-1 text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
         >
-          {link.is_pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+          {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
         </button>
         <button
           type="button"

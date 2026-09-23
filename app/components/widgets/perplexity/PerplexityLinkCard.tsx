@@ -19,7 +19,7 @@ export default function PerplexityLinkCard({
   const displayTitle = link.title || 'Untitled chat'
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container-low p-3">
+    <div className="flex flex-col gap-2 rounded-lg border border-outline-variant bg-surface-container p-3">
       <div className="flex items-start justify-between gap-2">
         <a
           href={link.url}

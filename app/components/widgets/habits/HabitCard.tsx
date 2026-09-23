@@ -2,6 +2,7 @@
 
 import { Check, GripVertical, Pencil, Trash2 } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
+import { MetadataChip } from '@/components/ui/metadata-chip'
 import HabitHeatmap, { type HabitDayStatus } from './HabitHeatmap'
 import type { DailyGoalHabit } from '@/lib/types'
 import { londonDayBoundsUTC } from '@/lib/google/london-day'
@@ -90,9 +91,7 @@ export default function HabitCard({
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center gap-2">
             <h3 className="truncate text-sm font-semibold text-on-surface">{habit.name}</h3>
-            <span className="shrink-0 rounded-full bg-surface-container-highest px-1.5 py-0.5 text-[10px] text-on-surface-variant">
-              {frequencyLabel(habit)}
-            </span>
+            <MetadataChip className="shrink-0">{frequencyLabel(habit)}</MetadataChip>
           </div>
           {habit.description && (
             <p className="truncate text-xs text-on-surface-variant">{habit.description}</p>
@@ -127,8 +126,12 @@ export default function HabitCard({
               aria-label={`Log today's ${habit.name}`}
               className="flex h-8 shrink-0 items-center justify-center rounded-full px-2.5 text-[11px] font-semibold"
               style={{
-                backgroundColor: metToday ? habit.colour : 'rgba(218,229,218,0.08)',
-                color: metToday ? '#07100a' : 'rgba(218,229,218,0.6)',
+                backgroundColor: metToday
+                  ? habit.colour
+                  : 'color-mix(in srgb, var(--color-on-surface) 8%, transparent)',
+                color: metToday
+                  ? 'var(--color-surface-container-lowest)'
+                  : 'color-mix(in srgb, var(--color-on-surface) 60%, transparent)',
               }}
             >
               {todayValue ?? 0}
@@ -143,8 +146,12 @@ export default function HabitCard({
               }
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
               style={{
-                backgroundColor: metToday ? habit.colour : 'rgba(218,229,218,0.08)',
-                color: metToday ? '#07100a' : 'rgba(218,229,218,0.3)',
+                backgroundColor: metToday
+                  ? habit.colour
+                  : 'color-mix(in srgb, var(--color-on-surface) 8%, transparent)',
+                color: metToday
+                  ? 'var(--color-surface-container-lowest)'
+                  : 'color-mix(in srgb, var(--color-on-surface) 30%, transparent)',
               }}
             >
               <Check className="h-4 w-4" strokeWidth={3} />

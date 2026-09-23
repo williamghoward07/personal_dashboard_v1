@@ -77,7 +77,7 @@ export default function TimeBlockStepInputs({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+        <p className="label-caps text-on-surface-variant">
           Today&apos;s fixed events
         </p>
         {needsReconnect ? (
@@ -121,7 +121,7 @@ export default function TimeBlockStepInputs({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+        <p className="label-caps text-on-surface-variant">
           Add a fixed event not on your calendar
         </p>
         {keyEvents.length > 0 && (

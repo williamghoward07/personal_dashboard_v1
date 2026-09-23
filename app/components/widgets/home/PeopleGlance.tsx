@@ -5,8 +5,18 @@ import Link from 'next/link'
 import { ArrowUpRight, Contact } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { FollowUp } from '@/lib/types'
+import type { HomeWidgetProps } from '@/lib/home/layout'
 import WidgetCard from '../../WidgetCard'
 import { ACCENT_TEXT } from '@/lib/theme'
+
+// A wider card can afford more follow-ups. Fetched once at the ceiling and
+// sliced in render, so dragging the card wider never refetches.
+const MAX_ROWS = 8
+function rowsForSpan(span: number) {
+  if (span >= 3) return MAX_ROWS
+  if (span === 2) return 5
+  return 3
+}
 
 /**
  * Unlike the other home glance cards, this one can't just wrap the whole
@@ -15,7 +25,7 @@ import { ACCENT_TEXT } from '@/lib/theme'
  * directly on WidgetCard with the "view all" arrow moved into the action
  * slot instead.
  */
-export default function PeopleGlance() {
+export default function PeopleGlance({ span = 1 }: HomeWidgetProps) {
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -25,12 +35,14 @@ export default function PeopleGlance() {
       .select('*')
       .is('completed_at', null)
       .order('due_date', { ascending: true, nullsFirst: false })
-      .limit(3)
+      .limit(MAX_ROWS)
       .then(({ data }) => {
         setFollowUps(data ?? [])
         setLoading(false)
       })
   }, [])
+
+  const shown = followUps.slice(0, rowsForSpan(span))
 
   return (
     <WidgetCard
@@ -50,11 +62,11 @@ export default function PeopleGlance() {
     >
       {loading ? (
         <p>Loading...</p>
-      ) : followUps.length === 0 ? (
+      ) : shown.length === 0 ? (
         <p>Nothing to follow up.</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
-          {followUps.map((f) => (
+          {shown.map((f) => (
             <li key={f.id}>
               <Link
                 href={`/people?person=${f.person_id}`}

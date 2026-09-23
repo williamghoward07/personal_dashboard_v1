@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Wand2, ZoomIn, ZoomOut } from 'lucide-react'
+import { FilterTabs } from '@/components/ui/filter-tabs'
 import { supabase } from '@/lib/supabase'
 import type { RoutineInstance, Task } from '@/lib/types'
 import { connectGoogleCalendar } from '@/lib/google/connect'
@@ -131,6 +132,11 @@ const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
 
 type GridMode = 'grid' | 'agenda'
 
+const GRID_MODE_OPTIONS: { value: GridMode; label: string }[] = [
+  { value: 'grid', label: 'Grid' },
+  { value: 'agenda', label: 'Agenda' },
+]
+
 // Everything rendered above the hour grid box (sticky top bar, page header,
 // widget card chrome, the calendar's own title/toolbar row) — used as a
 // generous, shared-across-Day/Week estimate so the grid can size itself to
@@ -248,22 +254,13 @@ export default function CalendarPageView() {
       action={
         !needsReconnect && (
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 rounded-lg border border-outline-variant p-0.5">
-              {VIEW_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setView(opt.value)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors duration-200 ${
-                    view === opt.value
-                      ? 'bg-surface-container-high text-on-surface'
-                      : 'text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <FilterTabs
+              aria-label="Calendar view"
+              size="compact"
+              value={view}
+              onChange={setView}
+              options={VIEW_OPTIONS}
+            />
             <div className="flex items-center gap-1">
               <button
                 type="button"
@@ -353,22 +350,13 @@ export default function CalendarPageView() {
                     </button>
                   </div>
                 )}
-                <div className="flex items-center gap-1 rounded-lg bg-surface-container p-0.5">
-                  {(['grid', 'agenda'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setGridMode(mode)}
-                      className={`rounded-md px-2 py-1 text-xs font-medium capitalize transition-colors duration-200 ${
-                        gridMode === mode
-                          ? 'bg-surface-container-high text-on-surface'
-                          : 'text-on-surface-variant hover:text-on-surface'
-                      }`}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                </div>
+                <FilterTabs
+                  aria-label="Grid or agenda view"
+                  size="compact"
+                  value={gridMode}
+                  onChange={setGridMode}
+                  options={GRID_MODE_OPTIONS}
+                />
               </div>
             )}
           </div>

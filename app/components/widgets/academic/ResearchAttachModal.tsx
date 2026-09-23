@@ -122,7 +122,7 @@ export default function ResearchAttachModal({
             type="button"
             onClick={attach}
             disabled={selected.size === 0}
-            className="rounded-lg bg-research-pink px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40 hover:brightness-110"
+            className="rounded-lg bg-research-pink px-3 py-1.5 text-sm font-medium text-surface-container-lowest disabled:opacity-40 hover:brightness-110"
           >
             Attach
           </button>

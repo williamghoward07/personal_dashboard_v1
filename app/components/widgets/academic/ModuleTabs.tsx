@@ -178,7 +178,7 @@ export default function ModuleTabs({
               </button>
               <button
                 type="submit"
-                className="rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
+                className="rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110"
               >
                 Save
               </button>
@@ -255,7 +255,7 @@ export default function ModuleTabs({
               </button>
               <button
                 type="submit"
-                className="rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-white hover:brightness-110"
+                className="rounded-lg bg-academic-orange px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110"
               >
                 Save
               </button>

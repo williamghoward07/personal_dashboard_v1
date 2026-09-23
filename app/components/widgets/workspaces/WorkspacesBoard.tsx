@@ -29,6 +29,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
+import { StatusBadge } from '@/components/ui/status-badge'
 import type { Accent } from '@/lib/theme'
 import type { Workspace, WorkspaceFolder } from '@/lib/types'
 import { useWorkspaces } from '@/lib/workspaces/use-workspaces'
@@ -338,7 +339,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
 
         <DragOverlay dropAnimation={null}>
           {draggedLabel ? (
-            <div className="flex max-w-72 items-center gap-2 rounded-lg border border-outline bg-surface-container-high px-3 py-2 shadow-2xl shadow-black/50">
+            <div className="flex max-w-72 items-center gap-2 rounded-lg border border-outline bg-surface-container-high px-3 py-2 shadow-lg">
               {dragItem?.type === 'folder' ? (
                 <Folder className="h-4 w-4 shrink-0 text-ws-accent" strokeWidth={1.75} />
               ) : (
@@ -495,15 +496,9 @@ function WorkspaceCard({
         </div>
 
         <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-          <span
-            className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-              isArchived
-                ? 'border-outline-variant bg-surface-container-highest text-on-surface-variant'
-                : 'border-ws-accent/30 bg-ws-accent/10 text-ws-accent'
-            }`}
-          >
+          <StatusBadge accent={isArchived ? 'neutral' : 'ws'} size="sm">
             {isArchived ? 'Archived' : 'Active'}
-          </span>
+          </StatusBadge>
 
           {isArchived ? (
             <button type="button" onClick={onUnarchive} className={actionButtonClass}>

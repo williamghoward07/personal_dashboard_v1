@@ -117,7 +117,7 @@ export default function TaskTimeTracking({ taskId }: { taskId: string }) {
           </label>
           <button
             type="submit"
-            className="rounded-md bg-academic-orange px-2 py-1 text-xs font-medium text-white hover:brightness-110"
+            className="rounded-md bg-academic-orange px-2 py-1 text-xs font-medium text-surface-container-lowest hover:brightness-110"
           >
             Log
           </button>

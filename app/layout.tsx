@@ -19,8 +19,17 @@ const ibmPlexMono = IBM_Plex_Mono({
   weight: ["400", "500", "600", "700"],
 });
 
+// The tab title is driven at runtime by lib/page-title.ts, because every
+// page here is client-rendered under this one layout and no route defines
+// its own metadata — `generateMetadata` is server-only and can't see, say, a
+// workspace's name. These stay as the pre-hydration default and as the
+// template any future server route would inherit; the `%s — Study Copilot`
+// shape matches `formatDocumentTitle`.
 export const metadata: Metadata = {
-  title: "Study Copilot",
+  title: {
+    default: "Study Copilot",
+    template: "%s — Study Copilot",
+  },
   description: "Personal study, health, money and research dashboard",
 };
 

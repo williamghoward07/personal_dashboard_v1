@@ -48,7 +48,7 @@ export default function TimeBlockStepReview({
 
       {unplaced.length > 0 && (
         <div className="flex flex-col gap-1 rounded-lg border border-outline-variant/60 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Didn&apos;t fit today</p>
+          <p className="label-caps text-on-surface-variant">Didn&apos;t fit today</p>
           <ul className="flex flex-col gap-0.5">
             {unplaced.map((item) => (
               <li key={item.id} className="text-xs text-on-surface-variant">

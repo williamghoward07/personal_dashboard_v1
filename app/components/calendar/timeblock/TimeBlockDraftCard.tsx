@@ -56,7 +56,7 @@ export default function TimeBlockDraftCard({
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-habit-purple/40 bg-habit-purple/10 p-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-habit-purple">
+      <p className="label-caps text-habit-purple">
         {SOURCE_LABEL[draft.candidate.source]}
       </p>
       <p className="text-sm text-on-surface">{draft.candidate.title}</p>

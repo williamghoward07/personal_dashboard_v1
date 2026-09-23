@@ -1,11 +1,7 @@
 import { Search } from 'lucide-react'
+import { FilterTabs } from '@/components/ui/filter-tabs'
+import { Input } from '@/components/ui/input'
 import type { FollowSort, FollowStatusFilter } from '@/lib/instagram/list'
-
-const STATUS_OPTIONS: { value: FollowStatusFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'unlinked', label: 'Unlinked' },
-  { value: 'linked', label: 'Linked' },
-]
 
 const SORT_OPTIONS: { value: FollowSort; label: string }[] = [
   { value: 'followed_desc', label: 'Follow date (newest first)' },
@@ -39,40 +35,41 @@ export default function InstagramFollowsFilters({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <label className="flex items-center gap-2 rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 focus-within:border-people-amber">
-        <Search className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
-        <input
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-outline"
+          aria-hidden
+        />
+        <Input
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search handle, name, note, category..."
           aria-label="Search Instagram follows"
-          className="w-full bg-transparent text-sm text-on-surface outline-none placeholder:text-on-surface-variant"
+          size="sm"
+          accent="amber"
+          className="pl-8"
         />
-      </label>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          {STATUS_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => onStatusChange(opt.value)}
-              className={`rounded-full border px-2 py-0.5 text-xs ${
-                status === opt.value
-                  ? 'border-people-amber/50 bg-people-amber/10 text-people-amber'
-                  : 'border-outline-variant text-on-surface-variant hover:border-outline'
-              }`}
-            >
-              {opt.label} ({counts[opt.value]})
-            </button>
-          ))}
-        </div>
+        <FilterTabs
+          size="compact"
+          accent="amber"
+          aria-label="Filter by link status"
+          value={status}
+          onChange={onStatusChange}
+          options={[
+            { value: 'all', label: 'All', count: counts.all },
+            { value: 'unlinked', label: 'Unlinked', count: counts.unlinked },
+            { value: 'linked', label: 'Linked', count: counts.linked },
+          ]}
+        />
 
         <select
           value={category === null ? '__any__' : category}
           onChange={(e) => onCategoryChange(e.target.value === '__any__' ? null : e.target.value)}
           aria-label="Filter by category"
-          className="ml-auto rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs text-on-surface outline-none focus:border-people-amber"
+          className="ml-auto rounded-lg border border-outline-variant bg-surface-container-high px-2 py-1 text-xs text-on-surface outline-none focus:border-people-amber"
         >
           <option value="__any__">Any category</option>
           <option value="">Uncategorized</option>
@@ -87,7 +84,7 @@ export default function InstagramFollowsFilters({
           value={sort}
           onChange={(e) => onSortChange(e.target.value as FollowSort)}
           aria-label="Sort follows"
-          className="rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs text-on-surface outline-none focus:border-people-amber"
+          className="rounded-lg border border-outline-variant bg-surface-container-high px-2 py-1 text-xs text-on-surface outline-none focus:border-people-amber"
         >
           {SORT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>

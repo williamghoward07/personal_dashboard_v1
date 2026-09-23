@@ -120,8 +120,8 @@ export default function DayTimeline({
                   height,
                   left: GUTTER_PX,
                   right: 4,
-                  backgroundColor: colour ? `${colour}33` : 'rgba(218,229,218,0.12)',
-                  borderColor: colour ?? 'rgba(218,229,218,0.3)',
+                  backgroundColor: colour ? `${colour}33` : 'color-mix(in srgb, var(--color-on-surface) 12%, transparent)',
+                  borderColor: colour ?? 'color-mix(in srgb, var(--color-on-surface) 30%, transparent)',
                 }}
                 className="absolute overflow-hidden rounded-md border px-1.5 py-0.5 text-left text-[11px] text-on-surface"
               >

@@ -1,8 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, UserPlus, X } from 'lucide-react'
+import { UserPlus, X } from 'lucide-react'
 import Popover from '../../Popover'
+import { Button } from '@/components/ui/button'
+import { EntityChip } from '@/components/ui/entity-chip'
+import { onActivateKey } from '@/lib/utils/a11y'
 import { normalizeForMatch } from '@/lib/instagram/match'
 import type { Person } from '@/lib/types'
 
@@ -34,23 +37,20 @@ export default function InstagramPersonPicker({
       label={`Link @${handle} to a person`}
       trigger={(props) =>
         linkedPerson ? (
-          <button
-            type="button"
+          <EntityChip
             {...props}
-            className="flex items-center gap-1 rounded-full border border-people-amber/30 bg-people-amber/10 px-2 py-0.5 text-xs text-people-amber"
-          >
-            {linkedPerson.full_name}
-            <ChevronDown className="h-3 w-3" />
-          </button>
+            role="button"
+            tabIndex={0}
+            onKeyDown={onActivateKey(props.onClick)}
+            name={linkedPerson.full_name}
+            accent="amber"
+            className="cursor-pointer"
+          />
         ) : (
-          <button
-            type="button"
-            {...props}
-            className="flex items-center gap-1 rounded-full border border-outline-variant px-2 py-0.5 text-xs text-on-surface-variant hover:border-people-amber/40 hover:text-people-amber"
-          >
+          <Button type="button" variant="dashed" size="sm" {...props}>
             <UserPlus className="h-3 w-3" />
             Link to person…
-          </button>
+          </Button>
         )
       }
     >

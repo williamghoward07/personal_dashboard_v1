@@ -1,6 +1,7 @@
 'use client'
 
 import { Cloud, Pencil, Trash2 } from 'lucide-react'
+import { CountBadge } from '@/components/ui/count-badge'
 import type { Todo } from '@/lib/types'
 import type { WorkspaceTag } from '@/lib/workspaces/use-workspace-lookup'
 import { onActivateKey } from '@/lib/utils/a11y'
@@ -57,11 +58,7 @@ export default function TodoRow({
           >
             {todo.title}
           </span>
-          {!!subtaskCount && (
-            <span className="shrink-0 rounded-full bg-surface-container-high px-1.5 py-0.5 text-[10px] font-medium text-on-surface-variant">
-              {subtaskCount}
-            </span>
-          )}
+          {!!subtaskCount && <CountBadge count={subtaskCount} className="shrink-0" />}
           {workspace && <WorkspaceChip workspace={workspace} />}
         </span>
         {todo.notes && <span className="block truncate text-xs text-on-surface-variant">{todo.notes}</span>}

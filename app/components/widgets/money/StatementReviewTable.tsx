@@ -2,6 +2,15 @@
 
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableHead,
+  DataTableHeaderCell,
+  DataTableRow,
+} from '@/components/ui/data-table'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 export interface ReviewRow {
   id: string
@@ -47,82 +56,80 @@ export default function StatementReviewTable({
             text, or use a layout this parser doesn&apos;t recognise.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-left text-xs">
-              <thead>
-                <tr className="border-b border-outline-variant text-on-surface-variant">
-                  <th className="w-8 py-2" />
-                  <th className="py-2 pr-2">Date</th>
-                  <th className="py-2 pr-2">Description</th>
-                  <th className="py-2 pr-2">Category</th>
-                  <th className="py-2 pr-2">Type</th>
-                  <th className="py-2 pr-2 text-right">Amount (£)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className={`border-b border-outline-variant/40 ${row.included ? '' : 'opacity-40'}`}>
-                    <td className="py-1.5">
-                      <input
-                        type="checkbox"
-                        checked={row.included}
-                        onChange={(e) => updateRow(row.id, { included: e.target.checked })}
-                        className="h-4 w-4 cursor-pointer"
-                        aria-label={`Include ${row.description || 'this row'}`}
-                      />
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        type="date"
-                        value={row.date}
-                        onChange={(e) => updateRow(row.id, { date: e.target.value })}
-                        className={inputClass}
-                      />
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        value={row.description}
-                        onChange={(e) => updateRow(row.id, { description: e.target.value })}
-                        className={inputClass}
-                      />
-                      {row.possibleDuplicate && (
-                        <span className="mt-0.5 block text-[10px] font-medium text-academic-orange">
-                          Possible duplicate
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        value={row.category}
-                        onChange={(e) => updateRow(row.id, { category: e.target.value })}
-                        className={inputClass}
-                      />
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <select
-                        value={row.type}
-                        onChange={(e) => updateRow(row.id, { type: e.target.value as 'income' | 'outgoing' })}
-                        className={inputClass}
-                      >
-                        <option value="outgoing">Outgoing</option>
-                        <option value="income">Income</option>
-                      </select>
-                    </td>
-                    <td className="py-1.5 pr-2">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={0.01}
-                        value={row.amount}
-                        onChange={(e) => updateRow(row.id, { amount: Number(e.target.value) })}
-                        className={`${inputClass} text-right`}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable containerClassName="min-w-[720px] overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low">
+            <DataTableHead>
+              <tr>
+                <DataTableHeaderCell className="w-8" />
+                <DataTableHeaderCell>Date</DataTableHeaderCell>
+                <DataTableHeaderCell>Description</DataTableHeaderCell>
+                <DataTableHeaderCell>Category</DataTableHeaderCell>
+                <DataTableHeaderCell>Type</DataTableHeaderCell>
+                <DataTableHeaderCell align="right">Amount (£)</DataTableHeaderCell>
+              </tr>
+            </DataTableHead>
+            <DataTableBody>
+              {rows.map((row) => (
+                <DataTableRow key={row.id} className={row.included ? '' : 'opacity-40'}>
+                  <DataTableCell>
+                    <input
+                      type="checkbox"
+                      checked={row.included}
+                      onChange={(e) => updateRow(row.id, { included: e.target.checked })}
+                      className="h-4 w-4 cursor-pointer"
+                      aria-label={`Include ${row.description || 'this row'}`}
+                    />
+                  </DataTableCell>
+                  <DataTableCell>
+                    <input
+                      type="date"
+                      value={row.date}
+                      onChange={(e) => updateRow(row.id, { date: e.target.value })}
+                      className={inputClass}
+                    />
+                  </DataTableCell>
+                  <DataTableCell>
+                    <input
+                      value={row.description}
+                      onChange={(e) => updateRow(row.id, { description: e.target.value })}
+                      className={inputClass}
+                    />
+                    {row.possibleDuplicate && (
+                      <StatusBadge accent="orange" size="sm" className="mt-1">
+                        Possible duplicate
+                      </StatusBadge>
+                    )}
+                  </DataTableCell>
+                  <DataTableCell>
+                    <input
+                      value={row.category}
+                      onChange={(e) => updateRow(row.id, { category: e.target.value })}
+                      className={inputClass}
+                    />
+                  </DataTableCell>
+                  <DataTableCell>
+                    <select
+                      value={row.type}
+                      onChange={(e) => updateRow(row.id, { type: e.target.value as 'income' | 'outgoing' })}
+                      className={inputClass}
+                    >
+                      <option value="outgoing">Outgoing</option>
+                      <option value="income">Income</option>
+                    </select>
+                  </DataTableCell>
+                  <DataTableCell align="right">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min={0.01}
+                      value={row.amount}
+                      onChange={(e) => updateRow(row.id, { amount: Number(e.target.value) })}
+                      className={`${inputClass} text-right`}
+                    />
+                  </DataTableCell>
+                </DataTableRow>
+              ))}
+            </DataTableBody>
+          </DataTable>
         )}
       </GlassCardContent>
     </ModuleGlassCard>

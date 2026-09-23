@@ -441,6 +441,18 @@ export interface QuickLink {
   created_at: string
 }
 
+// Mirrors public.user_settings (supabase/migrations/20260920000000_user_settings.sql).
+// home_layout holds [{ id, span, hidden }] in render order; see
+// lib/settings/schema.ts for the normalised/tolerant-merged shape the app
+// actually reads/writes (HomeLayoutEntry / UserSettings).
+export interface UserSettingsRow {
+  user_id: string
+  home_layout: unknown
+  hidden_nav_items: string[]
+  launcher_link_ids: string[]
+  updated_at: string
+}
+
 export type WorkspaceLinkKind = 'paper' | 'data' | 'doc' | 'other'
 export type WorkspaceNoteKind = 'realization' | 'discarded' | 'argument' | 'meeting' | 'note'
 // The workspace page's sections, as stored in hidden_sections /

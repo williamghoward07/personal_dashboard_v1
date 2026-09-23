@@ -2,9 +2,13 @@ import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
 import type { Transaction } from '@/lib/types'
 import { minorUnitsOf } from '@/lib/money'
+import { ACCENT_VAR } from '@/lib/theme'
 
-const PALETTE = ['#3987e5', '#d95926', '#199e70']
-const OTHER = '#849587'
+// Series colours are drawn from the shared accent tokens (DESIGN.md §4.2)
+// rather than hardcoded hex — blue/orange/teal for the top three
+// categories, the neutral outline tone for the "Other" bucket.
+const PALETTE = [ACCENT_VAR.blue, ACCENT_VAR.orange, ACCENT_VAR.teal]
+const OTHER = ACCENT_VAR.neutral
 
 const SIZE = 160
 const RADIUS = 60

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { StatusBadge } from '@/components/ui/status-badge'
 import { answerQuestion, completeSession, getSession, listSessionQuestions } from '@/lib/bible/studies'
 import { getPassageById } from '@/lib/bible/passages-repo'
 import { formatReference } from '@/lib/bible/passages'
@@ -98,11 +99,11 @@ export default function SessionDetail({ sessionId }: { sessionId: string }) {
             {session.title ? `: ${session.title}` : ''}
           </h1>
           {session.completed_at ? (
-            <span className="rounded-full border border-bible-crimson/30 bg-bible-crimson/10 px-2.5 py-1 text-xs text-bible-crimson">
+            <StatusBadge accent="crimson" dot="static">
               Completed
-            </span>
+            </StatusBadge>
           ) : (
-            <Button type="button" size="sm" onClick={handleComplete} disabled={completing}>
+            <Button type="button" size="sm" accent="crimson" onClick={handleComplete} disabled={completing}>
               Mark session complete
             </Button>
           )}

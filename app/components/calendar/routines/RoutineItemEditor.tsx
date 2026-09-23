@@ -175,7 +175,7 @@ const RoutineItemEditor = forwardRef<
             onClick={handleAdd}
             disabled={!draft.name.trim() || saving}
             aria-label="Add step"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#22c55e] text-black transition-opacity hover:brightness-110 disabled:opacity-40"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container text-on-primary-container transition-opacity hover:brightness-110 disabled:opacity-40"
           >
             <Check className="h-4 w-4" strokeWidth={3} />
           </button>
@@ -315,7 +315,7 @@ function RoutineStepBlock({
               onClick={() => onSave({ ...values, name: values.name.trim() })}
               disabled={!values.name.trim()}
               aria-label="Save step"
-              className="rounded p-1.5 text-[#22c55e] hover:bg-surface-container-high disabled:opacity-40"
+              className="rounded p-1.5 text-primary-container hover:bg-surface-container-high disabled:opacity-40"
             >
               <Check className="h-3.5 w-3.5" strokeWidth={3} />
             </button>

@@ -122,7 +122,9 @@ export default function AppLibraryBoard() {
       const allLinks = (l.data ?? []) as QuickLink[]
       const archivedFolderIds = new Set(allFolders.filter((x) => x.archived_at).map((x) => x.id))
       const isArchived = (link: QuickLink) =>
-        link.archived_at !== null || (link.folder_id !== null && archivedFolderIds.has(link.folder_id))
+        // Truthy, not `!== null`: archived_at is undefined until
+        // 20261009000000 is applied, and that must not archive every link.
+        !!link.archived_at || (link.folder_id !== null && archivedFolderIds.has(link.folder_id))
       setFolders(allFolders.filter((x) => !x.archived_at))
       setArchivedFolders(allFolders.filter((x) => x.archived_at))
       setLinks(allLinks.filter((x) => !isArchived(x)))

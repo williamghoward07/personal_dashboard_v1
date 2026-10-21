@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from './calendarItems'
-import { MIN_PILL_HEIGHT_PX, defaultScrollMinutes, gridHeightPx, minutesToPx } from './time-grid/grid-math'
+import {
+  defaultScrollMinutes,
+  gridHeightPx,
+  minutesToPx,
+  pillHeightPx,
+  visualEndMinutes,
+} from './time-grid/grid-math'
 import { layoutOverlappingBlocks } from './time-grid/overlap-layout'
 import { resolveTimedRange } from './time-grid/timed-range'
 import TimeGridPill, { isTimedDayItem } from './time-grid/TimeGridPill'
@@ -44,9 +50,12 @@ export default function DayGridView({
 
   const ranges = useMemo(() => new Map(timed.map((item) => [itemKey(item), resolveTimedRange(item)])), [timed])
   const layouts = useMemo(() => {
-    const blocks = timed.map((item) => ({ id: itemKey(item), ...ranges.get(itemKey(item))! }))
+    const blocks = timed.map((item) => {
+      const { startMinutes, endMinutes } = ranges.get(itemKey(item))!
+      return { id: itemKey(item), startMinutes, endMinutes: visualEndMinutes(startMinutes, endMinutes, pxPerMin) }
+    })
     return new Map(layoutOverlappingBlocks(blocks).map((l) => [l.id, l]))
-  }, [timed, ranges])
+  }, [timed, ranges, pxPerMin])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(isToday, nowMinutes), pxPerMin) })
@@ -86,7 +95,7 @@ export default function DayGridView({
                   key={key}
                   item={item}
                   top={minutesToPx(range.startMinutes, pxPerMin)}
-                  height={Math.max(MIN_PILL_HEIGHT_PX, minutesToPx(range.endMinutes - range.startMinutes, pxPerMin))}
+                  height={pillHeightPx(range.startMinutes, range.endMinutes, pxPerMin)}
                   column={layout.column}
                   columnCount={layout.columnCount}
                   onSelectRoutineInstance={onSelectRoutineInstance}

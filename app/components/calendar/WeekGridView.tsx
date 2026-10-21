@@ -7,10 +7,11 @@ import { isBarRenderedCalendarItem } from './calendarItems'
 import { layoutBarsForWeek, laneCountForWeek } from './weekBarLayout'
 import {
   GUTTER_PX,
-  MIN_PILL_HEIGHT_PX,
   defaultScrollMinutes,
   gridHeightPx,
   minutesToPx,
+  pillHeightPx,
+  visualEndMinutes,
 } from './time-grid/grid-math'
 import { layoutOverlappingBlocks } from './time-grid/overlap-layout'
 import { resolveTimedRange } from './time-grid/timed-range'
@@ -148,11 +149,11 @@ export default function WeekGridView({
                 .filter(isTimedDayItem)
                 .filter((item) => !isBarRenderedCalendarItem(item))
               const ranges = new Map(timed.map((item) => [itemKey(item), resolveTimedRange(item)]))
-              const layouts = new Map(
-                layoutOverlappingBlocks(timed.map((item) => ({ id: itemKey(item), ...ranges.get(itemKey(item))! }))).map(
-                  (l) => [l.id, l]
-                )
-              )
+              const blocks = timed.map((item) => {
+                const { startMinutes, endMinutes } = ranges.get(itemKey(item))!
+                return { id: itemKey(item), startMinutes, endMinutes: visualEndMinutes(startMinutes, endMinutes, pxPerMin) }
+              })
+              const layouts = new Map(layoutOverlappingBlocks(blocks).map((l) => [l.id, l]))
 
               return (
                 <div key={dateKey} className="relative flex-1 border-l border-outline-variant/20 first:border-l-0">
@@ -168,10 +169,7 @@ export default function WeekGridView({
                         key={key}
                         item={item}
                         top={minutesToPx(range.startMinutes, pxPerMin)}
-                        height={Math.max(
-                          MIN_PILL_HEIGHT_PX,
-                          minutesToPx(range.endMinutes - range.startMinutes, pxPerMin)
-                        )}
+                        height={pillHeightPx(range.startMinutes, range.endMinutes, pxPerMin)}
                         column={layout.column}
                         columnCount={layout.columnCount}
                         onSelectRoutineInstance={onSelectRoutineInstance}

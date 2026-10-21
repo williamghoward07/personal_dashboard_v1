@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { defaultScrollMinutes, minutesSinceLondonMidnight } from './grid-math'
+import {
+  MIN_PILL_HEIGHT_PX,
+  defaultScrollMinutes,
+  minutesSinceLondonMidnight,
+  pillHeightPx,
+  visualEndMinutes,
+} from './grid-math'
 
 describe('minutesSinceLondonMidnight', () => {
   it('reads a UTC morning instant during GMT (winter)', () => {
@@ -28,5 +34,24 @@ describe('defaultScrollMinutes', () => {
 
   it('never scrolls above the top of the grid', () => {
     expect(defaultScrollMinutes(true, 30)).toBe(0)
+  })
+})
+
+describe('pill sizing', () => {
+  it('keeps a short event at the minimum height', () => {
+    expect(pillHeightPx(600, 605, 0.5)).toBe(MIN_PILL_HEIGHT_PX)
+  })
+
+  it('uses the real duration once that is taller', () => {
+    expect(pillHeightPx(600, 660, 1.2)).toBe(72)
+  })
+
+  it('extends a short event to where its pill is drawn', () => {
+    // 20px at 0.5px/min is 40 minutes on screen, though the event is 15.
+    expect(visualEndMinutes(600, 615, 0.5)).toBe(640)
+  })
+
+  it('leaves a long event its real end', () => {
+    expect(visualEndMinutes(600, 660, 1.2)).toBe(660)
   })
 })

@@ -21,7 +21,7 @@ import RoutineInstanceModal from './routines/RoutineInstanceModal'
 import TimeBlockWizardModal from './timeblock/TimeBlockWizardModal'
 import type { CalendarEvent, DayItem, EventSpan } from './calendarItems'
 import { groupItemsByDate, getBarSpans, addDaysToKey } from './calendarItems'
-import { MAX_PX_PER_MIN, MINUTES_PER_DAY } from './time-grid/grid-math'
+import { DEFAULT_PX_PER_MIN, MAX_PX_PER_MIN, MINUTES_PER_DAY, ZOOM_STEP } from './time-grid/grid-math'
 
 type ViewMode = 'month' | 'week' | 'day' | 'routines'
 
@@ -151,9 +151,10 @@ const SSR_FALLBACK_VIEWPORT_PX = RESERVED_CHROME_PX + MIN_GRID_CONTAINER_PX
 export default function CalendarPageView() {
   const [view, setView] = useState<ViewMode>('month')
   const [gridMode, setGridMode] = useState<GridMode>('grid')
-  // null = not manually zoomed — pxPerMin below tracks fitPxPerMin instead,
-  // so the grid stays auto-fitted to the viewport until the user picks a
-  // zoom level themselves ("Fit day" resets this back to null).
+  // null = not manually zoomed — pxPerMin below opens at a readable
+  // DEFAULT_PX_PER_MIN (or the viewport fit, if that's already roomier)
+  // until the user picks a zoom level themselves. "Fit day" sets it to the
+  // fit value.
   const [manualPxPerMin, setManualPxPerMin] = useState<number | null>(null)
   // Read only after mount (see effect below) — window isn't available
   // during SSR, so this fallback keeps the first client render matching
@@ -180,8 +181,9 @@ export default function CalendarPageView() {
   const fitPxPerMin = maxContainerHeightPx / MINUTES_PER_DAY
   const zoomMaxPxPerMin = Math.max(MAX_PX_PER_MIN, fitPxPerMin * 2)
   // The actual zoom level in effect: whatever the user picked, or the
-  // viewport-fit value if they haven't touched the slider.
-  const pxPerMin = manualPxPerMin ?? fitPxPerMin
+  // readable default if they haven't touched the zoom.
+  const pxPerMin = manualPxPerMin ?? Math.min(zoomMaxPxPerMin, Math.max(fitPxPerMin, DEFAULT_PX_PER_MIN))
+  const setZoom = (next: number) => setManualPxPerMin(Math.min(zoomMaxPxPerMin, Math.max(fitPxPerMin, next)))
 
   useEffect(() => {
     const updateViewportH = () => setViewportH(window.innerHeight)
@@ -344,23 +346,39 @@ export default function CalendarPageView() {
                 {gridMode === 'grid' && (
                   <div
                     className="flex items-center gap-1.5"
-                    title="Zoom the hour grid — shrink it all the way to fit the whole day with no scrolling"
+                    title="Zoom the hour grid — Fit day shrinks it to the whole day with no scrolling"
                   >
-                    <ZoomOut className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
+                    <button
+                      type="button"
+                      onClick={() => setZoom(pxPerMin / ZOOM_STEP)}
+                      disabled={pxPerMin <= fitPxPerMin}
+                      aria-label="Zoom out"
+                      className="rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
+                    >
+                      <ZoomOut className="h-3.5 w-3.5" />
+                    </button>
                     <input
                       type="range"
                       min={fitPxPerMin}
                       max={zoomMaxPxPerMin}
                       step={0.05}
                       value={pxPerMin}
-                      onChange={(e) => setManualPxPerMin(Number(e.target.value))}
+                      onChange={(e) => setZoom(Number(e.target.value))}
                       aria-label="Hour grid zoom"
-                      className="h-1 w-20 accent-on-surface-variant"
+                      className="h-1 w-24 accent-on-surface-variant"
                     />
-                    <ZoomIn className="h-3.5 w-3.5 shrink-0 text-on-surface-variant" />
                     <button
                       type="button"
-                      onClick={() => setManualPxPerMin(null)}
+                      onClick={() => setZoom(pxPerMin * ZOOM_STEP)}
+                      disabled={pxPerMin >= zoomMaxPxPerMin}
+                      aria-label="Zoom in"
+                      className="rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
+                    >
+                      <ZoomIn className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setManualPxPerMin(fitPxPerMin)}
                       className="rounded-md px-1.5 py-1 text-xs font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
                     >
                       Fit day

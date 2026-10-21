@@ -52,13 +52,14 @@ export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan 
   useEffect(() => {
     supabase
       .from('quick_links')
-      .select('*, folder:link_folders(archived_at)')
-      .is('archived_at', null)
+      // Archived rows are filtered client-side (not with .is()), so the
+      // launcher still loads before 20261009000000 adds archived_at.
+      .select('*, folder:link_folders(*)')
       .order('sort_order', { ascending: true })
       .then(({ data }) => {
         // A link in an archived folder is archived too.
-        type Row = QuickLink & { folder: { archived_at: string | null } | null }
-        setLinks(((data ?? []) as Row[]).filter((row) => !row.folder?.archived_at))
+        type Row = QuickLink & { folder: { archived_at?: string | null } | null }
+        setLinks(((data ?? []) as Row[]).filter((row) => !row.archived_at && !row.folder?.archived_at))
         setLoading(false)
       })
   }, [])

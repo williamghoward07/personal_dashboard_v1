@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react'
 import type { RoutineInstance } from '@/lib/types'
 import type { DayItem } from '../calendarItems'
 import { formatTime, sessionColour } from '../calendarItems'
+import { TWO_LINE_PILL_HEIGHT_PX } from './grid-math'
 import PrepLight from '../../lectures/PrepLight'
 import { useOpenSession } from '../../lectures/SessionPopover'
 
@@ -58,11 +59,20 @@ export default function TimeGridPill({
     borderColor: colour ?? 'var(--color-secondary-container)',
   }
 
-  const content = (
-    <>
-      <span className="font-semibold">{formatTime(start)}</span> {item.title}
-    </>
-  )
+  // Text never wraps into a pill it doesn't fit: a short pill gets one
+  // truncated line, and the full text is always on hover.
+  const tooltip = `${formatTime(start)} ${item.title}`
+  const content =
+    height >= TWO_LINE_PILL_HEIGHT_PX ? (
+      <>
+        <span className="block font-semibold">{formatTime(start)}</span>
+        <span className="block break-words">{item.title}</span>
+      </>
+    ) : (
+      <span className="block truncate">
+        <span className="font-semibold">{formatTime(start)}</span> {item.title}
+      </span>
+    )
 
   if (item.kind === 'session') {
     return (
@@ -70,10 +80,11 @@ export default function TimeGridPill({
         type="button"
         onClick={(e) => openSession?.(item.session, e.currentTarget)}
         style={style}
-        className="absolute flex cursor-pointer items-start gap-1 overflow-hidden rounded-md border px-1.5 py-0.5 text-left text-[11px] text-on-surface"
+        title={tooltip}
+        className="absolute flex cursor-pointer items-start gap-1 overflow-hidden rounded-md border px-1.5 py-px text-left text-[11px] leading-4 text-on-surface"
       >
         <PrepLight status={item.session.status} notesDone={item.session.notesDone} size="sm" className="mt-1" />
-        <span className="min-w-0">{content}</span>
+        <span className="min-w-0 flex-1">{content}</span>
       </button>
     )
   }
@@ -84,7 +95,8 @@ export default function TimeGridPill({
         type="button"
         onClick={() => onSelectRoutineInstance(item.instance)}
         style={style}
-        className="absolute cursor-pointer overflow-hidden rounded-md border px-1.5 py-0.5 text-left text-[11px] text-on-surface"
+        title={tooltip}
+        className="absolute cursor-pointer overflow-hidden rounded-md border px-1.5 py-px text-left text-[11px] leading-4 text-on-surface"
       >
         {content}
       </button>
@@ -92,7 +104,7 @@ export default function TimeGridPill({
   }
 
   return (
-    <div style={style} className="absolute overflow-hidden rounded-md border px-1.5 py-0.5 text-left text-[11px] text-on-surface">
+    <div style={style} title={tooltip} className="absolute overflow-hidden rounded-md border px-1.5 py-px text-left text-[11px] leading-4 text-on-surface">
       {content}
     </div>
   )

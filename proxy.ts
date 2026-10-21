@@ -3,7 +3,10 @@ import { type NextRequest, NextResponse } from 'next/server'
 
 // /api/alexa has no Supabase session (Alexa calls it); it verifies Amazon's
 // signature itself — see lib/alexa/verify.ts.
-const PUBLIC_PATHS = ['/login', '/auth', '/api/alexa']
+// /api/timer is also called by the Mac/Shortcuts with a bearer token and no
+// session; every route checks the caller itself (lib/timer/auth.ts).
+// /api/cron is called by Vercel with CRON_SECRET; each route checks it.
+const PUBLIC_PATHS = ['/login', '/auth', '/api/alexa', '/api/timer', '/api/cron']
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))

@@ -1,6 +1,8 @@
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from './calendarItems'
-import { DOT_CLASS, formatSpanEnd, formatTime } from './calendarItems'
+import { dotClassFor, formatSpanEnd, formatTime } from './calendarItems'
+import PrepLight from '../lectures/PrepLight'
+import { useOpenSession } from '../lectures/SessionPopover'
 
 export default function DayItemsList({
   items,
@@ -11,6 +13,8 @@ export default function DayItemsList({
   onSelectTask: (task: Task) => void
   onSelectRoutineInstance: (instance: RoutineInstance) => void
 }) {
+  const openSession = useOpenSession()
+
   if (items.length === 0) {
     return <p className="text-sm text-on-surface-variant">Nothing on this day.</p>
   }
@@ -39,11 +43,15 @@ export default function DayItemsList({
 
         return (
           <li key={`${item.kind}-${item.id}`} className="flex items-center gap-2">
-            <span
-              className={item.kind === 'routine' ? 'h-1.5 w-1.5 shrink-0 rounded-full' : `h-1.5 w-1.5 shrink-0 rounded-full ${DOT_CLASS[item.kind]}`}
-              style={item.kind === 'routine' ? { backgroundColor: item.colour } : undefined}
-            />
-            {(item.kind === 'calendar' || item.kind === 'routine') && item.start && (
+            {item.kind === 'session' ? (
+              <PrepLight status={item.session.status} notesDone={item.session.notesDone} size="sm" />
+            ) : (
+              <span
+                className={item.kind === 'routine' ? 'h-1.5 w-1.5 shrink-0 rounded-full' : `h-1.5 w-1.5 shrink-0 rounded-full ${dotClassFor(item)}`}
+                style={item.kind === 'routine' ? { backgroundColor: item.colour } : undefined}
+              />
+            )}
+            {(item.kind === 'calendar' || item.kind === 'routine' || item.kind === 'session') && item.start && (
               <span className="shrink-0 text-xs tabular-nums text-on-surface-variant">
                 {formatTime(item.start)}
               </span>
@@ -52,6 +60,14 @@ export default function DayItemsList({
               <button
                 type="button"
                 onClick={() => onSelectTask(item.task)}
+                className="truncate text-left text-on-surface hover:underline"
+              >
+                {item.title}
+              </button>
+            ) : item.kind === 'session' ? (
+              <button
+                type="button"
+                onClick={(e) => openSession?.(item.session, e.currentTarget)}
                 className="truncate text-left text-on-surface hover:underline"
               >
                 {item.title}

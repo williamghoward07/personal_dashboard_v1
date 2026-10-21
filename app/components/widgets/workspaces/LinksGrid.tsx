@@ -25,6 +25,7 @@ export default function LinksGrid({
   addingUrl,
   setAddingUrl,
   weekChoices,
+  markReading,
 }: {
   /** The rendered (possibly kind-filtered) list. */
   links: WorkspaceLink[]
@@ -45,6 +46,8 @@ export default function LinksGrid({
   setAddingUrl: (open: boolean) => void
   /** When set, each card offers "Week…" to move it into Readings. */
   weekChoices?: number[]
+  /** Module workspaces: each card offers "Reading" to move it to Lectures. */
+  markReading?: (link: WorkspaceLink) => void
 }) {
   // Primary DnD-disambiguation signal — checked before ever inspecting a
   // drop event's DataTransfer, since dragstart must call setData for the
@@ -128,6 +131,7 @@ export default function LinksGrid({
           onInternalReorder={handleInternalReorder}
           onExternalUrlDrop={handleAddUrl}
           weekChoices={weekChoices}
+          onMarkReading={markReading ? () => markReading(link) : undefined}
         />
       ))}
 

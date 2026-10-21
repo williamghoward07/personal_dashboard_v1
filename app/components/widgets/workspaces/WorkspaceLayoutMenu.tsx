@@ -22,10 +22,15 @@ const SECTION_HINTS: Record<WorkspaceSectionKey, string> = {
 export default function WorkspaceLayoutMenu({
   hidden,
   onToggle,
+  exclude = [],
 }: {
   hidden: WorkspaceSectionKey[]
   onToggle: (key: WorkspaceSectionKey) => void
+  /** Sections this workspace can't show (module workspaces: weekly readings). */
+  exclude?: WorkspaceSectionKey[]
 }) {
+  const keys = SECTION_KEYS.filter((key) => !exclude.includes(key))
+  const hiddenCount = hidden.filter((key) => keys.includes(key)).length
   return (
     <Popover
       label="Workspace layout"
@@ -35,9 +40,9 @@ export default function WorkspaceLayoutMenu({
         <button type="button" {...props} className={actionButtonClass}>
           <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.75} />
           Layout
-          {hidden.length > 0 && (
+          {hiddenCount > 0 && (
             <span className="rounded-full bg-surface-container-highest px-1.5 text-[10px] tabular-nums">
-              {hidden.length} hidden
+              {hiddenCount} hidden
             </span>
           )}
         </button>
@@ -46,7 +51,7 @@ export default function WorkspaceLayoutMenu({
       <div className="flex flex-col gap-2">
         <span className={microLabelClass}>Show on this workspace</span>
         <ul className="flex flex-col gap-1">
-          {SECTION_KEYS.map((key) => {
+          {keys.map((key) => {
             const shown = !hidden.includes(key)
             const Icon = shown ? Eye : EyeOff
             return (

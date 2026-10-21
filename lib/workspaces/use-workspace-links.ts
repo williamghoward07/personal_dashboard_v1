@@ -8,16 +8,25 @@ import { detectLinkKind } from './kinds'
 import { normalizeUrl } from '@/lib/utils/url'
 
 export type WorkspaceLinkPatch = Partial<
-  Pick<WorkspaceLink, 'title' | 'kind' | 'citation' | 'doi' | 'meta_label' | 'completed_at' | 'week'>
+  Pick<
+    WorkspaceLink,
+    'title' | 'kind' | 'citation' | 'doi' | 'meta_label' | 'completed_at' | 'week' | 'is_reading' | 'session_uid'
+  >
 >
+
+export interface AddLinkOptions {
+  week?: number | null
+  /** A timetable session (ICS UID) — see lib/timetable. */
+  sessionUid?: string | null
+}
 
 export interface UseWorkspaceLinksResult {
   links: WorkspaceLink[]
   loading: boolean
   error: string | null
   refresh: () => void
-  /** With a `week`, the link is added as a weekly reading. */
-  addLink: (rawUrl: string, options?: { week?: number | null }) => Promise<WorkspaceLink | null>
+  /** With a `week` or `sessionUid`, the link is added as a reading for it. */
+  addLink: (rawUrl: string, options?: AddLinkOptions) => Promise<WorkspaceLink | null>
   updateLink: (id: string, patch: WorkspaceLinkPatch) => Promise<void>
   deleteLink: (id: string) => Promise<void>
   reorderLinks: (orderedIds: string[]) => Promise<void>
@@ -52,9 +61,10 @@ export function useWorkspaceLinks(workspaceId: string): UseWorkspaceLinksResult 
   }, [refresh])
 
   const addLink = useCallback(
-    async (rawUrl: string, options?: { week?: number | null }) => {
+    async (rawUrl: string, options?: AddLinkOptions) => {
       const url = normalizeUrl(rawUrl)
       const week = options?.week ?? null
+      const sessionUid = options?.sessionUid ?? null
       if (!url) {
         setError('Not a valid URL')
         return null
@@ -77,6 +87,7 @@ export function useWorkspaceLinks(workspaceId: string): UseWorkspaceLinksResult 
         meta_label: null,
         completed_at: null,
         week,
+        ...(sessionUid !== null ? { is_reading: true, session_uid: sessionUid } : {}),
         created_at: new Date().toISOString(),
       }
       setLinks((prev) => [...prev, optimisticLink])
@@ -84,9 +95,17 @@ export function useWorkspaceLinks(workspaceId: string): UseWorkspaceLinksResult 
 
       const { data, error: insertError } = await supabase
         .from('workspace_links')
-        // week only when set, so adding a plain source never depends on
-        // the readings migration having been applied.
-        .insert({ workspace_id: workspaceId, title, url, position, kind, ...(week !== null ? { week } : {}) })
+        // week / session only when set, so adding a plain source never
+        // depends on the readings or lectures migration having been applied.
+        .insert({
+          workspace_id: workspaceId,
+          title,
+          url,
+          position,
+          kind,
+          ...(week !== null ? { week } : {}),
+          ...(sessionUid !== null ? { session_uid: sessionUid, is_reading: true } : {}),
+        })
         .select()
         .single()
 

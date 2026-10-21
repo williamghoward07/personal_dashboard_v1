@@ -57,6 +57,22 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
 - ❌ **Dedicated research panel with saved conversation links** — this is
   build-list item #7, still not done.
 
+### Lectures (`/lectures`)
+- ✅ Timetable read straight from the Durham MyTimetable ICS feed
+  (`TIMETABLE_ICS_URL`, cached 1h) — not via Google, so it's fresh within
+  the hour and survives the weekly Google re-auth.
+- ✅ Per session: paste reading links (Talis/Blackboard are 2FA-locked, so
+  links only — never fetched), tick them off, "no readings for this one",
+  "Notes taken" and a short note. Traffic light: red = no readings added,
+  amber = some to do, green = all done; a tick = notes taken.
+- ✅ "Next 7 days" list + one card per module code; Create workspace makes
+  the module workspace (`workspaces.module_code`), which then lives on
+  `/lectures`, not `/workspaces`, and has a Lectures section.
+- ✅ The same lights on `/calendar` (month dots, week/day pills, agenda);
+  clicking a session opens an anchored popover with its prep.
+- 🚧 Needs `20261019000000_lecture_sessions.sql` applied — until then lights
+  are all red and ticks don't save.
+
 ### Money (`/money`)
 - ✅ Overall balance, per-account cards, transactions list.
 - ✅ **Starling** — live balances + Spaces, transaction sync.
@@ -416,6 +432,8 @@ Markdown export (always complete, even for hidden sections).
   grades, time logged, OneNote.
 - **Workspaces** is where the work happens: sources, next actions, thinking
   log.
+- Lecture prep lives in **module workspaces** (Lectures tab): one per
+  module code, sessions from the timetable, readings per session.
 - For an essay: add the deadline in Education **and** create a workspace
   (subtitle = module), filed under a folder like Uni › Year 2. Non-uni
   projects (e.g. the Christian clothing brand) are workspace-only — hide the

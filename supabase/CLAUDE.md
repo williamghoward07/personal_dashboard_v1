@@ -12,3 +12,5 @@
   - `20261009000000_app_library_archive.sql`
   - `20261009010000_todos_mstodo_steps.sql`
   - `20261009020000_workspace_readings_and_time.sql`
+  - `20261019000000_lecture_sessions.sql`
+  - `20261019010000_time_sessions.sql` (needs `20261009020000` first; it stops with an error otherwise)

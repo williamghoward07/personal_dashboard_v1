@@ -28,6 +28,7 @@ export default function LinksSection({
   addingUrl,
   setAddingUrl,
   weekChoices,
+  markReading,
   onCollapse,
 }: {
   links: WorkspaceLink[]
@@ -44,6 +45,8 @@ export default function LinksSection({
   setAddingUrl: (open: boolean) => void
   /** Set while Readings is shown: cards can be moved into a week. */
   weekChoices?: number[]
+  /** Module workspaces: cards can be moved into the Lectures section. */
+  markReading?: (link: WorkspaceLink) => void
   onCollapse: () => void
 }) {
   const [filter, setFilter] = useState<KindFilter>('all')
@@ -156,6 +159,7 @@ export default function LinksSection({
             addingUrl={addingUrl}
             setAddingUrl={setAddingUrl}
             weekChoices={weekChoices}
+            markReading={markReading}
           />
           {open.length > 0 && visibleLinks.length === 0 && (
             <p className="text-xs text-on-surface-variant">No sources of that type.</p>

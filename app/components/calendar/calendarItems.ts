@@ -1,5 +1,8 @@
 import type { Task, ActivitySession, RoutineInstance } from '@/lib/types'
 import { londonDateKey } from '@/lib/google/london-day'
+import { ACCENT_BAR, ACCENT_VAR } from '@/lib/theme'
+import { PREP_ACCENT } from '@/lib/timetable/format'
+import type { SessionWithPrep } from '@/lib/timetable/session'
 
 export interface CalendarEvent {
   id: string
@@ -40,6 +43,16 @@ export type DayItem =
       routineId: string | null
       instance: RoutineInstance
     }
+  | {
+      // A timetable session (lecture, seminar…) from the ICS feed, coloured
+      // by its prep traffic light. Clicking one opens SessionPopover.
+      kind: 'session'
+      id: string
+      title: string
+      start: string
+      end: string | null
+      session: SessionWithPrep
+    }
 
 export interface EventSpan {
   id: string
@@ -57,6 +70,22 @@ export const DOT_CLASS: Record<DayItem['kind'], string> = {
   task: 'bg-academic-orange',
   activity: 'bg-primary-container',
   routine: 'bg-habit-purple',
+  session: 'bg-on-surface-variant',
+}
+
+/** The dot class for any item: a session's is its traffic light. */
+export function dotClassFor(item: DayItem): string {
+  return item.kind === 'session' ? ACCENT_BAR[PREP_ACCENT[item.session.status]] : DOT_CLASS[item.kind]
+}
+
+/** The CSS colour of a session's traffic light, for pill borders/fills. */
+export function sessionColour(session: SessionWithPrep): string {
+  return ACCENT_VAR[PREP_ACCENT[session.status]]
+}
+
+/** "Lecture: Physical Geography" — short enough for a grid cell. */
+export function sessionItemTitle(session: SessionWithPrep): string {
+  return `${session.type}: ${session.moduleName}`
 }
 
 export function formatSpanEnd(endKey: string) {
@@ -124,7 +153,8 @@ export function groupItemsByDate(
   events: CalendarEvent[],
   tasks: Task[],
   sessions: ActivitySession[],
-  routineInstances: RoutineInstance[]
+  routineInstances: RoutineInstance[],
+  timetable: SessionWithPrep[] = []
 ): Map<string, DayItem[]> {
   const byDate = new Map<string, DayItem[]>()
   const routineEventIds = new Set(routineInstances.map((i) => i.google_event_id))
@@ -182,10 +212,21 @@ export function groupItemsByDate(
     })
   }
 
+  for (const session of timetable) {
+    push(londonDateKey(session.start), {
+      kind: 'session',
+      id: session.uid,
+      title: sessionItemTitle(session),
+      start: session.start,
+      end: session.end,
+      session,
+    })
+  }
+
   for (const items of byDate.values()) {
     items.sort((a, b) => {
-      const aStart = a.kind === 'calendar' || a.kind === 'routine' ? a.start : null
-      const bStart = b.kind === 'calendar' || b.kind === 'routine' ? b.start : null
+      const aStart = a.kind === 'calendar' || a.kind === 'routine' || a.kind === 'session' ? a.start : null
+      const bStart = b.kind === 'calendar' || b.kind === 'routine' || b.kind === 'session' ? b.start : null
       if (!aStart && !bStart) return 0
       if (!aStart) return -1
       if (!bStart) return 1

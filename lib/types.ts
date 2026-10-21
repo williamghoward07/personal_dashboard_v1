@@ -482,6 +482,10 @@ export interface Workspace {
   collapsed_sections: WorkspaceSectionKey[]
   // Optional goal for the Study time card's ring; null = compare with last week.
   weekly_minutes_target: number | null
+  // e.g. "GEOG1081": a module workspace, linked to that module's timetable
+  // sessions and shown on /lectures instead of /workspaces. Undefined until
+  // 20261019000000_lecture_sessions.sql is applied.
+  module_code?: string | null
 }
 
 export interface WorkspaceFolder {
@@ -513,6 +517,23 @@ export interface WorkspaceLink {
   // Set = a weekly reading (shown in Readings, grouped by week); null = a
   // source. See lib/workspaces/readings.ts.
   week: number | null
+  // A reading (vs a source). Undefined until 20261019000000 is applied.
+  is_reading?: boolean
+  // The timetable session (ICS UID) this reading is for; null = unassigned.
+  session_uid?: string | null
+  created_at: string
+}
+
+/** What the user has recorded about one timetable session (lib/timetable). */
+export interface LectureSession {
+  id: string
+  uid: string
+  module_code: string | null
+  title: string
+  starts_at: string | null
+  notes_done_at: string | null
+  no_readings: boolean
+  note: string | null
   created_at: string
 }
 

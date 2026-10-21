@@ -30,6 +30,8 @@ import { readingProgress, splitReadings, weekOptions } from '@/lib/workspaces/re
 import { formatMinutes, timeSummary } from '@/lib/workspaces/time'
 import { folderPath, resolveAccent } from '@/lib/workspaces/folders'
 import { COLUMN_GRID_CLASS, SECTION_LABELS, columnLayout, isShown, toggleSection, visibleStatCards } from '@/lib/workspaces/layout'
+import { isModuleWorkspace } from '@/lib/lectures/module-workspace'
+import LecturesSection from './LecturesSection'
 import LinksSection from './LinksSection'
 import ReadingsSection from './ReadingsSection'
 import StudyTimeCard from './StudyTimeCard'
@@ -116,9 +118,18 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
     label: f.name,
     href: `/workspaces?folder=${f.id}`,
   }))
-  const siblings = workspaces.filter((w) => (w.folder_id ?? null) === (workspace.folder_id ?? null))
+  // Module workspaces tab between each other (they share the Lectures tab);
+  // the rest between workspaces in the same folder.
+  const siblings = isModuleWorkspace(workspace)
+    ? workspaces.filter((w) => isModuleWorkspace(w) && !w.archived_at)
+    : workspaces.filter((w) => !isModuleWorkspace(w) && (w.folder_id ?? null) === (workspace.folder_id ?? null))
 
-  const hidden = workspace.hidden_sections ?? []
+  // A module workspace's readings live in its Lectures section, so the
+  // week-based Weekly readings column is never shown there.
+  const moduleCode = isModuleWorkspace(workspace) ? (workspace.module_code as string) : null
+  const savedHidden = workspace.hidden_sections ?? []
+  const hidden: WorkspaceSectionKey[] =
+    moduleCode && !savedHidden.includes('readings') ? [...savedHidden, 'readings'] : savedHidden
   const collapsed = workspace.collapsed_sections ?? []
   const shown = (key: WorkspaceSectionKey) => isShown(hidden, key)
   const statCards = visibleStatCards(hidden)
@@ -126,7 +137,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
   const columns = columnLayout(hidden, collapsed)
 
   const toggleHidden = (key: WorkspaceSectionKey) =>
-    updateWorkspace(workspace.id, { hidden_sections: toggleSection(hidden, key) })
+    updateWorkspace(workspace.id, { hidden_sections: toggleSection(savedHidden, key) })
   const toggleCollapsed = (key: WorkspaceSectionKey) =>
     updateWorkspace(workspace.id, { collapsed_sections: toggleSection(collapsed, key) })
 
@@ -215,6 +226,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
         addingUrl={addingSource}
         setAddingUrl={setAddingSource}
         weekChoices={shown('readings') ? weekOptions(readings) : undefined}
+        markReading={moduleCode ? (link) => void linksApi.updateLink(link.id, { is_reading: true }) : undefined}
         onCollapse={() => toggleCollapsed('sources')}
       />
     ),
@@ -271,7 +283,11 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
 
   return (
     <main className={pageClass} style={accentVars(accent)}>
-      <WorkspaceHeaderStrip context={isArchived ? 'Archived Context' : 'Active Context'} crumbs={crumbs} />
+      <WorkspaceHeaderStrip
+        context={isArchived ? 'Archived Context' : 'Active Context'}
+        crumbs={moduleCode ? [] : crumbs}
+        root={moduleCode ? { label: 'Lectures', href: '/lectures' } : undefined}
+      />
 
       <WorkspaceTabStrip
         workspaces={siblings}
@@ -357,7 +373,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
             </>
           )}
 
-          <WorkspaceLayoutMenu hidden={hidden} onToggle={toggleHidden} />
+          <WorkspaceLayoutMenu hidden={hidden} onToggle={toggleHidden} exclude={moduleCode ? ['readings'] : []} />
 
           <StatusBadge accent={isArchived ? 'neutral' : 'ws'}>
             Lifecycle: {isArchived ? 'Archived' : 'Active'}
@@ -419,12 +435,23 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
         <div className={`grid grid-cols-1 gap-2 ${BAR_GRID_CLASS[collapsedBars.length]}`}>{collapsedBars}</div>
       )}
 
+      {moduleCode && (
+        <LecturesSection
+          moduleCode={moduleCode}
+          links={linksApi.links}
+          addLink={linksApi.addLink}
+          updateLink={linksApi.updateLink}
+          deleteLink={linksApi.deleteLink}
+        />
+      )}
+
       {columns.expanded.length > 0 ? (
         <div className={`grid grid-cols-1 items-start gap-4 ${COLUMN_GRID_CLASS[columns.expanded.length]}`}>
           {columns.expanded.map((key) => sections[key])}
         </div>
       ) : (
-        columns.collapsed.length === 0 && (
+        columns.collapsed.length === 0 &&
+        !moduleCode && (
           <p className="text-sm text-on-surface-variant">
             Every section is hidden on this workspace — use Layout to bring one back.
           </p>

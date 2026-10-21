@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Wand2, ZoomIn, ZoomOut } from 'lucide-react'
 import { FilterTabs } from '@/components/ui/filter-tabs'
 import { supabase } from '@/lib/supabase'
-import type { RoutineInstance, Task } from '@/lib/types'
+import type { ActivitySession, RoutineInstance, Task } from '@/lib/types'
+import { useTimetable } from '@/lib/lectures/use-timetable'
 import { connectGoogleCalendar } from '@/lib/google/connect'
 import { londonDayBoundsUTC, londonWeekBoundsUTC, londonMonthBoundsUTC } from '@/lib/google/london-day'
 import type { LondonDateRange } from '@/lib/google/london-day'
@@ -159,7 +160,12 @@ export default function CalendarPageView() {
   // the server-rendered markup exactly.
   const [viewportH, setViewportH] = useState(SSR_FALLBACK_VIEWPORT_PX)
   const [selectedDateKey, setSelectedDateKey] = useState(() => todayKeyLondon())
-  const [itemsByDate, setItemsByDate] = useState<Map<string, DayItem[]>>(new Map())
+  const [fetched, setFetched] = useState<{
+    events: CalendarEvent[]
+    tasks: Task[]
+    sessions: ActivitySession[]
+    routineInstances: RoutineInstance[]
+  } | null>(null)
   const [spans, setSpans] = useState<EventSpan[]>([])
   const [needsReconnect, setNeedsReconnect] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -211,14 +217,12 @@ export default function CalendarPageView() {
       supabase.from('routine_instances').select('*').gte('start_at', range.timeMin).lt('start_at', range.timeMax),
     ]).then(([events, tasksRes, sessionsRes, routineInstancesRes]) => {
       if (cancelled) return
-      setItemsByDate(
-        groupItemsByDate(
-          events,
-          tasksRes.data ?? [],
-          sessionsRes.data ?? [],
-          (routineInstancesRes.data ?? []) as RoutineInstance[]
-        )
-      )
+      setFetched({
+        events,
+        tasks: tasksRes.data ?? [],
+        sessions: sessionsRes.data ?? [],
+        routineInstances: (routineInstancesRes.data ?? []) as RoutineInstance[],
+      })
       setSpans(getBarSpans(events))
       setLoading(false)
     })
@@ -227,6 +231,19 @@ export default function CalendarPageView() {
       cancelled = true
     }
   }, [view, selectedDateKey, refreshToken])
+
+  // Timetable sessions (lectures etc.) are fetched on their own, so ticking
+  // a reading in the session popover refreshes their traffic lights without
+  // reloading — and blanking — the whole calendar.
+  const range = useMemo(() => getRangeForView(view, selectedDateKey), [view, selectedDateKey])
+  const timetable = useTimetable({ timeMin: range.timeMin, timeMax: range.timeMax })
+  const itemsByDate = useMemo<Map<string, DayItem[]>>(
+    () =>
+      fetched
+        ? groupItemsByDate(fetched.events, fetched.tasks, fetched.sessions, fetched.routineInstances, timetable.sessions)
+        : new Map(),
+    [fetched, timetable.sessions]
+  )
 
   const goPrev = () => {
     if (view === 'month') setSelectedDateKey((k) => addMonthsToKey(k, -1))

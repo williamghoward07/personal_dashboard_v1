@@ -3,7 +3,8 @@
 import { useDroppable } from '@dnd-kit/core'
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from '../calendarItems'
-import { formatTime } from '../calendarItems'
+import { formatTime, sessionColour } from '../calendarItems'
+import { useOpenSession } from '../../lectures/SessionPopover'
 
 const START_HOUR = 6
 const END_HOUR = 23
@@ -40,10 +41,23 @@ for (let h = START_HOUR; h < END_HOUR; h++) {
   }
 }
 
-type TimedItem = Extract<DayItem, { kind: 'calendar' }> | Extract<DayItem, { kind: 'routine' }>
+type TimedItem =
+  | Extract<DayItem, { kind: 'calendar' }>
+  | Extract<DayItem, { kind: 'routine' }>
+  | Extract<DayItem, { kind: 'session' }>
 
 function isTimed(item: DayItem): item is TimedItem {
-  return (item.kind === 'calendar' && !item.allDay && item.start !== null) || item.kind === 'routine'
+  return (
+    (item.kind === 'calendar' && !item.allDay && item.start !== null) || item.kind === 'routine' || item.kind === 'session'
+  )
+}
+
+function durationOf(item: TimedItem): number {
+  if (item.kind === 'routine') return item.durationMinutes
+  if (item.kind === 'session' && item.end) {
+    return Math.max(15, (new Date(item.end).getTime() - new Date(item.start).getTime()) / 60_000)
+  }
+  return DEFAULT_CALENDAR_EVENT_MINUTES
 }
 
 // Left-side single-day view for the Routines tab: an untimed strip (all-day
@@ -62,6 +76,7 @@ export default function DayTimeline({
   onSelectRoutineInstance: (instance: RoutineInstance) => void
   onSelectTask: (task: Task) => void
 }) {
+  const openSession = useOpenSession()
   const untimed = items.filter((item) => !isTimed(item))
   const timed = items.filter(isTimed)
 
@@ -105,8 +120,9 @@ export default function DayTimeline({
 
           {timed.map((item) => {
             const start = item.kind === 'calendar' ? item.start! : item.start
-            const durationMinutes = item.kind === 'routine' ? item.durationMinutes : DEFAULT_CALENDAR_EVENT_MINUTES
+            const durationMinutes = durationOf(item)
             const colour = item.kind === 'routine' ? item.colour : null
+            const session = item.kind === 'session' ? sessionColour(item.session) : null
             const top = Math.max(0, minutesSinceGridStart(start) * PX_PER_MIN)
             const height = Math.max(20, durationMinutes * PX_PER_MIN)
 
@@ -114,14 +130,21 @@ export default function DayTimeline({
               <button
                 type="button"
                 key={`${item.kind}-${item.id}`}
-                onClick={() => item.kind === 'routine' && onSelectRoutineInstance(item.instance)}
+                onClick={(e) => {
+                  if (item.kind === 'routine') onSelectRoutineInstance(item.instance)
+                  else if (item.kind === 'session') openSession?.(item.session, e.currentTarget)
+                }}
                 style={{
                   top,
                   height,
                   left: GUTTER_PX,
                   right: 4,
-                  backgroundColor: colour ? `${colour}33` : 'color-mix(in srgb, var(--color-on-surface) 12%, transparent)',
-                  borderColor: colour ?? 'color-mix(in srgb, var(--color-on-surface) 30%, transparent)',
+                  backgroundColor: session
+                    ? `color-mix(in srgb, ${session} 16%, transparent)`
+                    : colour
+                      ? `${colour}33`
+                      : 'color-mix(in srgb, var(--color-on-surface) 12%, transparent)',
+                  borderColor: session ?? colour ?? 'color-mix(in srgb, var(--color-on-surface) 30%, transparent)',
                 }}
                 className="absolute overflow-hidden rounded-md border px-1.5 py-0.5 text-left text-[11px] text-on-surface"
               >

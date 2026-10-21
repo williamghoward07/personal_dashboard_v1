@@ -12,6 +12,7 @@ import {
   BookOpen,
   LayoutGrid,
   FolderKanban,
+  Presentation,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { MODULE_ACCENT } from '@/lib/theme'
@@ -38,6 +39,7 @@ export const navItems: NavItem[] = [
   { href: '/', label: 'Home', icon: Home, module: 'home' },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays, module: 'calendar' },
   { href: '/education', label: 'Education', icon: GraduationCap, module: 'education' },
+  { href: '/lectures', label: 'Lectures', icon: Presentation, module: 'education' },
   { href: '/workspaces', label: 'Workspaces', icon: FolderKanban, module: 'workspaces' },
   { href: '/money', label: 'Money', icon: DollarSign, module: 'money' },
   { href: '/research', label: 'Research', icon: FileSearch, module: 'research' },

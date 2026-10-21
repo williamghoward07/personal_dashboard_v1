@@ -54,6 +54,21 @@ export default function WorkspacesHelp({ align = 'start' }: { align?: 'start' | 
           </p>
         </Section>
 
+        <Section title="Lectures: module workspaces">
+          <p>
+            Give a workspace a <span className="text-on-surface">module code</span> (e.g. GEOG1081, in the palette
+            menu next to the title) — or use Create workspace on the Lectures tab — and it becomes a module workspace.
+            It moves from here to the Lectures tab and gets a Lectures section listing every session for that module
+            from your timetable.
+          </p>
+          <p>
+            Open a session to paste its reading links (Talis, Blackboard…) and tick them off, mark &quot;no readings&quot;,
+            and tick Notes taken afterwards. The light is red with no readings added, amber with some still to do, and
+            green when they&apos;re all done; a tick beside it means notes are taken. The same lights show on the
+            calendar. A source can be turned into a reading with its Reading button, then assigned to a session.
+          </p>
+        </Section>
+
         <Section title="Uni modules: weekly readings & study time">
           <p>
             For a module, turn on <span className="text-on-surface">Weekly readings</span> and{' '}

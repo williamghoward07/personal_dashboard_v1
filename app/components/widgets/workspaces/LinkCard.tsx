@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, type MutableRefObject } from 'react'
-import { CheckCircle2, ExternalLink, GripVertical, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { BookOpen, CheckCircle2, ExternalLink, GripVertical, Pencil, Plus, Trash2, X } from 'lucide-react'
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo } from '@/lib/types'
 import { faviconPublicUrl } from '@/lib/workspaces/favicon'
 import { SOURCE_KINDS } from '@/lib/workspaces/kinds'
@@ -25,6 +25,7 @@ export default function LinkCard({
   onInternalReorder,
   onExternalUrlDrop,
   weekChoices,
+  onMarkReading,
 }: {
   link: WorkspaceLink
   todos: Todo[]
@@ -41,6 +42,8 @@ export default function LinkCard({
   onExternalUrlDrop: (url: string) => void
   /** Weeks to offer in the "Week…" control (moves a link into or out of Readings). */
   weekChoices?: number[]
+  /** Module workspaces: move this source into the Lectures section's readings. */
+  onMarkReading?: () => void
 }) {
   const [managingTodos, setManagingTodos] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -252,7 +255,12 @@ export default function LinkCard({
             {weekChoices && (
               <select
                 value={link.week ?? ''}
-                onChange={(e) => void onUpdate(link.id, { week: e.target.value ? Number(e.target.value) : null })}
+                onChange={(e) => {
+                  const week = e.target.value ? Number(e.target.value) : null
+                  // Back to a source clears is_reading too — only when the row
+                  // has the column (20261019000000 applied), or the update fails.
+                  void onUpdate(link.id, week === null && link.is_reading !== undefined ? { week, is_reading: false } : { week })
+                }}
                 onKeyDown={(e) => e.stopPropagation()}
                 aria-label={link.week ? `Reading for week ${link.week}` : 'Move to weekly readings'}
                 title={link.week ? 'Change week, or make it a source again' : 'Move to weekly readings'}
@@ -265,6 +273,13 @@ export default function LinkCard({
                   </option>
                 ))}
               </select>
+            )}
+
+            {onMarkReading && (
+              <button type="button" onClick={onMarkReading} className={`${ghostButtonClass} flex items-center gap-1`}>
+                <BookOpen className="h-3 w-3" strokeWidth={2} />
+                Reading
+              </button>
             )}
 
             <span className="ml-auto flex items-center gap-0.5">

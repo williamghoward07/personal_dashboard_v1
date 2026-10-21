@@ -214,7 +214,7 @@ describe('buildWorkspaceMarkdown', () => {
       ],
     })
     expect(md).toContain('## Sources (1)')
-    expect(md).toContain('## Weekly readings (1/2 read)')
+    expect(md).toContain('## Readings (1/2 read)')
     expect(md.indexOf('### Week 1 (0/1)')).toBeLessThan(md.indexOf('### Week 2 (1/1)'))
     expect(md).toContain('- [x] **Reading 2**')
     expect(md).toContain('- [ ] **Reading 1**')

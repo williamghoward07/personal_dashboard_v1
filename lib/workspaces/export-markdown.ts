@@ -81,17 +81,26 @@ export function buildWorkspaceMarkdown({
   }
   lines.push('')
 
+  const pushReading = (link: WorkspaceLink) => {
+    lines.push(`- [${link.completed_at ? 'x' : ' '}] **${link.title}** — <${link.url}>`)
+    if (link.citation) lines.push(`  - Citation: ${link.citation}`)
+  }
+
   if (readings.length > 0) {
     const overall = readingProgress(readings)
-    lines.push(`## Weekly readings (${overall.done}/${overall.total} read)`)
+    lines.push(`## Readings (${overall.done}/${overall.total} read)`)
     for (const group of groupByWeek(readings)) {
       lines.push('')
       lines.push(`### Week ${group.week} (${group.progress.done}/${group.progress.total})`)
       lines.push('')
-      for (const link of group.links) {
-        lines.push(`- [${link.completed_at ? 'x' : ' '}] **${link.title}** — <${link.url}>`)
-        if (link.citation) lines.push(`  - Citation: ${link.citation}`)
-      }
+      for (const link of group.links) pushReading(link)
+    }
+    const unweeked = readings.filter((r) => r.week === null || r.week === undefined)
+    if (unweeked.length > 0) {
+      lines.push('')
+      lines.push(`### Lecture readings (${readingProgress(unweeked).done}/${unweeked.length})`)
+      lines.push('')
+      for (const link of unweeked) pushReading(link)
     }
     lines.push('')
   }

@@ -51,6 +51,7 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
 - `quick_links.sort_order` is global. A move renumbers every link (`lib/app-launcher/order.ts`).
 - `link_folders.color` can't be teal.
 - `user_settings`: one row per user for UI layout and visibility (`home_layout`, `hidden_nav_items`, `launcher_link_ids`), via `useSettings()` (`lib/settings/use-settings.ts`). Falls back to defaults when the row or table is missing.
+- Lecture prep: the timetable is never stored — it's read from the ICS feed (`lib/timetable/CLAUDE.md`). `lecture_sessions` holds per-session state keyed by ICS UID; readings are `workspace_links` with `session_uid`; `workspaces.module_code` marks a module workspace.
 - `launcher_link_ids` is the home launcher's membership and order. `quick_links.is_pinned` is retired: it's only read once to seed that array.
 
 ## Integrations and boundaries
@@ -61,6 +62,12 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
 - `/api/alexa` is public in `proxy.ts` and verifies requests itself (`lib/alexa/CLAUDE.md`).
 - No push or email notifications are built yet.
 - Env vars are documented in `.env.example`. Never commit values.
+
+## Focus Timer
+- Spec: `docs/specs/focus-timer-spec.md`. Phase 1 (schema + API) is built; there's no UI yet.
+- The timer lives on the server. A running timer is a `time_sessions` row with `ended_at` null. Pause/resume are segments sharing a `session_group_id`, never a flag. State is derived from the latest segment. Discard is `ended_reason = 'discarded'`, and rows are never deleted.
+- All logic is in the `timer_*` / `time_breakdown` RPCs (migration `20261019010000`), using `now()` only. `time_entries` unions timer segments with the manual `workspace_time_logs`. The manual "add time" flow is untouched.
+- Auth: `lib/timer/auth.ts`. Session cookie, or `TIMER_API_TOKEN` + `TIMER_OWNER_USER_ID` on `/api/timer/*` only. `/api/timer` and `/api/cron` are public in `proxy.ts`. The daily cron (`vercel.json`) uses `CRON_SECRET`.
 
 ## Docs
 - `docs/FEATURE_INVENTORY.md`: what's built, how each feature behaves, and the Education + Workspaces workflow.

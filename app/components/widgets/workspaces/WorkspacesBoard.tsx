@@ -34,6 +34,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import type { Accent } from '@/lib/theme'
 import type { Workspace, WorkspaceFolder } from '@/lib/types'
 import { useWorkspaces } from '@/lib/workspaces/use-workspaces'
+import { isModuleWorkspace } from '@/lib/lectures/module-workspace'
 import { useWorkspaceFolders } from '@/lib/workspaces/use-workspace-folders'
 import { useStudyProgress } from '@/lib/workspaces/use-study-progress'
 import type { StudyProgress } from '@/lib/workspaces/study-progress'
@@ -72,7 +73,7 @@ const gridClass = 'grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3'
 export default function WorkspacesBoard({ folderId }: { folderId: string | null }) {
   const router = useRouter()
   const {
-    workspaces,
+    workspaces: allWorkspaces,
     loading,
     error,
     createWorkspace,
@@ -90,6 +91,9 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
     deleteFolder,
   } = useWorkspaceFolders()
   const studyProgress = useStudyProgress()
+  // Module workspaces (with a module code) live on /lectures instead.
+  const workspaces = useMemo(() => allWorkspaces.filter((w) => !isModuleWorkspace(w)), [allWorkspaces])
+  const moduleCount = allWorkspaces.length - workspaces.length
 
   const [title, setTitle] = useState('')
   const [showArchived, setShowArchived] = useState(false)
@@ -209,6 +213,15 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
               {currentFolder
                 ? 'Folders and workspaces filed here. Drag a grip onto a folder or a breadcrumb step to move it.'
                 : 'An ad hoc container per project — its sources, its scoped actions, and a dated log of your thinking.'}
+              {!currentFolder && moduleCount > 0 && (
+                <>
+                  {' '}
+                  <Link href="/lectures" className="underline hover:text-on-surface">
+                    {moduleCount} module {moduleCount === 1 ? 'workspace is' : 'workspaces are'} on Lectures
+                  </Link>
+                  .
+                </>
+              )}
             </p>
           </div>
 

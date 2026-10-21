@@ -1,14 +1,16 @@
 'use client'
 
+import { useState } from 'react'
 import { Palette } from 'lucide-react'
 import type { Accent } from '@/lib/theme'
 import type { Workspace, WorkspaceFolder } from '@/lib/types'
 import { WORKSPACE_ACCENTS, isAccent, moveTargets, resolveFolderAccent } from '@/lib/workspaces/folders'
+import { normalizeModuleCode } from '@/lib/lectures/module-workspace'
 import AccentPicker from '../../AccentPicker'
 import Popover from '../../Popover'
 import { iconButtonClass, inputClass, labelClass, microLabelClass } from './shared'
 
-// Colour + folder for one workspace, from its own page.
+// Colour, folder and module code for one workspace, from its own page.
 export default function WorkspaceAppearanceMenu({
   workspace,
   folders,
@@ -18,23 +20,37 @@ export default function WorkspaceAppearanceMenu({
 }: {
   workspace: Workspace
   folders: WorkspaceFolder[]
-  onChange: (patch: { color?: string | null; folder_id?: string | null }) => void
+  onChange: (patch: { color?: string | null; folder_id?: string | null; module_code?: string | null }) => void
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }) {
   const inherited = resolveFolderAccent(folders, workspace.folder_id)
   const targets = moveTargets(folders)
+  const [codeDraft, setCodeDraft] = useState(workspace.module_code ?? '')
+  const [codeError, setCodeError] = useState<string | null>(null)
+
+  const saveCode = () => {
+    const trimmed = codeDraft.trim()
+    const code = trimmed ? normalizeModuleCode(trimmed) : null
+    if (trimmed && !code) {
+      setCodeError('Use a code like GEOG1081')
+      return
+    }
+    setCodeError(null)
+    setCodeDraft(code ?? '')
+    if (code !== (workspace.module_code ?? null)) onChange({ module_code: code })
+  }
 
   return (
     <Popover
-      label="Colour and folder"
+      label="Colour, folder and module"
       align="end"
       panelClassName="w-80"
       className="self-center"
       open={open}
       onOpenChange={onOpenChange}
       trigger={(props) => (
-        <button type="button" {...props} aria-label="Colour and folder" title="Colour and folder" className={iconButtonClass}>
+        <button type="button" {...props} aria-label="Colour, folder and module" title="Colour, folder and module" className={iconButtonClass}>
           <Palette className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
         </button>
       )}
@@ -70,6 +86,24 @@ export default function WorkspaceAppearanceMenu({
               </option>
             ))}
           </select>
+        </label>
+
+        <label className={labelClass}>
+          Module code
+          <input
+            value={codeDraft}
+            onChange={(e) => setCodeDraft(e.target.value)}
+            onBlur={saveCode}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveCode()
+            }}
+            placeholder="e.g. GEOG1081"
+            className={inputClass}
+          />
+          <span className={`text-[11px] ${codeError ? 'text-error' : 'text-on-surface-variant'}`}>
+            {codeError ??
+              'Links this workspace to that module’s lectures on your timetable and moves it to the Lectures tab.'}
+          </span>
         </label>
       </div>
     </Popover>

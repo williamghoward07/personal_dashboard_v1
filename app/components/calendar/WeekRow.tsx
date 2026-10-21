@@ -1,5 +1,5 @@
 import type { DayItem, EventSpan } from './calendarItems'
-import { DOT_CLASS, formatTime, isBarRenderedCalendarItem } from './calendarItems'
+import { dotClassFor, formatTime, isBarRenderedCalendarItem } from './calendarItems'
 import { layoutBarsForWeek, laneCountForWeek } from './weekBarLayout'
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -122,10 +122,10 @@ export default function WeekRow({
             {items.slice(0, maxCompactItems).map((item) => (
               <li key={`${item.kind}-${item.id}`} className="flex items-center gap-1 truncate text-[11px] text-on-surface">
                 <span
-                  className={item.kind === 'routine' ? 'h-1 w-1 shrink-0 rounded-full' : `h-1 w-1 shrink-0 rounded-full ${DOT_CLASS[item.kind]}`}
+                  className={item.kind === 'routine' ? 'h-1 w-1 shrink-0 rounded-full' : `h-1 w-1 shrink-0 rounded-full ${dotClassFor(item)}`}
                   style={item.kind === 'routine' ? { backgroundColor: item.colour } : undefined}
                 />
-                {(item.kind === 'calendar' || item.kind === 'routine') && item.start && (
+                {(item.kind === 'calendar' || item.kind === 'routine' || item.kind === 'session') && item.start && (
                   <span className="shrink-0 tabular-nums text-on-surface-variant">{formatTime(item.start)}</span>
                 )}
                 <span className="truncate">{item.title}</span>

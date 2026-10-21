@@ -1,19 +1,24 @@
 import type { WorkspaceLink } from '@/lib/types'
 
-// Weekly readings: workspace_links rows with a `week` (1..52). Everything
-// else on the page treats week-less links as "sources". Pure so progress
-// and grouping are testable.
+// Readings: workspace_links rows marked `is_reading`, filed under a week
+// (1..52, the Weekly readings section) and/or a timetable session
+// (`session_uid`, the Lectures section). Everything else is a "source".
+// Pure so progress and grouping are testable.
 
 export const MAX_WEEK = 52
 // The week picker always offers at least this many weeks (a UK term).
 const MIN_WEEK_OPTIONS = 12
 
-export function isReading(link: Pick<WorkspaceLink, 'week'>): boolean {
-  return link.week !== null && link.week !== undefined
+type ReadingFields = Pick<WorkspaceLink, 'week' | 'is_reading' | 'session_uid'>
+
+// A week or session also counts on its own, so the page reads correctly
+// before 20261019000000 (which adds and backfills is_reading) is applied.
+export function isReading(link: ReadingFields): boolean {
+  return !!link.is_reading || (link.week !== null && link.week !== undefined) || !!link.session_uid
 }
 
-/** Sources (no week) and readings (with a week), each in input order. */
-export function splitReadings<T extends Pick<WorkspaceLink, 'week'>>(links: T[]): { sources: T[]; readings: T[] } {
+/** Sources and readings, each in input order. */
+export function splitReadings<T extends ReadingFields>(links: T[]): { sources: T[]; readings: T[] } {
   const sources: T[] = []
   const readings: T[] = []
   for (const link of links) (isReading(link) ? readings : sources).push(link)
@@ -44,8 +49,8 @@ export function groupByWeek<T extends Pick<WorkspaceLink, 'week' | 'position' | 
 ): WeekGroup<T>[] {
   const byWeek = new Map<number, T[]>()
   for (const reading of readings) {
-    if (!isReading(reading)) continue
-    const week = reading.week as number
+    const week = reading.week
+    if (week === null || week === undefined) continue
     const group = byWeek.get(week)
     if (group) group.push(reading)
     else byWeek.set(week, [reading])

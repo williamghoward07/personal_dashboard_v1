@@ -7,7 +7,7 @@ import type { Workspace } from '@/lib/types'
 export type WorkspacePatch = Partial<
   Pick<
     Workspace,
-    'title' | 'subtitle' | 'folder_id' | 'color' | 'hidden_sections' | 'collapsed_sections' | 'weekly_minutes_target'
+    'title' | 'subtitle' | 'folder_id' | 'color' | 'hidden_sections' | 'collapsed_sections' | 'weekly_minutes_target' | 'module_code'
   >
 >
 

@@ -9,6 +9,12 @@ const { mockState } = vi.hoisted(() => ({
 const fetchMock = vi.fn()
 vi.stubGlobal('fetch', fetchMock)
 
+// Every todo change now goes to the push route; by default it succeeds.
+beforeEach(() => {
+  fetchMock.mockReset()
+  fetchMock.mockResolvedValue({ ok: true, json: async () => ({}) })
+})
+
 // Mimics supabase-js's PostgrestFilterBuilder: filter/order methods
 // (.or/.order/.eq/.gt/.limit) are independent modifiers that can be
 // chained in any order and combination, each returning a builder that
@@ -38,6 +44,7 @@ vi.mock('@/lib/supabase', () => {
     caldav_uid: null,
     mstodo_task_id: null,
     mstodo_list_id: null,
+    mstodo_checklist_item_id: null,
     starred: false,
   }
 
@@ -202,17 +209,34 @@ describe('useTodos Microsoft To Do sync', () => {
 
   const pushBody = (call: unknown[]) => JSON.parse((call[1] as { body: string }).body)
 
-  it('does not call the push route for an app-only todo', async () => {
+  it('pushes changes to a not-yet-linked todo too (the server creates its task)', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, ids: { mstodo_task_id: 'new-task', mstodo_list_id: 'l', mstodo_checklist_item_id: null } }),
+    })
+    const { result } = renderHook(() => useTodos('2026-08-05'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(async () => {
+      await result.current.toggleStar('todo-1')
+    })
+
+    expect(pushBody(fetchMock.mock.calls[0])).toEqual({ todo_id: 'todo-1', action: 'update', changes: { starred: true } })
+    const todo = result.current.todos.find((t) => t.id === 'todo-1')
+    expect(todo?.starred).toBe(true)
+    expect(todo?.mstodo_task_id).toBe('new-task')
+  })
+
+  it('stays quiet when Microsoft is not connected', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 409, json: async () => ({ state: 'not_connected', error: 'x' }) })
     const { result } = renderHook(() => useTodos('2026-08-05'))
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
       await result.current.toggleTodo('todo-1')
-      await result.current.toggleStar('todo-1')
     })
 
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(result.current.todos.find((t) => t.id === 'todo-1')?.starred).toBe(true)
+    expect(result.current.error).toBeNull()
   })
 
   it('pushes completion and star changes for a linked todo', async () => {
@@ -246,10 +270,10 @@ describe('useTodos Microsoft To Do sync', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     await act(async () => {
-      await result.current.updateTodo('todo-2', { title: 'Renamed', list_id: 'list-x' })
+      await result.current.updateTodo('todo-2', { title: 'Renamed', due_time: '14:30', workspace_id: 'ws-1' })
     })
 
-    expect(pushBody(fetchMock.mock.calls[0]).changes).toEqual({ title: 'Renamed' })
+    expect(pushBody(fetchMock.mock.calls[0]).changes).toEqual({ title: 'Renamed', due_time: '14:30' })
   })
 
   it('keeps the change but warns when the push fails', async () => {

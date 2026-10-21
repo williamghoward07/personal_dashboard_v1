@@ -1,18 +1,21 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Loader2, Plus } from 'lucide-react'
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo } from '@/lib/types'
 import type { WorkspaceLinkPatch } from '@/lib/workspaces/use-workspace-links'
+import { findDuplicateUrl } from '@/lib/utils/url'
 import { extractDroppedUrl } from './dnd'
 import LinkCard from './LinkCard'
-import { ghostButtonClass, inputClass, primaryButtonClass } from './shared'
+import { ghostButtonClass, inputClass, microLabelClass, primaryButtonClass } from './shared'
 
 export default function LinksGrid({
   links,
+  completedLinks,
   allLinks,
   addLink,
   updateLink,
+  toggleDone,
   deleteLink,
   reorderLinks,
   todos,
@@ -21,13 +24,17 @@ export default function LinksGrid({
   detachLinkTodo,
   addingUrl,
   setAddingUrl,
+  weekChoices,
 }: {
   /** The rendered (possibly kind-filtered) list. */
   links: WorkspaceLink[]
+  /** Finished sources, shown in a collapsed sublist below the rest. */
+  completedLinks: WorkspaceLink[]
   /** The full ordered list — reordering must be computed against this. */
   allLinks: WorkspaceLink[]
   addLink: (rawUrl: string) => Promise<WorkspaceLink | null>
   updateLink: (id: string, patch: WorkspaceLinkPatch) => Promise<void>
+  toggleDone: (link: WorkspaceLink) => void
   deleteLink: (id: string) => Promise<void>
   reorderLinks: (orderedIds: string[]) => Promise<void>
   todos: Todo[]
@@ -36,6 +43,8 @@ export default function LinksGrid({
   detachLinkTodo: (junctionId: string) => Promise<void>
   addingUrl: boolean
   setAddingUrl: (open: boolean) => void
+  /** When set, each card offers "Week…" to move it into Readings. */
+  weekChoices?: number[]
 }) {
   // Primary DnD-disambiguation signal — checked before ever inspecting a
   // drop event's DataTransfer, since dragstart must call setData for the
@@ -44,14 +53,30 @@ export default function LinksGrid({
   const draggingIdRef = useRef<string | null>(null)
   const [urlInput, setUrlInput] = useState('')
   const [isDropTarget, setIsDropTarget] = useState(false)
+  // Collapsed by default — finished sources are out of the way but recoverable.
+  const [completedOpen, setCompletedOpen] = useState(false)
+
+  // Ref, not just state: a fast double Enter fires twice before a re-render.
+  const savingRef = useRef(false)
+  const [saving, setSaving] = useState(false)
 
   const handleAddUrl = async (rawUrl: string) => {
-    const result = await addLink(rawUrl)
-    if (result) {
-      setUrlInput('')
-      setAddingUrl(false)
+    if (savingRef.current) return
+    savingRef.current = true
+    setSaving(true)
+    try {
+      const result = await addLink(rawUrl)
+      if (result) {
+        setUrlInput('')
+        setAddingUrl(false)
+      }
+    } finally {
+      savingRef.current = false
+      setSaving(false)
     }
   }
+
+  const duplicate = urlInput.trim() ? findDuplicateUrl(allLinks, urlInput) : null
 
   // Resolved against allLinks, never the rendered list, so dropping onto a
   // card still writes correct positions while a kind filter is active.
@@ -96,11 +121,13 @@ export default function LinksGrid({
           linkTodos={linkTodos}
           onDelete={deleteLink}
           onUpdate={updateLink}
+          onToggleDone={toggleDone}
           onAttachTodos={attachTodosToLink}
           onDetachJunction={detachLinkTodo}
           draggingIdRef={draggingIdRef}
           onInternalReorder={handleInternalReorder}
           onExternalUrlDrop={handleAddUrl}
+          weekChoices={weekChoices}
         />
       ))}
 
@@ -110,7 +137,7 @@ export default function LinksGrid({
             e.preventDefault()
             if (urlInput.trim()) handleAddUrl(urlInput)
           }}
-          className="flex items-center gap-2 rounded-xl border border-dashed border-ws-accent/40 bg-surface-container-low/40 p-2.5"
+          className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-ws-accent/40 bg-surface-container-low/40 p-2.5"
         >
           <input
             autoFocus
@@ -122,12 +149,25 @@ export default function LinksGrid({
             placeholder="https://example.com"
             className={`${inputClass} flex-1`}
           />
-          <button type="submit" disabled={!urlInput.trim()} className={primaryButtonClass}>
-            Add
+          <button
+            type="submit"
+            disabled={!urlInput.trim() || saving}
+            aria-busy={saving}
+            className={`${primaryButtonClass} flex items-center gap-1.5`}
+          >
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {saving ? 'Adding…' : duplicate ? 'Add anyway' : 'Add'}
           </button>
           <button type="button" onClick={() => setAddingUrl(false)} className={ghostButtonClass}>
             Cancel
           </button>
+          {duplicate && (
+            <span className="flex w-full items-center gap-1.5 text-xs text-people-amber">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Already here as &ldquo;{duplicate.title}&rdquo;
+              {duplicate.completed_at ? ' (completed)' : ''}
+            </span>
+          )}
         </form>
       ) : (
         <button
@@ -138,6 +178,37 @@ export default function LinksGrid({
           <Plus className="h-3.5 w-3.5" strokeWidth={2} />
           Add a source, or drop a link here
         </button>
+      )}
+
+      {completedLinks.length > 0 && (
+        <div className="flex flex-col gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => setCompletedOpen((v) => !v)}
+            aria-expanded={completedOpen}
+            className={`${microLabelClass} flex w-fit items-center gap-1 transition-colors hover:text-on-surface`}
+          >
+            <ChevronDown className={`h-3 w-3 transition-transform ${completedOpen ? '' : '-rotate-90'}`} />
+            Completed ({completedLinks.length})
+          </button>
+          {completedOpen &&
+            completedLinks.map((link) => (
+              <LinkCard
+                key={link.id}
+                link={link}
+                todos={todos}
+                linkTodos={linkTodos}
+                onDelete={deleteLink}
+                onUpdate={updateLink}
+                onToggleDone={toggleDone}
+                onAttachTodos={attachTodosToLink}
+                onDetachJunction={detachLinkTodo}
+                draggingIdRef={draggingIdRef}
+                onInternalReorder={handleInternalReorder}
+                onExternalUrlDrop={handleAddUrl}
+              />
+            ))}
+        </div>
       )}
     </div>
   )

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import Modal from '../../Modal'
 import type { Accent } from '@/lib/theme'
 import type { LinkFolder } from '@/lib/types'
@@ -27,13 +28,15 @@ export default function LinkFolderFormModal({
   isOpen: boolean
   heading: string
   initialValues?: Pick<LinkFolder, 'name' | 'color'> | null
-  onSave: (values: LinkFolderFormValues) => void
+  onSave: (values: LinkFolderFormValues) => Promise<void> | void
   onClose: () => void
 }) {
   const [values, setValues] = useState<LinkFolderFormValues>(EMPTY)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
+      setSaving(false)
       setValues({
         name: initialValues?.name ?? '',
         color: (initialValues?.color as Accent) ?? 'neutral',
@@ -44,12 +47,17 @@ export default function LinkFolderFormModal({
   if (!isOpen) return null
 
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={saving ? () => {} : onClose}>
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault()
-          if (!values.name.trim()) return
-          onSave({ ...values, name: values.name.trim() })
+          if (!values.name.trim() || saving) return
+          setSaving(true)
+          try {
+            await onSave({ ...values, name: values.name.trim() })
+          } finally {
+            setSaving(false)
+          }
         }}
         className="flex flex-col gap-4"
       >
@@ -79,16 +87,19 @@ export default function LinkFolderFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
+            disabled={saving}
+            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high disabled:opacity-40"
           >
             Cancel
           </button>
           <button
             type="submit"
-            disabled={!values.name.trim()}
-            className="rounded-lg bg-outline px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110 disabled:opacity-40"
+            disabled={!values.name.trim() || saving}
+            aria-busy={saving}
+            className="flex items-center gap-1.5 rounded-lg bg-outline px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110 disabled:opacity-40"
           >
-            Save
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>

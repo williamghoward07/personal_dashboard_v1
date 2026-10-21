@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronRight, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Archive, ChevronDown, ChevronRight, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Accent } from '@/lib/theme'
@@ -31,8 +31,10 @@ export default function FolderTile({
   onAddLink,
   onEdit,
   onDelete,
+  onArchive,
   onEditLink,
   onDeleteLink,
+  onArchiveLink,
   onTogglePinLink,
 }: {
   folder: FolderGroup
@@ -45,8 +47,10 @@ export default function FolderTile({
   onAddLink: () => void
   onEdit: () => void
   onDelete: () => void
+  onArchive: () => void
   onEditLink: (link: QuickLink) => void
   onDeleteLink: (link: QuickLink) => void
+  onArchiveLink: (link: QuickLink) => void
   onTogglePinLink: (link: QuickLink) => void
 }) {
   // The tile is two dnd-kit nodes: a sortable folder (moved by its grip)
@@ -118,6 +122,15 @@ export default function FolderTile({
                 </button>
                 <button
                   type="button"
+                  onClick={onArchive}
+                  aria-label={`Archive ${folder.name}`}
+                  title="Archive folder (and its links)"
+                  className={toolbarButtonClass}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
                   onClick={onDelete}
                   aria-label={`Delete ${folder.name}`}
                   className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-error"
@@ -145,6 +158,7 @@ export default function FolderTile({
                     isPinned={pinnedIds.has(link.id)}
                     onEdit={() => onEditLink(link)}
                     onDelete={() => onDeleteLink(link)}
+                    onArchive={() => onArchiveLink(link)}
                     onTogglePin={() => onTogglePinLink(link)}
                   />
                 ))

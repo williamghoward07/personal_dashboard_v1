@@ -5,6 +5,8 @@ import { CountBadge } from '@/components/ui/count-badge'
 import type { Todo } from '@/lib/types'
 import type { WorkspaceTag } from '@/lib/workspaces/use-workspace-lookup'
 import { onActivateKey } from '@/lib/utils/a11y'
+import { formatDue } from '@/lib/todos/format'
+import { isSyncedTodo } from '@/lib/todos/patch'
 import WorkspaceChip from '../workspaces/WorkspaceChip'
 import StarButton from './StarButton'
 
@@ -30,7 +32,7 @@ export default function TodoRow({
   onDelete: () => void
 }) {
   const completed = todo.completed_at !== null
-  const overdue = !completed && todo.due_date !== null && todo.due_date < todayDateKey
+  const due = formatDue(todo, todayDateKey)
 
   return (
     <li
@@ -50,7 +52,7 @@ export default function TodoRow({
       />
       <div className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          {todo.mstodo_task_id && (
+          {isSyncedTodo(todo) && (
             <Cloud className="h-3 w-3 shrink-0 text-on-surface-variant" aria-label="Synced with Microsoft To Do" />
           )}
           <span
@@ -63,13 +65,11 @@ export default function TodoRow({
         </span>
         {todo.notes && <span className="block truncate text-xs text-on-surface-variant">{todo.notes}</span>}
       </div>
-      {todo.due_date && (
+      {due && (
         <span
-          className={`shrink-0 text-xs font-medium ${overdue ? 'text-academic-orange' : 'text-on-surface-variant'}`}
+          className={`shrink-0 text-xs font-medium tabular-nums ${due.overdue ? 'text-academic-orange' : 'text-on-surface-variant'}`}
         >
-          {overdue ? 'Overdue · ' : ''}
-          {todo.due_date}
-          {todo.due_time ? ` · ${todo.due_time}` : ''}
+          {due.label}
         </span>
       )}
       <StarButton starred={todo.starred} title={todo.title} onToggle={onToggleStar} alwaysShow />

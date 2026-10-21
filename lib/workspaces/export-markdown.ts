@@ -1,4 +1,7 @@
-import type { Todo, Workspace, WorkspaceLink, WorkspaceLinkTodo, WorkspaceNote } from '@/lib/types'
+import type { Todo, Workspace, WorkspaceLink, WorkspaceLinkTodo, WorkspaceNote, WorkspaceTimeLog } from '@/lib/types'
+import { partitionLinks } from './completed'
+import { groupByWeek, readingProgress, splitReadings } from './readings'
+import { formatMinutes, totalMinutes } from './time'
 import { NOTE_KINDS, SOURCE_KINDS } from './kinds'
 
 function formatDate(iso: string): string {
@@ -16,24 +19,27 @@ function formatDateTime(iso: string): string {
 }
 
 /**
- * The whole workspace as one Markdown document — sources, scoped actions
- * and the full thinking log. Pure and synchronous so it can be unit-tested
+ * The whole workspace as one Markdown document — sources, weekly readings,
+ * scoped actions, study time and the full thinking log. Pure and synchronous so it can be unit-tested
  * without a DOM; the caller wraps the string in a Blob download.
  */
 export function buildWorkspaceMarkdown({
   workspace,
-  links,
+  links: allLinks,
   todos,
   notes,
   linkTodos,
+  timeLogs = [],
 }: {
   workspace: Workspace
   links: WorkspaceLink[]
   todos: Todo[]
   notes: WorkspaceNote[]
   linkTodos: WorkspaceLinkTodo[]
+  timeLogs?: WorkspaceTimeLog[]
 }): string {
   const lines: string[] = []
+  const { sources: links, readings } = splitReadings(allLinks)
 
   lines.push(`# ${workspace.title}`)
   if (workspace.subtitle) lines.push(`*${workspace.subtitle}*`)
@@ -48,7 +54,7 @@ export function buildWorkspaceMarkdown({
   if (links.length === 0) {
     lines.push('_No sources._')
   } else {
-    for (const link of links) {
+    const pushSource = (link: WorkspaceLink) => {
       const attachedTitles = linkTodos
         .filter((lt) => lt.workspace_link_id === link.id)
         .map((lt) => todos.find((t) => t.id === lt.todo_id)?.title)
@@ -63,8 +69,41 @@ export function buildWorkspaceMarkdown({
       if (link.doi) lines.push(`  - DOI: ${link.doi}`)
       if (attachedTitles.length > 0) lines.push(`  - Linked todos: ${attachedTitles.join('; ')}`)
     }
+
+    const { open, completed } = partitionLinks(links, new Set())
+    for (const link of open) pushSource(link)
+    if (completed.length > 0) {
+      if (open.length > 0) lines.push('')
+      lines.push(`### Completed (${completed.length})`)
+      lines.push('')
+      for (const link of completed) pushSource(link)
+    }
   }
   lines.push('')
+
+  if (readings.length > 0) {
+    const overall = readingProgress(readings)
+    lines.push(`## Weekly readings (${overall.done}/${overall.total} read)`)
+    for (const group of groupByWeek(readings)) {
+      lines.push('')
+      lines.push(`### Week ${group.week} (${group.progress.done}/${group.progress.total})`)
+      lines.push('')
+      for (const link of group.links) {
+        lines.push(`- [${link.completed_at ? 'x' : ' '}] **${link.title}** — <${link.url}>`)
+        if (link.citation) lines.push(`  - Citation: ${link.citation}`)
+      }
+    }
+    lines.push('')
+  }
+
+  if (timeLogs.length > 0) {
+    lines.push(`## Study time (${formatMinutes(totalMinutes(timeLogs))} total)`)
+    lines.push('')
+    for (const log of [...timeLogs].sort((a, b) => a.day.localeCompare(b.day))) {
+      lines.push(`- ${log.day} — ${formatMinutes(log.minutes)}${log.note ? ` · ${log.note}` : ''}`)
+    }
+    lines.push('')
+  }
 
   lines.push(`## Scoped actions (${todos.length})`)
   lines.push('')

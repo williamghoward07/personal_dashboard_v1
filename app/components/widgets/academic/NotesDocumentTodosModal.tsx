@@ -1,15 +1,22 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Pencil, Plus, X } from 'lucide-react'
 import type { Todo } from '@/lib/types'
+import { londonDayBoundsUTC } from '@/lib/google/london-day'
+import { formatDue } from '@/lib/todos/format'
+import { changedFields, type TodoPatch } from '@/lib/todos/patch'
+import { useWorkspaceLookup } from '@/lib/workspaces/use-workspace-lookup'
 import Modal from '../../Modal'
+import TodoFormModal from '../daily-goals/TodoFormModal'
+import WorkspaceChip from '../workspaces/WorkspaceChip'
 
 export default function NotesDocumentTodosModal({
   pageTitle,
   todos,
   onAddTodo,
   onToggleTodo,
+  onUpdateTodo,
   onUnlinkTodo,
   onClose,
 }: {
@@ -17,11 +24,32 @@ export default function NotesDocumentTodosModal({
   todos: Todo[]
   onAddTodo: (title: string) => void
   onToggleTodo: (todoId: string) => void
+  onUpdateTodo: (todoId: string, patch: TodoPatch) => void
   onUnlinkTodo: (todoId: string) => void
   onClose: () => void
 }) {
   const [draft, setDraft] = useState('')
+  // Editing swaps this panel for the shared todo editor (one modal at a
+  // time); closing the editor comes back here.
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
+  const workspaces = useWorkspaceLookup()
+  const todayKey = useMemo(() => londonDayBoundsUTC().startDateKey, [])
   const completed = todos.filter((t) => t.completed_at !== null).length
+
+  if (editingTodo) {
+    return (
+      <TodoFormModal
+        isOpen
+        heading="Edit todo"
+        initialValues={editingTodo}
+        onClose={() => setEditingTodo(null)}
+        onSave={(values) => {
+          onUpdateTodo(editingTodo.id, changedFields(editingTodo, values))
+          setEditingTodo(null)
+        }}
+      />
+    )
+  }
 
   return (
     <Modal onClose={onClose}>
@@ -59,8 +87,10 @@ export default function NotesDocumentTodosModal({
             {todos.map((todo) => {
               const done = todo.completed_at !== null
               const inputId = `notes-doc-todo-${todo.id}`
+              const due = formatDue(todo, todayKey)
+              const workspace = todo.workspace_id ? workspaces.get(todo.workspace_id) : undefined
               return (
-                <li key={todo.id} className="flex items-center gap-2">
+                <li key={todo.id} className="group flex items-center gap-2">
                   <input
                     id={inputId}
                     type="checkbox"
@@ -76,6 +106,24 @@ export default function NotesDocumentTodosModal({
                   >
                     {todo.title}
                   </label>
+                  {workspace && <WorkspaceChip workspace={workspace} />}
+                  {due && (
+                    <span
+                      className={`shrink-0 text-[11px] tabular-nums ${
+                        due.overdue ? 'text-academic-orange' : 'text-on-surface-variant'
+                      }`}
+                    >
+                      {due.label}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEditingTodo(todo)}
+                    aria-label={`Edit ${todo.title}`}
+                    className="shrink-0 rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => onUnlinkTodo(todo.id)}

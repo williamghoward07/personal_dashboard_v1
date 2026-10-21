@@ -2,20 +2,37 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Archive, ArchiveRestore, ArrowLeft, BarChart3, Brain, FolderOpen, ListChecks, Pencil, Plus } from 'lucide-react'
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  BarChart3,
+  BookOpen,
+  Brain,
+  FolderOpen,
+  ListChecks,
+  Pencil,
+  Plus,
+} from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import type { WorkspaceSectionKey } from '@/lib/types'
 import { usePageTitle } from '@/lib/page-title'
 import { useWorkspaces } from '@/lib/workspaces/use-workspaces'
 import { useWorkspaceFolders } from '@/lib/workspaces/use-workspace-folders'
+import { isOpenLink } from '@/lib/workspaces/completed'
 import { useWorkspaceLinks } from '@/lib/workspaces/use-workspace-links'
 import { useWorkspaceTodos } from '@/lib/workspaces/use-workspace-todos'
 import { useWorkspaceLinkTodos } from '@/lib/workspaces/use-workspace-link-todos'
 import { useAllNoteTags, useWorkspaceNotes } from '@/lib/workspaces/use-workspace-notes'
 import { useWorkspaceSessions } from '@/lib/workspaces/use-workspace-sessions'
+import { useWorkspaceTime } from '@/lib/workspaces/use-workspace-time'
+import { readingProgress, splitReadings, weekOptions } from '@/lib/workspaces/readings'
+import { formatMinutes, timeSummary } from '@/lib/workspaces/time'
 import { folderPath, resolveAccent } from '@/lib/workspaces/folders'
 import { COLUMN_GRID_CLASS, SECTION_LABELS, columnLayout, isShown, toggleSection, visibleStatCards } from '@/lib/workspaces/layout'
 import LinksSection from './LinksSection'
+import ReadingsSection from './ReadingsSection'
+import StudyTimeCard from './StudyTimeCard'
 import TodosSection from './TodosSection'
 import NotesSection from './NotesSection'
 import WorkspaceHeaderStrip from './WorkspaceHeaderStrip'
@@ -36,6 +53,7 @@ const BAR_GRID_CLASS: Record<number, string> = {
   2: 'sm:grid-cols-2',
   3: 'sm:grid-cols-3',
   4: 'sm:grid-cols-2 xl:grid-cols-4',
+  5: 'sm:grid-cols-2 xl:grid-cols-5',
 }
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
@@ -45,6 +63,11 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
     useWorkspaces()
   const { folders, error: foldersError } = useWorkspaceFolders()
   const linksApi = useWorkspaceLinks(workspaceId)
+  // Readings are links with a week; everything else on the page is a source.
+  const { sources, readings } = splitReadings(linksApi.links)
+  const openLinkCount = sources.filter(isOpenLink).length
+  const readingStats = readingProgress(readings)
+  const timeApi = useWorkspaceTime(workspaceId)
   const todosApi = useWorkspaceTodos(workspaceId)
   const linkTodosApi = useWorkspaceLinkTodos()
   const notesApi = useWorkspaceNotes(workspaceId)
@@ -124,7 +147,9 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
         onExpand={() => toggleCollapsed('stats')}
         summary={[
           shown('actions') && `${doneTodos}/${todosApi.todos.length} actions done`,
-          shown('sources') && plural(linksApi.links.length, 'source', 'sources'),
+          shown('sources') && plural(openLinkCount, 'source', 'sources'),
+          shown('readings') && `${readingStats.done}/${readingStats.total} read`,
+          shown('time') && `${formatMinutes(timeSummary(timeApi.logs).thisWeek)} this week`,
           shown('log') && plural(notes.length, 'log entry', 'log entries'),
         ]
           .filter(Boolean)
@@ -137,7 +162,16 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
         label="Scoped sources"
         Icon={FolderOpen}
         onExpand={() => toggleCollapsed('sources')}
-        summary={plural(linksApi.links.length, 'source', 'sources')}
+        summary={plural(openLinkCount, 'source', 'sources')}
+      />
+    ),
+    columns.collapsed.includes('readings') && (
+      <CollapsedSectionBar
+        key="readings"
+        label="Weekly readings"
+        Icon={BookOpen}
+        onExpand={() => toggleCollapsed('readings')}
+        summary={`${readingStats.done}/${readingStats.total} read · ${readingStats.percent}%`}
       />
     ),
     columns.collapsed.includes('actions') && (
@@ -168,7 +202,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
     sources: (
       <LinksSection
         key="sources"
-        links={linksApi.links}
+        links={sources}
         loading={linksApi.loading}
         addLink={linksApi.addLink}
         updateLink={linksApi.updateLink}
@@ -180,7 +214,25 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
         detachLinkTodo={linkTodosApi.detach}
         addingUrl={addingSource}
         setAddingUrl={setAddingSource}
+        weekChoices={shown('readings') ? weekOptions(readings) : undefined}
         onCollapse={() => toggleCollapsed('sources')}
+      />
+    ),
+    readings: (
+      <ReadingsSection
+        key="readings"
+        readings={readings}
+        allLinks={linksApi.links}
+        loading={linksApi.loading}
+        addLink={linksApi.addLink}
+        updateLink={linksApi.updateLink}
+        deleteLink={linksApi.deleteLink}
+        reorderLinks={linksApi.reorderLinks}
+        todos={todosApi.todos}
+        linkTodos={linkTodosApi.linkTodos}
+        attachTodosToLink={linkTodosApi.attachTodosToLink}
+        detachLinkTodo={linkTodosApi.detach}
+        onCollapse={() => toggleCollapsed('readings')}
       />
     ),
     actions: (
@@ -193,6 +245,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
         detachTodo={todosApi.detachTodo}
         toggleTodo={todosApi.toggleTodo}
         toggleStar={todosApi.toggleStar}
+        updateTodo={todosApi.updateTodo}
         deleteTodo={todosApi.deleteTodo}
         links={linksApi.links}
         linkTodos={linkTodosApi.linkTodos}
@@ -278,7 +331,8 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-on-surface-variant">
             {[
               lastSession && `Last session ${lastSession}`,
-              shown('sources') && plural(linksApi.links.length, 'source', 'sources'),
+              shown('sources') && plural(openLinkCount, 'source', 'sources'),
+              shown('readings') && `${readingStats.done}/${readingStats.total} readings`,
               shown('actions') && `${todosApi.todos.length} scoped ${todosApi.todos.length === 1 ? 'action' : 'actions'}`,
               shown('log') && plural(notes.length, 'thinking log', 'thinking logs'),
             ]
@@ -295,7 +349,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
         <div className="flex flex-wrap items-center gap-2">
           {shown('sources') && (
             <>
-              <LaunchSetButton links={linksApi.links} />
+              <LaunchSetButton links={sources} />
               <button type="button" onClick={addSource} className={actionButtonClass}>
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                 Add source
@@ -342,10 +396,21 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
           </div>
           <WorkspaceStatCards
             cards={statCards}
-            links={linksApi.links}
+            links={sources}
             todos={todosApi.todos}
             notes={notes}
             linkTodos={linkTodosApi.linkTodos}
+            timeCard={
+              <StudyTimeCard
+                logs={timeApi.logs}
+                error={timeApi.error}
+                targetMinutes={workspace.weekly_minutes_target ?? null}
+                addLog={timeApi.addLog}
+                updateLog={timeApi.updateLog}
+                removeLog={timeApi.removeLog}
+                onSetTarget={(minutes) => updateWorkspace(workspace.id, { weekly_minutes_target: minutes })}
+              />
+            }
           />
         </div>
       )}
@@ -372,6 +437,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
         todos={todosApi.todos}
         notes={notes}
         linkTodos={linkTodosApi.linkTodos}
+        timeLogs={timeApi.logs}
         sessionCount={sessionCount}
       />
     </main>

@@ -9,12 +9,16 @@ import { actionButtonClass, microLabelClass } from './shared'
 const SECTION_HINTS: Record<WorkspaceSectionKey, string> = {
   stats: 'Progress rings along the top',
   sources: 'Links, papers and data',
+  readings: "Each week's reading list, with progress",
   actions: 'Todos filed under this workspace',
   log: 'Dated notes and #tags',
+  time: 'Hours studied (e.g. from Opal), as a stat card',
 }
 
 // Per-workspace "which sections exist on this page" — e.g. a side project
-// that only needs Sources and the Thinking log. Hiding never deletes data.
+// that only needs Sources and the Thinking log, or a uni module that also
+// wants Weekly readings and Study time (both start hidden). Hiding never
+// deletes data.
 export default function WorkspaceLayoutMenu({
   hidden,
   onToggle,

@@ -15,6 +15,7 @@ import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
 import { Button } from '@/components/ui/button'
 import ConfirmDialog from '../../ConfirmDialog'
+import { changedFields } from '@/lib/todos/patch'
 import TodoFormModal, { type TodoFormValues } from './TodoFormModal'
 import TodoDetailModal from './TodoDetailModal'
 import TodoListFormModal from './TodoListFormModal'
@@ -355,6 +356,8 @@ export default function TodosBoard() {
             due_time: values.due_time,
             notes: values.notes,
             list_id: values.list_id,
+            workspace_id: values.workspace_id,
+            starred: values.starred,
           })
           setIsAddOpen(false)
         }}
@@ -367,7 +370,7 @@ export default function TodosBoard() {
         onClose={() => setEditingTodo(null)}
         onSave={(values: TodoFormValues) => {
           if (!editingTodo) return
-          updateTodo(editingTodo.id, values)
+          updateTodo(editingTodo.id, changedFields(editingTodo, values))
           setEditingTodo(null)
         }}
       />

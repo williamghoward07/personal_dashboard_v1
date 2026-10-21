@@ -7,8 +7,8 @@ import { ghostButtonClass, primaryButtonClass } from './shared'
 
 // Candidate pool is todos with no workspace yet — a todo already in a
 // different workspace is never offered here, since attaching it would
-// silently move it out of that other workspace (no such reassignment UI
-// exists). To Do-synced todos are attachable like any other — workspace_id
+// silently move it out of that other workspace (move it deliberately from
+// the todo's editor instead). To Do-synced todos are attachable like any other — workspace_id
 // is app-only and never touched by the To Do pull.
 export default function AttachExistingTodoPanel({
   onAttach,

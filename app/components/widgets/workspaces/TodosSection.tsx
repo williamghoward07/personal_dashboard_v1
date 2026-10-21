@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CheckCircle2, Link2, ListChecks, Plus, Trash2, Unlink, X } from 'lucide-react'
+import { CheckCircle2, Link2, ListChecks, Pencil, Plus, Trash2, Unlink, X } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { CountBadge } from '@/components/ui/count-badge'
 import { MetadataChip } from '@/components/ui/metadata-chip'
@@ -9,6 +9,10 @@ import type { Todo, WorkspaceLink, WorkspaceLinkTodo } from '@/lib/types'
 import AttachExistingTodoPanel from './AttachExistingTodoPanel'
 import TodoLinkAttachPanel from './TodoLinkAttachPanel'
 import StarButton from '../daily-goals/StarButton'
+import TodoFormModal from '../daily-goals/TodoFormModal'
+import { formatDue } from '@/lib/todos/format'
+import { changedFields, isSyncedTodo, type TodoPatch } from '@/lib/todos/patch'
+import { londonDayBoundsUTC } from '@/lib/google/london-day'
 import { CollapseButton } from './SectionChrome'
 import {
   actionButtonClass,
@@ -32,6 +36,7 @@ export default function TodosSection({
   detachTodo,
   toggleTodo,
   toggleStar,
+  updateTodo,
   deleteTodo,
   links,
   linkTodos,
@@ -46,6 +51,7 @@ export default function TodosSection({
   detachTodo: (id: string) => Promise<void>
   toggleTodo: (id: string) => Promise<void>
   toggleStar: (id: string) => Promise<void>
+  updateTodo: (id: string, patch: TodoPatch) => Promise<void>
   deleteTodo: (id: string) => Promise<void>
   links: WorkspaceLink[]
   linkTodos: WorkspaceLinkTodo[]
@@ -57,6 +63,8 @@ export default function TodosSection({
   const [attachingExisting, setAttachingExisting] = useState(false)
   const [managingLinksForTodoId, setManagingLinksForTodoId] = useState<string | null>(null)
   const [filter, setFilter] = useState<TaskFilter>('all')
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
+  const todayKey = useMemo(() => londonDayBoundsUTC().startDateKey, [])
 
   const linkedTodoIds = useMemo(() => new Set(linkTodos.map((lt) => lt.todo_id)), [linkTodos])
   const doneCount = useMemo(() => todos.filter((t) => t.completed_at).length, [todos])
@@ -67,12 +75,14 @@ export default function TodosSection({
     return todos
   }, [todos, filter, linkedTodoIds])
 
-  const handleAdd = async (e: React.FormEvent) => {
+  // The row appears straight away, so clear the input straight away too —
+  // otherwise a second Enter while the insert is in flight adds it twice.
+  const handleAdd = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = title.trim()
     if (!trimmed) return
-    await addTodo(trimmed)
     setTitle('')
+    void addTodo(trimmed)
   }
 
   return (
@@ -164,6 +174,8 @@ export default function TodosSection({
               deleteTodo={deleteTodo}
               attachLinksToTodo={attachLinksToTodo}
               detachLinkTodo={detachLinkTodo}
+              todayKey={todayKey}
+              onEdit={() => setEditingTodo(todo)}
               managing={managingLinksForTodoId === todo.id}
               onToggleManaging={() =>
                 setManagingLinksForTodoId((current) => (current === todo.id ? null : todo.id))
@@ -172,6 +184,18 @@ export default function TodosSection({
           ))}
         </ul>
       )}
+
+      <TodoFormModal
+        isOpen={editingTodo !== null}
+        heading="Edit todo"
+        initialValues={editingTodo}
+        onClose={() => setEditingTodo(null)}
+        onSave={(values) => {
+          if (!editingTodo) return
+          updateTodo(editingTodo.id, changedFields(editingTodo, values))
+          setEditingTodo(null)
+        }}
+      />
     </ModuleGlassCard>
   )
 }
@@ -186,6 +210,8 @@ function TodoRow({
   deleteTodo,
   attachLinksToTodo,
   detachLinkTodo,
+  todayKey,
+  onEdit,
   managing,
   onToggleManaging,
 }: {
@@ -198,6 +224,8 @@ function TodoRow({
   deleteTodo: (id: string) => Promise<void>
   attachLinksToTodo: (todoId: string, linkIds: string[]) => Promise<void>
   detachLinkTodo: (junctionId: string) => Promise<void>
+  todayKey: string
+  onEdit: () => void
   managing: boolean
   onToggleManaging: () => void
 }) {
@@ -214,6 +242,7 @@ function TodoRow({
   )
   const alreadyAttachedLinkIds = useMemo(() => attachedLinks.map((l) => l.id), [attachedLinks])
   const isDone = !!todo.completed_at
+  const due = formatDue(todo, todayKey)
 
   return (
     <li className="group rounded-xl border border-outline-variant bg-surface-container-low/60 p-3 transition-colors hover:border-ws-accent/40">
@@ -236,11 +265,12 @@ function TodoRow({
             <span className={`text-sm ${isDone ? 'text-on-surface-variant/60 line-through' : 'text-on-surface'}`}>
               {todo.title}
             </span>
-            {todo.mstodo_task_id && <MetadataChip>To Do</MetadataChip>}
-            {todo.due_date && (
-              <span className="text-[11px] tabular-nums text-on-surface-variant">
-                Due {todo.due_date}
-                {todo.due_time ? ` ${todo.due_time}` : ''}
+            {isSyncedTodo(todo) && <MetadataChip>To Do</MetadataChip>}
+            {due && (
+              <span
+                className={`text-[11px] tabular-nums ${due.overdue ? 'text-academic-orange' : 'text-on-surface-variant'}`}
+              >
+                {due.label}
               </span>
             )}
           </div>
@@ -278,6 +308,15 @@ function TodoRow({
               Manage links
             </button>
             <span className="ml-auto flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={onEdit}
+                title="Edit (title, date, reminder time, workspace…)"
+                aria-label={`Edit ${todo.title}`}
+                className={iconButtonClass}
+              >
+                <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+              </button>
               <button
                 type="button"
                 onClick={() => detachTodo(todo.id)}

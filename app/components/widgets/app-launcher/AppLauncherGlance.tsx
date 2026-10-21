@@ -52,10 +52,13 @@ export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan 
   useEffect(() => {
     supabase
       .from('quick_links')
-      .select('*')
+      .select('*, folder:link_folders(archived_at)')
+      .is('archived_at', null)
       .order('sort_order', { ascending: true })
       .then(({ data }) => {
-        setLinks((data ?? []) as QuickLink[])
+        // A link in an archived folder is archived too.
+        type Row = QuickLink & { folder: { archived_at: string | null } | null }
+        setLinks(((data ?? []) as Row[]).filter((row) => !row.folder?.archived_at))
         setLoading(false)
       })
   }, [])

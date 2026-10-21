@@ -4,6 +4,7 @@ import { Fragment, useMemo } from 'react'
 import { CheckCircle2, Layers, Link2, Brain } from 'lucide-react'
 import { StatTile } from '@/components/ui/stat-tile'
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo, WorkspaceNote } from '@/lib/types'
+import { isOpenLink } from '@/lib/workspaces/completed'
 import { recentLogShare, sourceCoupling, sourceFootprint, taskProgress } from '@/lib/workspaces/stats'
 import { STAT_GRID_CLASS, type StatCardKey } from '@/lib/workspaces/layout'
 import { logTimestamp } from './shared'
@@ -14,6 +15,7 @@ export default function WorkspaceStatCards({
   todos,
   notes,
   linkTodos,
+  timeCard,
 }: {
   // Which cards to show, in order — see lib/workspaces/layout.ts
   // visibleStatCards (a card drops out when its section is hidden).
@@ -22,9 +24,12 @@ export default function WorkspaceStatCards({
   todos: Todo[]
   notes: WorkspaceNote[]
   linkTodos: WorkspaceLinkTodo[]
+  /** The Study time card (StudyTimeCard) — built by the page, which owns its data. */
+  timeCard?: React.ReactNode
 }) {
   const tasks = useMemo(() => taskProgress(todos), [todos])
   const footprint = useMemo(() => sourceFootprint(links), [links])
+  const openCount = useMemo(() => links.filter(isOpenLink).length, [links])
   const coupling = useMemo(() => sourceCoupling(todos, linkTodos), [todos, linkTodos])
   const logShare = useMemo(() => recentLogShare(notes), [notes])
   const latest = notes[0]?.created_at ?? null
@@ -32,6 +37,7 @@ export default function WorkspaceStatCards({
   if (cards.length === 0) return null
 
   const rendered: Record<StatCardKey, React.ReactNode> = {
+    time: timeCard ?? null,
     tasks: (
       <StatTile
         label="Task progress"
@@ -46,8 +52,8 @@ export default function WorkspaceStatCards({
     footprint: (
       <StatTile
         label="Working set footprint"
-        value={String(links.length)}
-        unit={links.length === 1 ? 'Source' : 'Sources'}
+        value={String(openCount)}
+        unit={openCount === 1 ? 'Source' : 'Sources'}
         detail={footprint.breakdown || 'No sources yet'}
         percent={footprint.percent}
         accent="ws"

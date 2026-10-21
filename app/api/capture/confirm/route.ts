@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createGoogleCalendarEvent } from '@/lib/google/calendar'
 import { GoogleReauthRequiredError } from '@/lib/google/token'
+import { getTodoConnection } from '@/lib/microsoft/todo-connection'
+import { linkTodo } from '@/lib/microsoft/todo-sync'
 import type { ActDraft, ActEntity } from '@/lib/search/act-types'
 
 const ENTITIES: ActEntity[] = ['todo', 'education_task', 'calendar_event']
@@ -69,6 +71,17 @@ export async function POST(request: Request) {
   if (error) {
     console.error(`Capture confirm: insert into ${table} failed:`, error)
     return NextResponse.json({ error: 'insert_failed' }, { status: 500 })
+  }
+
+  // Every todo goes to Microsoft To Do too. Best-effort: the todo is
+  // already saved, and the next pull retries a failed create.
+  if (draft.entity === 'todo') {
+    try {
+      const connection = await getTodoConnection(supabase)
+      if (connection.ok) await linkTodo(supabase, connection.accessToken, data.id)
+    } catch (err) {
+      console.error('Capture confirm: To Do create failed (will retry on next pull):', err)
+    }
   }
 
   return NextResponse.json({ success: true, id: data.id })

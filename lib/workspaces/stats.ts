@@ -1,4 +1,5 @@
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo, WorkspaceNote } from '@/lib/types'
+import { isOpenLink } from './completed'
 import { SOURCE_KINDS, SOURCE_KIND_ORDER } from './kinds'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
@@ -13,8 +14,10 @@ export function taskProgress(todos: Todo[]): { completed: number; percent: numbe
   return { completed, percent: percent(completed, todos.length) }
 }
 
-/** Source count by type, plus the share that have a type assigned. */
-export function sourceFootprint(links: WorkspaceLink[]): { breakdown: string; percent: number } {
+/** Open-source count by type, plus the share that have a type assigned. */
+export function sourceFootprint(allLinks: WorkspaceLink[]): { breakdown: string; percent: number } {
+  // A finished source shouldn't inflate the footprint.
+  const links = allLinks.filter(isOpenLink)
   const breakdown = SOURCE_KIND_ORDER.map((kind) => {
     const count = links.filter((l) => l.kind === kind).length
     return count > 0 ? `${count} ${SOURCE_KINDS[kind].label.toLowerCase()}${count === 1 ? '' : 's'}` : null

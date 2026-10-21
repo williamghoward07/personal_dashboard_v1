@@ -6,14 +6,17 @@ import { londonDayBoundsUTC } from '@/lib/google/london-day'
 import type { Todo } from '@/lib/types'
 import type { TodoSyncChanges } from '@/lib/microsoft/todo-mapping'
 import {
+  isOptimisticId,
   pullMicrosoftTodo,
   pushTodoChange,
+  pushTodoCreate,
   pushTodoDelete,
   syncWarning,
   type TodoSyncStatus,
 } from '@/lib/todos/sync-client'
+import { syncedChanges, type TodoPatch, type TodoSyncIds } from '@/lib/todos/patch'
 
-export type TodoPatch = Partial<Pick<Todo, 'title' | 'notes' | 'due_date' | 'due_time' | 'list_id' | 'parent_id'>>
+export type { TodoPatch } from '@/lib/todos/patch'
 
 export interface UseTodosResult {
   todos: Todo[]
@@ -27,6 +30,8 @@ export interface UseTodosResult {
       notes?: string | null
       list_id?: string | null
       parent_id?: string | null
+      workspace_id?: string | null
+      starred?: boolean
     }
   ) => Promise<Todo | null>
   toggleTodo: (id: string) => Promise<void>
@@ -40,15 +45,6 @@ export interface UseTodosResult {
   syncStatus: TodoSyncStatus
 }
 
-// Edits that are mirrored to the linked To Do task.
-function syncedChanges(patch: TodoPatch): TodoSyncChanges {
-  const changes: TodoSyncChanges = {}
-  if (patch.title !== undefined) changes.title = patch.title
-  if (patch.notes !== undefined) changes.notes = patch.notes
-  if (patch.due_date !== undefined) changes.due_date = patch.due_date
-  return changes
-}
-
 // Todos for either the Daily Goals checklist (scope: 'today', the
 // default — incomplete, due today, or finished today, so the ring's
 // "todos due today" count can also be derived client-side from the same
@@ -59,8 +55,9 @@ function syncedChanges(patch: TodoPatch): TodoSyncChanges {
 // then the write fires; on failure the previous state is restored and
 // `error` is set. "Undo" for completion is deliberately the same
 // toggle — clicking a completed item un-completes it — rather than a
-// separate control. Changes to a To Do-linked todo are then pushed to
-// To Do; a failed push keeps the app-side change and shows a warning.
+// separate control. Every add and change is then pushed to To Do (an add
+// creates the task); a failed push keeps the app-side change and shows a
+// warning.
 export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today'): UseTodosResult {
   const [todos, setTodos] = useState<Todo[]>([])
   const [loading, setLoading] = useState(true)
@@ -95,11 +92,22 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
     refresh()
   }, [refresh])
 
-  const pushChange = useCallback(async (todo: Todo, changes: TodoSyncChanges) => {
-    if (!todo.mstodo_task_id || Object.keys(changes).length === 0) return
-    const pushError = await pushTodoChange(todo.id, changes)
-    if (pushError) setError(syncWarning(pushError))
+  // The server answers with the row's To Do ids, so a todo created here a
+  // moment ago picks up its link without a refetch.
+  const mergeIds = useCallback((id: string, ids: TodoSyncIds | null | undefined) => {
+    if (!ids) return
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...ids } : t)))
   }, [])
+
+  const pushChange = useCallback(
+    async (todo: Todo, changes: TodoSyncChanges) => {
+      if (Object.keys(changes).length === 0 || isOptimisticId(todo.id)) return
+      const outcome = await pushTodoChange(todo.id, changes)
+      if (outcome.error) setError(syncWarning(outcome.error))
+      mergeIds(todo.id, outcome.ids)
+    },
+    [mergeIds]
+  )
 
   const addTodo = useCallback(
     async (
@@ -110,6 +118,8 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
         notes?: string | null
         list_id?: string | null
         parent_id?: string | null
+        workspace_id?: string | null
+        starred?: boolean
       }
     ): Promise<Todo | null> => {
       const trimmed = title.trim()
@@ -120,6 +130,8 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
       const notes = extra?.notes ?? null
       const listId = extra?.list_id ?? null
       const parentId = extra?.parent_id ?? null
+      const workspaceId = extra?.workspace_id ?? null
+      const starred = extra?.starred ?? false
 
       const optimisticId = `optimistic-${crypto.randomUUID()}`
       const optimisticTodo: Todo = {
@@ -131,26 +143,33 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
         completed_at: null,
         created_at: new Date().toISOString(),
         caldav_uid: null,
-        // Todos added through this function are always app-created —
-        // never linked to a To Do task.
+        // Linked once pushTodoCreate (below) has made the To Do task.
         mstodo_task_id: null,
         mstodo_list_id: null,
-        starred: false,
+        mstodo_checklist_item_id: null,
+        starred,
         list_id: listId,
         parent_id: parentId,
         // Only ever set by the Education notes-document feature, which
         // writes directly via Supabase rather than through this hook.
         notes_document_id: null,
-        // Only ever set by the Workspaces feature, which writes directly
-        // via Supabase rather than through this hook.
-        workspace_id: null,
+        workspace_id: workspaceId,
       }
       setTodos((prev) => [...prev, optimisticTodo])
       setError(null)
 
       const { data, error: insertError } = await supabase
         .from('todos')
-        .insert({ title: trimmed, due_date: dueDate, due_time: dueTime, notes, list_id: listId, parent_id: parentId })
+        .insert({
+          title: trimmed,
+          due_date: dueDate,
+          due_time: dueTime,
+          notes,
+          list_id: listId,
+          parent_id: parentId,
+          workspace_id: workspaceId,
+          starred,
+        })
         .select()
         .single()
 
@@ -161,9 +180,10 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
       }
 
       setTodos((prev) => prev.map((t) => (t.id === optimisticId ? (data as Todo) : t)))
+      void pushTodoCreate(data.id).then((outcome) => mergeIds(data.id, outcome.ids))
       return data as Todo
     },
-    [todayDateKey]
+    [todayDateKey, mergeIds]
   )
 
   // Shared optimistic single-row update with rollback.
@@ -232,8 +252,9 @@ export function useTodos(todayDateKey: string, scope: 'today' | 'all' = 'today')
       const target = todos[index]
 
       // Delete the To Do task first — if that fails, keep the todo, or
-      // the next pull would quietly bring it back.
-      if (target.mstodo_task_id) {
+      // the next pull would quietly bring it back. Asked for every todo:
+      // the local copy may not know about a task created moments ago.
+      if (!isOptimisticId(id)) {
         const pushError = await pushTodoDelete(id)
         if (pushError) {
           setError(`Not deleted — Microsoft To Do: ${pushError}`)

@@ -1,7 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { type NextRequest, NextResponse } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/auth']
+// /api/alexa has no Supabase session (Alexa calls it); it verifies Amazon's
+// signature itself — see lib/alexa/verify.ts.
+const PUBLIC_PATHS = ['/login', '/auth', '/api/alexa']
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))

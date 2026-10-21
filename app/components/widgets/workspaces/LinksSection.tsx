@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { CountBadge } from '@/components/ui/count-badge'
 import type { Todo, WorkspaceLink, WorkspaceLinkKind, WorkspaceLinkTodo } from '@/lib/types'
+import { RECENTLY_COMPLETED_MS, partitionLinks } from '@/lib/workspaces/completed'
 import { SOURCE_KINDS, SOURCE_KIND_ORDER } from '@/lib/workspaces/kinds'
 import type { WorkspaceLinkPatch } from '@/lib/workspaces/use-workspace-links'
 import LinksGrid from './LinksGrid'
@@ -26,6 +27,7 @@ export default function LinksSection({
   detachLinkTodo,
   addingUrl,
   setAddingUrl,
+  weekChoices,
   onCollapse,
 }: {
   links: WorkspaceLink[]
@@ -40,19 +42,64 @@ export default function LinksSection({
   detachLinkTodo: (junctionId: string) => Promise<void>
   addingUrl: boolean
   setAddingUrl: (open: boolean) => void
+  /** Set while Readings is shown: cards can be moved into a week. */
+  weekChoices?: number[]
   onCollapse: () => void
 }) {
   const [filter, setFilter] = useState<KindFilter>('all')
 
+  // Sources ticked in the last few seconds stay in the main list (greyed)
+  // before dropping into Completed, so a mis-click is easy to spot and undo.
+  const [recentIds, setRecentIds] = useState<ReadonlySet<string>>(new Set())
+  const timeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    const timeouts = timeoutsRef.current
+    return () => timeouts.forEach((t) => clearTimeout(t))
+  }, [])
+
+  const forgetRecent = useCallback((id: string) => {
+    const pending = timeoutsRef.current.get(id)
+    if (pending) clearTimeout(pending)
+    timeoutsRef.current.delete(id)
+    setRecentIds((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }, [])
+
+  const toggleDone = useCallback(
+    (link: WorkspaceLink) => {
+      if (link.completed_at) {
+        forgetRecent(link.id)
+        void updateLink(link.id, { completed_at: null })
+        return
+      }
+      void updateLink(link.id, { completed_at: new Date().toISOString() })
+      const pending = timeoutsRef.current.get(link.id)
+      if (pending) clearTimeout(pending)
+      setRecentIds((prev) => new Set(prev).add(link.id))
+      timeoutsRef.current.set(
+        link.id,
+        setTimeout(() => forgetRecent(link.id), RECENTLY_COMPLETED_MS)
+      )
+    },
+    [updateLink, forgetRecent]
+  )
+
+  const { open, completed } = useMemo(() => partitionLinks(links, recentIds), [links, recentIds])
+
   const counts = useMemo(() => {
     const byKind = {} as Record<WorkspaceLinkKind, number>
-    for (const kind of SOURCE_KIND_ORDER) byKind[kind] = links.filter((l) => l.kind === kind).length
+    for (const kind of SOURCE_KIND_ORDER) byKind[kind] = open.filter((l) => l.kind === kind).length
     return byKind
-  }, [links])
+  }, [open])
 
   const visibleLinks = useMemo(
-    () => (filter === 'all' ? links : links.filter((l) => l.kind === filter)),
-    [links, filter]
+    () => (filter === 'all' ? open : open.filter((l) => l.kind === filter)),
+    [open, filter]
   )
 
   return (
@@ -61,7 +108,7 @@ export default function LinksSection({
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
           <FolderOpen className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
           Scoped sources
-          <CountBadge accent="ws" count={links.length} />
+          <CountBadge accent="ws" count={open.length} />
         </h2>
         <CollapseButton label="Scoped sources" onClick={onCollapse} />
       </div>
@@ -72,7 +119,7 @@ export default function LinksSection({
           onClick={() => setFilter('all')}
           className={`${filterChipClass} ${filter === 'all' ? filterChipActiveClass : filterChipInactiveClass}`}
         >
-          All ({links.length})
+          All ({open.length})
         </button>
         {SOURCE_KIND_ORDER.filter((kind) => counts[kind] > 0).map((kind) => (
           <button
@@ -95,9 +142,11 @@ export default function LinksSection({
         <>
           <LinksGrid
             links={visibleLinks}
+            completedLinks={completed}
             allLinks={links}
             addLink={addLink}
             updateLink={updateLink}
+            toggleDone={toggleDone}
             deleteLink={deleteLink}
             reorderLinks={reorderLinks}
             todos={todos}
@@ -106,8 +155,9 @@ export default function LinksSection({
             detachLinkTodo={detachLinkTodo}
             addingUrl={addingUrl}
             setAddingUrl={setAddingUrl}
+            weekChoices={weekChoices}
           />
-          {links.length > 0 && visibleLinks.length === 0 && (
+          {open.length > 0 && visibleLinks.length === 0 && (
             <p className="text-xs text-on-surface-variant">No sources of that type.</p>
           )}
         </>

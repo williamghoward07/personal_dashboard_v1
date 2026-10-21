@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ExternalLink, Rocket, X } from 'lucide-react'
 import type { WorkspaceLink } from '@/lib/types'
+import { isOpenLink } from '@/lib/workspaces/completed'
 import { launchLinks, openOne } from '@/lib/workspaces/launch'
 import Popover from '../../Popover'
 import { actionButtonClass, primaryButtonClass } from './shared'
@@ -11,7 +12,9 @@ import { actionButtonClass, primaryButtonClass } from './shared'
 // let only the first tab through per click, so any blocked ones are kept
 // in a queue with a one-click-per-tab stepper, alongside how to allow
 // pop-ups for the site so the next launch opens them all at once.
-export default function LaunchSetButton({ links }: { links: WorkspaceLink[] }) {
+export default function LaunchSetButton({ links: allLinks }: { links: WorkspaceLink[] }) {
+  // Finished sources are skipped — the set is what's still left to read.
+  const links = allLinks.filter(isOpenLink)
   const [queue, setQueue] = useState<string[]>([])
   const [total, setTotal] = useState(0)
 

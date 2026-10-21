@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   appListIdFor,
   changesToGraphPatch,
+  changesToStepPatch,
   mapTaskToRow,
   shouldImportTask,
   syncableLists,
   taskNotes,
+  todoToTaskBody,
   type GraphTodoTask,
 } from './todo-mapping'
 
@@ -31,7 +33,26 @@ describe('mapTaskToRow', () => {
       list_id: null,
       mstodo_task_id: 'task-1',
       mstodo_list_id: 'list-a',
+      steps: null,
     })
+  })
+
+  it('maps checklist items to steps when they were fetched', () => {
+    const row = mapTaskToRow(
+      task({
+        checklistItems: [
+          { id: 's1', displayName: ' Read ch.2 ', isChecked: true, checkedDateTime: '2026-09-15T10:00:00Z' },
+          { id: 's2', displayName: 'Notes', isChecked: false },
+        ],
+      }),
+      'l',
+      null,
+      NOW
+    )
+    expect(row.steps).toEqual([
+      { title: 'Read ch.2', completed_at: '2026-09-15T10:00:00Z', mstodo_checklist_item_id: 's1' },
+      { title: 'Notes', completed_at: null, mstodo_checklist_item_id: 's2' },
+    ])
   })
 
   it('stars important tasks', () => {
@@ -166,9 +187,40 @@ describe('changesToGraphPatch', () => {
       title: 'New',
       body: { content: '', contentType: 'text' },
       dueDateTime: { dateTime: '2026-09-20T00:00:00', timeZone: 'Europe/London' },
+      isReminderOn: false,
     })
-    expect(changesToGraphPatch({ due_date: null })).toEqual({ dueDateTime: null })
+    expect(changesToGraphPatch({ due_date: null })).toEqual({ dueDateTime: null, isReminderOn: false })
     expect(changesToGraphPatch({})).toEqual({})
+  })
+
+  it('sends the time as a reminder on the due date', () => {
+    expect(changesToGraphPatch({ due_date: '2026-10-10', due_time: '14:30' })).toEqual({
+      dueDateTime: { dateTime: '2026-10-10T00:00:00', timeZone: 'Europe/London' },
+      isReminderOn: true,
+      reminderDateTime: { dateTime: '2026-10-10T14:30:00', timeZone: 'Europe/London' },
+    })
+  })
+
+  it('round-trips a reminder through mapTaskToRow', () => {
+    const body = todoToTaskBody({
+      title: 'Seminar prep',
+      notes: null,
+      due_date: '2026-10-10',
+      due_time: '09:15',
+      completed_at: null,
+      starred: true,
+    })
+    const row = mapTaskToRow({ id: 't', status: 'notStarted', ...body } as GraphTodoTask, 'l', null, NOW)
+    expect(row).toMatchObject({ title: 'Seminar prep', due_date: '2026-10-10', due_time: '09:15', starred: true })
+  })
+})
+
+describe('changesToStepPatch', () => {
+  it('maps ticks and renames only', () => {
+    expect(changesToStepPatch({ completed: true, title: 'x', due_date: '2026-01-01' })).toEqual({
+      isChecked: true,
+      displayName: 'x',
+    })
   })
 })
 

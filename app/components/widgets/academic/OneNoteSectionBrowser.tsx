@@ -41,7 +41,7 @@ export default function OneNoteSectionBrowser({
   const [pagesError, setPagesError] = useState<string | null>(null)
   const [openPage, setOpenPage] = useState<OneNotePageSummary | null>(null)
 
-  const { documents, todosByDocumentId, ensureDocument, addTodo, toggleTodo, unlinkTodo } =
+  const { documents, todosByDocumentId, ensureDocument, addTodo, toggleTodo, updateTodo, unlinkTodo } =
     useModuleNotesDocuments(moduleId)
 
   const loadPages = (id: string) => {
@@ -148,6 +148,7 @@ export default function OneNoteSectionBrowser({
             if (doc) addTodo(doc.id, title)
           }}
           onToggleTodo={toggleTodo}
+          onUpdateTodo={updateTodo}
           onUnlinkTodo={unlinkTodo}
           onClose={() => setOpenPage(null)}
         />

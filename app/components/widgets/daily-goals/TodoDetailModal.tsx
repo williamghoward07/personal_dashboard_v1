@@ -1,13 +1,46 @@
 'use client'
 
-import { useState } from 'react'
-import { Pencil, Plus, Trash2, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { Link2, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import type { Todo, TodoList } from '@/lib/types'
 import type { WorkspaceTag } from '@/lib/workspaces/use-workspace-lookup'
 import { groupByParent } from '@/lib/todos/subtasks'
+import { formatDue } from '@/lib/todos/format'
+import { isSyncedTodo } from '@/lib/todos/patch'
+import { londonDayBoundsUTC } from '@/lib/google/london-day'
 import Modal from '../../Modal'
 import WorkspaceChip from '../workspaces/WorkspaceChip'
 import StarButton from './StarButton'
+
+interface LinkedSource {
+  id: string
+  title: string
+  workspace_id: string
+}
+
+// Workspace sources this todo is attached to (workspace_link_todos) —
+// may span workspaces other than the todo's own.
+function useLinkedSources(todoId: string): LinkedSource[] {
+  const [sources, setSources] = useState<LinkedSource[]>([])
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('workspace_link_todos')
+      .select('link:workspace_links(id, title, workspace_id)')
+      .eq('todo_id', todoId)
+      .then(({ data }) => {
+        if (cancelled) return
+        const rows = (data ?? []) as unknown as { link: LinkedSource | null }[]
+        setSources(rows.map((r) => r.link).filter((l): l is LinkedSource => l !== null))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [todoId])
+  return sources
+}
 
 export default function TodoDetailModal({
   todo,
@@ -36,9 +69,11 @@ export default function TodoDetailModal({
   const { childrenByParent } = groupByParent(todos)
   const subtasks = childrenByParent[todo.id] ?? []
   const list = lists.find((l) => l.id === todo.list_id) ?? null
-  // Matches the DB guard trigger: only a top-level, app-only todo can
-  // gain subtasks (no grandchildren, no To Do-linked parents).
-  const canAddSubtasks = todo.parent_id === null && !todo.mstodo_task_id
+  // Matches the DB guard trigger: only a top-level todo can gain subtasks
+  // (no grandchildren). They sync to To Do as the task's steps.
+  const canAddSubtasks = todo.parent_id === null
+  const due = formatDue(todo, londonDayBoundsUTC().startDateKey)
+  const linkedSources = useLinkedSources(todo.id)
 
   return (
     <Modal onClose={onClose} size="lg">
@@ -59,20 +94,34 @@ export default function TodoDetailModal({
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-on-surface-variant">
-          {todo.due_date && (
-            <span>
-              Due: {todo.due_date}
-              {todo.due_time ? ` · ${todo.due_time}` : ''}
-            </span>
-          )}
+          {due && <span className={due.overdue ? 'text-academic-orange' : undefined}>Due: {due.label}</span>}
           {list && <span>List: {list.name}</span>}
-          {todo.mstodo_task_id && <span>Synced with Microsoft To Do</span>}
+          {isSyncedTodo(todo) && <span>Synced with Microsoft To Do</span>}
           {workspace && (
             <span className="flex items-center gap-1.5">
               Workspace: <WorkspaceChip workspace={workspace} />
             </span>
           )}
         </div>
+
+        {linkedSources.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <h3 className="text-xs font-semibold text-on-surface-variant">Linked sources</h3>
+            <ul className="flex flex-wrap gap-1.5">
+              {linkedSources.map((source) => (
+                <li key={source.id}>
+                  <Link
+                    href={`/workspaces/${source.workspace_id}`}
+                    className="flex items-center gap-1 rounded-md border border-outline-variant px-2 py-0.5 text-[11px] text-on-surface-variant hover:border-outline hover:text-on-surface"
+                  >
+                    <Link2 className="h-3 w-3 shrink-0" aria-hidden />
+                    <span className="max-w-48 truncate">{source.title}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {todo.notes && (
           <div className="flex flex-col gap-1">

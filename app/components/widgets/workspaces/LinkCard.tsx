@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, type MutableRefObject } from 'react'
-import { ExternalLink, GripVertical, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CheckCircle2, ExternalLink, GripVertical, Pencil, Plus, Trash2, X } from 'lucide-react'
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo } from '@/lib/types'
 import { faviconPublicUrl } from '@/lib/workspaces/favicon'
 import { SOURCE_KINDS } from '@/lib/workspaces/kinds'
@@ -18,17 +18,20 @@ export default function LinkCard({
   linkTodos,
   onDelete,
   onUpdate,
+  onToggleDone,
   onAttachTodos,
   onDetachJunction,
   draggingIdRef,
   onInternalReorder,
   onExternalUrlDrop,
+  weekChoices,
 }: {
   link: WorkspaceLink
   todos: Todo[]
   linkTodos: WorkspaceLinkTodo[]
   onDelete: (id: string) => void
   onUpdate: (id: string, patch: WorkspaceLinkPatch) => Promise<void>
+  onToggleDone: (link: WorkspaceLink) => void
   onAttachTodos: (linkId: string, todoIds: string[]) => Promise<void>
   onDetachJunction: (junctionId: string) => Promise<void>
   // Carries the dragged card's id, not its index — the rendered list can be
@@ -36,12 +39,17 @@ export default function LinkCard({
   draggingIdRef: MutableRefObject<string | null>
   onInternalReorder: (sourceId: string, targetId: string) => void
   onExternalUrlDrop: (url: string) => void
+  /** Weeks to offer in the "Week…" control (moves a link into or out of Readings). */
+  weekChoices?: number[]
 }) {
   const [managingTodos, setManagingTodos] = useState(false)
   const [editing, setEditing] = useState(false)
   const [copied, setCopied] = useState<'citation' | 'doi' | null>(null)
   const [isDragTarget, setIsDragTarget] = useState(false)
 
+  // Set optimistically on tick, so a just-finished source greys out in place
+  // during its grace period, the same as in the Completed list.
+  const done = !!link.completed_at
   const kindMeta = SOURCE_KINDS[link.kind]
   const KindIcon = kindMeta.Icon
 
@@ -81,7 +89,7 @@ export default function LinkCard({
       // Not draggable while an inline editor/panel is open — a draggable
       // ancestor turns a mouse drag inside a text input into a card drag,
       // so text in the rename fields couldn't be selected.
-      draggable={!editing && !managingTodos}
+      draggable={!done && !editing && !managingTodos}
       onDragStart={(e) => {
         draggingIdRef.current = link.id
         e.dataTransfer.effectAllowed = 'move'
@@ -116,7 +124,9 @@ export default function LinkCard({
       className={`group cursor-pointer rounded-xl border bg-surface-container-low/60 p-3 transition-all duration-200 ${
         isDragTarget
           ? 'border-ws-accent/60 bg-ws-accent/5'
-          : 'border-outline-variant hover:border-ws-accent/40 hover:shadow-[0_0_15px_color-mix(in_oklab,var(--color-ws-accent)_12%,transparent)]'
+          : done
+            ? 'border-outline-variant/50 hover:border-outline-variant'
+            : 'border-outline-variant hover:border-ws-accent/40 hover:shadow-[0_0_15px_color-mix(in_oklab,var(--color-ws-accent)_12%,transparent)]'
       }`}
     >
       <div className="flex items-start gap-2.5">
@@ -126,8 +136,30 @@ export default function LinkCard({
           aria-hidden
         />
 
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={done}
+          aria-label={done ? `Mark ${link.title} not done` : `Mark ${link.title} done`}
+          // The card itself opens the URL, so the tick must not bubble.
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleDone(link)
+          }}
+          onKeyDown={(e) => e.stopPropagation()}
+          className={`mt-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+            done
+              ? 'border-ws-accent bg-ws-accent text-surface-container-lowest'
+              : 'border-outline hover:border-ws-accent'
+          }`}
+        >
+          {done && <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} aria-hidden />}
+        </button>
+
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${kindMeta.chipClass}`}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-opacity ${kindMeta.chipClass} ${
+            done ? 'opacity-50' : ''
+          }`}
           aria-hidden
         >
           {link.favicon_path ? (
@@ -138,9 +170,15 @@ export default function LinkCard({
           )}
         </span>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className={`flex min-w-0 flex-1 flex-col gap-1 transition-opacity ${done ? 'opacity-50' : ''}`}>
           <div className="flex items-start gap-2">
-            <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-on-surface">{link.title}</h3>
+            <h3
+              className={`min-w-0 flex-1 truncate text-sm font-semibold ${
+                done ? 'text-on-surface-variant line-through' : 'text-on-surface'
+              }`}
+            >
+              {link.title}
+            </h3>
             <ExternalLink
               className="mt-0.5 h-3.5 w-3.5 shrink-0 text-on-surface-variant/40 transition-colors group-hover:text-ws-accent"
               strokeWidth={1.75}
@@ -210,6 +248,24 @@ export default function LinkCard({
               <Plus className="h-3 w-3" strokeWidth={2} />
               Task
             </button>
+
+            {weekChoices && (
+              <select
+                value={link.week ?? ''}
+                onChange={(e) => void onUpdate(link.id, { week: e.target.value ? Number(e.target.value) : null })}
+                onKeyDown={(e) => e.stopPropagation()}
+                aria-label={link.week ? `Reading for week ${link.week}` : 'Move to weekly readings'}
+                title={link.week ? 'Change week, or make it a source again' : 'Move to weekly readings'}
+                className="rounded-md border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 text-[11px] text-on-surface-variant outline-none hover:text-on-surface focus:border-ws-accent"
+              >
+                <option value="">{link.week ? 'Not a reading' : 'Week…'}</option>
+                {weekChoices.map((week) => (
+                  <option key={week} value={week}>
+                    Week {week}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <span className="ml-auto flex items-center gap-0.5">
               <button

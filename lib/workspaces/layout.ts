@@ -4,34 +4,39 @@ import type { WorkspaceSectionKey } from '@/lib/types'
 // removes a section (its data is untouched); "collapsed" shrinks it to a
 // slim bar. Pure so the adapt-to-what's-visible rules are testable.
 
-export const SECTION_KEYS: WorkspaceSectionKey[] = ['stats', 'sources', 'actions', 'log']
+export const SECTION_KEYS: WorkspaceSectionKey[] = ['stats', 'sources', 'readings', 'actions', 'log', 'time']
 
 export const SECTION_LABELS: Record<WorkspaceSectionKey, string> = {
   stats: 'Stats',
   sources: 'Sources',
+  readings: 'Weekly readings',
   actions: 'Next actions',
   log: 'Thinking log',
+  time: 'Study time',
 }
 
-export type ColumnSectionKey = Exclude<WorkspaceSectionKey, 'stats'>
-export const COLUMN_SECTION_KEYS: ColumnSectionKey[] = ['sources', 'actions', 'log']
+// 'time' is not a column: it is the Study time stat card (with its log).
+export type ColumnSectionKey = Exclude<WorkspaceSectionKey, 'stats' | 'time'>
+export const COLUMN_SECTION_KEYS: ColumnSectionKey[] = ['sources', 'readings', 'actions', 'log']
 
-export type StatCardKey = 'tasks' | 'footprint' | 'coupling' | 'log'
+export type StatCardKey = 'tasks' | 'footprint' | 'coupling' | 'log' | 'time'
 
 // A stat card only makes sense while the sections it summarises are shown.
-const STAT_CARD_REQUIRES: Record<StatCardKey, ColumnSectionKey[]> = {
+const STAT_CARD_REQUIRES: Record<StatCardKey, WorkspaceSectionKey[]> = {
   tasks: ['actions'],
   footprint: ['sources'],
   coupling: ['actions', 'sources'],
   log: ['log'],
+  time: ['time'],
 }
-const STAT_CARD_ORDER: StatCardKey[] = ['tasks', 'footprint', 'coupling', 'log']
+const STAT_CARD_ORDER: StatCardKey[] = ['time', 'tasks', 'footprint', 'coupling', 'log']
 
 // Tailwind only generates classes it can see written out in full.
 export const COLUMN_GRID_CLASS: Record<number, string> = {
   1: 'xl:grid-cols-1',
   2: 'xl:grid-cols-2',
   3: 'xl:grid-cols-3',
+  4: 'xl:grid-cols-4',
 }
 
 export const STAT_GRID_CLASS: Record<number, string> = {
@@ -39,6 +44,7 @@ export const STAT_GRID_CLASS: Record<number, string> = {
   2: 'sm:grid-cols-2',
   3: 'sm:grid-cols-2 xl:grid-cols-3',
   4: 'sm:grid-cols-2 xl:grid-cols-4',
+  5: 'sm:grid-cols-2 xl:grid-cols-5',
 }
 
 export function isShown(hidden: readonly WorkspaceSectionKey[], key: WorkspaceSectionKey): boolean {
@@ -50,7 +56,7 @@ export function visibleStatCards(hidden: readonly WorkspaceSectionKey[]): StatCa
   return STAT_CARD_ORDER.filter((card) => STAT_CARD_REQUIRES[card].every((section) => isShown(hidden, section)))
 }
 
-/** The three content columns split into shown-expanded and shown-collapsed. */
+/** The content columns split into shown-expanded and shown-collapsed. */
 export function columnLayout(
   hidden: readonly WorkspaceSectionKey[],
   collapsed: readonly WorkspaceSectionKey[]

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { NotesDocument, Todo } from '@/lib/types'
+import type { TodoSyncChanges } from '@/lib/microsoft/todo-mapping'
+import { pushTodoChange, pushTodoCreate, syncWarning } from '@/lib/todos/sync-client'
+import { syncedChanges, type TodoPatch, type TodoSyncIds } from '@/lib/todos/patch'
 
 export interface UseModuleNotesDocumentsResult {
   documents: NotesDocument[]
@@ -17,6 +20,7 @@ export interface UseModuleNotesDocumentsResult {
   ensureDocument: (onenotePageId: string, pageTitle: string) => Promise<NotesDocument | null>
   addTodo: (documentId: string, title: string) => Promise<void>
   toggleTodo: (todoId: string) => Promise<void>
+  updateTodo: (todoId: string, patch: TodoPatch) => Promise<void>
   // Clears the todo's notes_document_id — the todo itself isn't deleted,
   // it just stops being attached to this document (same "unlist, don't
   // delete" convention as todo lists).
@@ -32,6 +36,24 @@ export function useModuleNotesDocuments(moduleId: string): UseModuleNotesDocumen
   const [todosByDocumentId, setTodosByDocumentId] = useState<Map<string, Todo[]>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Applies fields (an edit, or To Do ids from a push) to one todo
+  // wherever it sits in the per-document map.
+  const mergeIntoTodo = useCallback((todoId: string, fields: Partial<Todo> | TodoSyncIds | null) => {
+    if (!fields) return
+    setTodosByDocumentId((prev) => {
+      const next = new Map(prev)
+      for (const [documentId, todos] of next) {
+        if (todos.some((t) => t.id === todoId)) {
+          next.set(
+            documentId,
+            todos.map((t) => (t.id === todoId ? { ...t, ...fields } : t))
+          )
+        }
+      }
+      return next
+    })
+  }, [])
 
   const refresh = useCallback(() => {
     supabase
@@ -129,7 +151,8 @@ export function useModuleNotesDocuments(moduleId: string): UseModuleNotesDocumen
       next.set(documentId, [...(next.get(documentId) ?? []), created])
       return next
     })
-  }, [])
+    void pushTodoCreate(created.id).then((outcome) => mergeIntoTodo(created.id, outcome.ids ?? null))
+  }, [mergeIntoTodo])
 
   const findDocumentIdForTodo = useCallback(
     (todoId: string): string | undefined => {
@@ -141,31 +164,41 @@ export function useModuleNotesDocuments(moduleId: string): UseModuleNotesDocumen
     [todosByDocumentId]
   )
 
-  const toggleTodo = useCallback(
-    async (todoId: string) => {
-      const documentId = findDocumentIdForTodo(todoId)
-      if (!documentId) return
-      const target = todosByDocumentId.get(documentId)?.find((t) => t.id === todoId)
-      if (!target) return
+  // Saves a change to one todo (optimistically), then mirrors it to To Do.
+  const patchTodo = useCallback(
+    async (todoId: string, patch: Partial<Todo>, changes: TodoSyncChanges) => {
+      if (!findDocumentIdForTodo(todoId)) return
+      mergeIntoTodo(todoId, patch)
 
-      const nextCompletedAt = target.completed_at ? null : new Date().toISOString()
-
-      setTodosByDocumentId((prev) => {
-        const next = new Map(prev)
-        next.set(
-          documentId,
-          (next.get(documentId) ?? []).map((t) => (t.id === todoId ? { ...t, completed_at: nextCompletedAt } : t))
-        )
-        return next
-      })
-
-      const { error: updateError } = await supabase.from('todos').update({ completed_at: nextCompletedAt }).eq('id', todoId)
+      const { error: updateError } = await supabase.from('todos').update(patch).eq('id', todoId)
       if (updateError) {
         setError(updateError.message)
         refresh()
+        return
+      }
+      if (Object.keys(changes).length > 0) {
+        const outcome = await pushTodoChange(todoId, changes)
+        if (outcome.error) setError(syncWarning(outcome.error))
+        mergeIntoTodo(todoId, outcome.ids ?? null)
       }
     },
-    [findDocumentIdForTodo, todosByDocumentId, refresh]
+    [findDocumentIdForTodo, refresh, mergeIntoTodo]
+  )
+
+  const toggleTodo = useCallback(
+    async (todoId: string) => {
+      const documentId = findDocumentIdForTodo(todoId)
+      const target = documentId ? todosByDocumentId.get(documentId)?.find((t) => t.id === todoId) : undefined
+      if (!target) return
+      const nextCompletedAt = target.completed_at ? null : new Date().toISOString()
+      await patchTodo(todoId, { completed_at: nextCompletedAt }, { completed: nextCompletedAt !== null })
+    },
+    [findDocumentIdForTodo, todosByDocumentId, patchTodo]
+  )
+
+  const updateTodo = useCallback(
+    (todoId: string, patch: TodoPatch) => patchTodo(todoId, patch, syncedChanges(patch)),
+    [patchTodo]
   )
 
   const unlinkTodo = useCallback(
@@ -188,5 +221,16 @@ export function useModuleNotesDocuments(moduleId: string): UseModuleNotesDocumen
     [findDocumentIdForTodo, refresh]
   )
 
-  return { documents, todosByDocumentId, loading, error, refresh, ensureDocument, addTodo, toggleTodo, unlinkTodo }
+  return {
+    documents,
+    todosByDocumentId,
+    loading,
+    error,
+    refresh,
+    ensureDocument,
+    addTodo,
+    toggleTodo,
+    updateTodo,
+    unlinkTodo,
+  }
 }

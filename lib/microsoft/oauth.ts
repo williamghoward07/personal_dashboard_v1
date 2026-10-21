@@ -14,6 +14,8 @@ export const MICROSOFT_ONENOTE_PROVIDER = 'microsoft_onenote'
 export const MICROSOFT_SCOPES = [
   'https://graph.microsoft.com/Notes.Read',
   'https://graph.microsoft.com/Tasks.ReadWrite',
+  // Outlook events for the Alexa reminder skill (lib/microsoft/calendar.ts).
+  'https://graph.microsoft.com/Calendars.ReadWrite',
   'offline_access',
   'openid',
   'profile',
@@ -30,6 +32,11 @@ export function safeNextPath(value: string | null | undefined): string {
 /** Whether a stored connection was granted To Do access (older ones weren't). */
 export function hasTodoScope(scopes: string[] | null | undefined): boolean {
   return (scopes ?? []).some((scope) => scope.toLowerCase().endsWith('tasks.readwrite'))
+}
+
+/** Whether a stored connection was granted Outlook calendar access (older ones weren't). */
+export function hasCalendarScope(scopes: string[] | null | undefined): boolean {
+  return (scopes ?? []).some((scope) => scope.toLowerCase().endsWith('calendars.readwrite'))
 }
 
 // "consumers" (not "common") because the Azure app registration is

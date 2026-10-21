@@ -10,13 +10,15 @@ export interface WorkspaceTag {
   id: string
   title: string
   accent: Accent
+  archived: boolean
 }
 
-type LookupWorkspace = Pick<Workspace, 'id' | 'title' | 'color' | 'folder_id'>
+type LookupWorkspace = Pick<Workspace, 'id' | 'title' | 'color' | 'folder_id' | 'archived_at'>
 type LookupFolder = Pick<WorkspaceFolder, 'id' | 'color' | 'parent_id'>
 
 // id -> {title, colour} for tagging todos with the workspace they belong
-// to (Todos page, Daily Goals). Two small column reads, once per mount.
+// to (Todos page, Daily Goals, the todo editor's workspace picker). Two
+// small column reads, once per mount.
 export function useWorkspaceLookup(): Map<string, WorkspaceTag> {
   const [workspaces, setWorkspaces] = useState<LookupWorkspace[]>([])
   const [folders, setFolders] = useState<LookupFolder[]>([])
@@ -24,7 +26,7 @@ export function useWorkspaceLookup(): Map<string, WorkspaceTag> {
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      supabase.from('workspaces').select('id, title, color, folder_id'),
+      supabase.from('workspaces').select('id, title, color, folder_id, archived_at'),
       supabase.from('workspace_folders').select('id, color, parent_id'),
     ]).then(([w, f]) => {
       if (cancelled) return
@@ -37,7 +39,13 @@ export function useWorkspaceLookup(): Map<string, WorkspaceTag> {
   }, [])
 
   return useMemo(
-    () => new Map(workspaces.map((w) => [w.id, { id: w.id, title: w.title, accent: resolveAccent(w, folders) }])),
+    () =>
+      new Map(
+        workspaces.map((w) => [
+          w.id,
+          { id: w.id, title: w.title, accent: resolveAccent(w, folders), archived: w.archived_at !== null },
+        ])
+      ),
     [workspaces, folders]
   )
 }

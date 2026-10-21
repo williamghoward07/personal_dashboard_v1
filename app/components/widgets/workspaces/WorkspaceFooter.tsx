@@ -1,7 +1,7 @@
 'use client'
 
 import { Download } from 'lucide-react'
-import type { Todo, Workspace, WorkspaceLink, WorkspaceLinkTodo, WorkspaceNote } from '@/lib/types'
+import type { Todo, Workspace, WorkspaceLink, WorkspaceLinkTodo, WorkspaceNote, WorkspaceTimeLog } from '@/lib/types'
 import { buildWorkspaceMarkdown, workspaceExportFilename } from '@/lib/workspaces/export-markdown'
 import { actionButtonClass, formatDate } from './shared'
 
@@ -11,6 +11,7 @@ export default function WorkspaceFooter({
   todos,
   notes,
   linkTodos,
+  timeLogs,
   sessionCount,
 }: {
   workspace: Workspace
@@ -18,10 +19,11 @@ export default function WorkspaceFooter({
   todos: Todo[]
   notes: WorkspaceNote[]
   linkTodos: WorkspaceLinkTodo[]
+  timeLogs: WorkspaceTimeLog[]
   sessionCount: number
 }) {
   const exportBundle = () => {
-    const markdown = buildWorkspaceMarkdown({ workspace, links, todos, notes, linkTodos })
+    const markdown = buildWorkspaceMarkdown({ workspace, links, todos, notes, linkTodos, timeLogs })
     const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url

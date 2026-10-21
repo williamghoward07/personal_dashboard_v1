@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronsDownUp, ChevronsUpDown, LayoutGrid, Plus } from 'lucide-react'
+import { ArchiveRestore, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, LayoutGrid, Plus, Trash2 } from 'lucide-react'
 import {
   DndContext,
   DragOverlay,
@@ -74,6 +74,12 @@ const collisionDetection: CollisionDetection = (args) => {
 export default function AppLibraryBoard() {
   const [folders, setFolders] = useState<LinkFolder[]>([])
   const [links, setLinks] = useState<QuickLink[]>([])
+  // Kept apart from folders/links so drag-and-drop and renumbering only
+  // ever see active rows. A link inside an archived folder counts as
+  // archived (it lives in archivedLinks) whatever its own archived_at.
+  const [archivedFolders, setArchivedFolders] = useState<LinkFolder[]>([])
+  const [archivedLinks, setArchivedLinks] = useState<QuickLink[]>([])
+  const [showArchived, setShowArchived] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [collapsedIds, setCollapsedIds] = useStoredIdSet(COLLAPSED_STORAGE_KEY)
@@ -112,8 +118,15 @@ export default function AppLibraryBoard() {
       } else {
         setError(null)
       }
-      setFolders((f.data ?? []) as LinkFolder[])
-      setLinks((l.data ?? []) as QuickLink[])
+      const allFolders = (f.data ?? []) as LinkFolder[]
+      const allLinks = (l.data ?? []) as QuickLink[]
+      const archivedFolderIds = new Set(allFolders.filter((x) => x.archived_at).map((x) => x.id))
+      const isArchived = (link: QuickLink) =>
+        link.archived_at !== null || (link.folder_id !== null && archivedFolderIds.has(link.folder_id))
+      setFolders(allFolders.filter((x) => !x.archived_at))
+      setArchivedFolders(allFolders.filter((x) => x.archived_at))
+      setLinks(allLinks.filter((x) => !isArchived(x)))
+      setArchivedLinks(allLinks.filter(isArchived))
       setLoading(false)
     })
   }
@@ -247,6 +260,49 @@ export default function AppLibraryBoard() {
     }
   }
 
+  // Archive moves the row between the active and archived lists straight
+  // away; a failed save reloads, which puts it back.
+  const setLinkArchived = async (link: QuickLink, archived: boolean) => {
+    const archivedAt = archived ? new Date().toISOString() : null
+    // Unarchived links go to the end of their folder (sort_order is global).
+    const sortOrder = archived ? link.sort_order : links.reduce((m, l) => Math.max(m, l.sort_order), -1) + 1
+    const next = { ...link, archived_at: archivedAt, sort_order: sortOrder }
+    if (archived) {
+      setLinks((prev) => prev.filter((l) => l.id !== link.id))
+      setArchivedLinks((prev) => [...prev, next])
+    } else {
+      setArchivedLinks((prev) => prev.filter((l) => l.id !== link.id))
+      setLinks((prev) => [...prev, next])
+    }
+    const ok = await runMutation(() =>
+      supabase.from('quick_links').update({ archived_at: archivedAt, sort_order: sortOrder }).eq('id', link.id),
+    )
+    if (!ok) refresh()
+  }
+
+  const setFolderArchived = async (folder: LinkFolder, archived: boolean) => {
+    const archivedAt = archived ? new Date().toISOString() : null
+    const next = { ...folder, archived_at: archivedAt }
+    if (archived) {
+      const moving = links.filter((l) => l.folder_id === folder.id)
+      setFolders((prev) => prev.filter((f) => f.id !== folder.id))
+      setArchivedFolders((prev) => [...prev, next])
+      setLinks((prev) => prev.filter((l) => l.folder_id !== folder.id))
+      setArchivedLinks((prev) => [...prev, ...moving])
+    } else {
+      // Only the links that weren't archived on their own come back.
+      const returning = archivedLinks.filter((l) => l.folder_id === folder.id && !l.archived_at)
+      setArchivedFolders((prev) => prev.filter((f) => f.id !== folder.id))
+      setFolders((prev) => [...prev, next].sort((a, b) => a.sort_order - b.sort_order))
+      setArchivedLinks((prev) => prev.filter((l) => !returning.includes(l)))
+      setLinks((prev) => [...prev, ...returning].sort((a, b) => a.sort_order - b.sort_order))
+    }
+    const ok = await runMutation(() =>
+      supabase.from('link_folders').update({ archived_at: archivedAt }).eq('id', folder.id),
+    )
+    if (!ok) refresh()
+  }
+
   const handleTogglePinLink = async (link: QuickLink) => {
     await updateSettings({ launcher_link_ids: toggleLauncherLink([...pinnedIds], link.id) })
   }
@@ -344,6 +400,11 @@ export default function AppLibraryBoard() {
   const draggedLink = dragType === 'link' ? links.find((l) => l.id === activeDragId) : undefined
   const draggedFolder = dragType === 'folder' ? folders.find((f) => f.id === activeDragId) : undefined
 
+  // Archived links whose folder is still active (or unfiled) are listed one
+  // by one; links in an archived folder come back with the folder.
+  const archivedFolderIds = new Set(archivedFolders.map((f) => f.id))
+  const looseArchivedLinks = archivedLinks.filter((l) => !l.folder_id || !archivedFolderIds.has(l.folder_id))
+
   const linksInDeletingFolder = deletingFolder ? links.filter((l) => l.folder_id === deletingFolder.id) : []
   const otherFoldersForReassign = deletingFolder ? folders.filter((f) => f.id !== deletingFolder.id) : []
   const presetFolderName = addLinkPreset?.folder_id
@@ -435,6 +496,11 @@ export default function AppLibraryBoard() {
                     const real = folders.find((f) => f.id === group.id)
                     if (real) setDeletingFolder(real)
                   }}
+                  onArchive={() => {
+                    const real = folders.find((f) => f.id === group.id)
+                    if (real) setFolderArchived(real, true)
+                  }}
+                  onArchiveLink={(link) => setLinkArchived(link, true)}
                   onEditLink={(link) => setEditingLink(link)}
                   onDeleteLink={(link) => setDeletingLink(link)}
                   onTogglePinLink={handleTogglePinLink}
@@ -467,6 +533,81 @@ export default function AppLibraryBoard() {
         </DndContext>
       )}
 
+      {(archivedFolders.length > 0 || archivedLinks.length > 0) && (
+        <section className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            aria-expanded={showArchived}
+            className="flex items-center gap-1.5 self-start text-sm text-on-surface-variant hover:text-on-surface"
+          >
+            {showArchived ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            Archived ({archivedFolders.length + looseArchivedLinks.length})
+          </button>
+          {showArchived && (
+            <div className="flex flex-col gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-low/60 p-2">
+              {archivedFolders.map((folder) => {
+                const count = archivedLinks.filter((l) => l.folder_id === folder.id).length
+                return (
+                  <div key={folder.id} className="flex items-center gap-2 rounded-lg px-1.5 py-1 opacity-70 hover:opacity-100">
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${ACCENT_BAR[folder.color as Accent]}`} />
+                    <span className="flex-1 truncate text-sm text-on-surface">
+                      {folder.name}
+                      <span className="ml-2 text-xs text-on-surface-variant">
+                        folder · {count} link{count === 1 ? '' : 's'}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFolderArchived(folder, false)}
+                      className="flex items-center gap-1 rounded px-2 py-1 text-xs text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                    >
+                      <ArchiveRestore className="h-3.5 w-3.5" />
+                      Unarchive
+                    </button>
+                  </div>
+                )
+              })}
+              {looseArchivedLinks.map((link) => (
+                <div key={link.id} className="flex items-center gap-2 rounded-lg px-1.5 py-1 opacity-70 hover:opacity-100">
+                  <FaviconTile
+                    title={link.title}
+                    url={link.url}
+                    faviconPath={link.favicon_path}
+                    faviconCustomUrl={link.favicon_custom_url}
+                    size="sm"
+                  />
+                  <span className="flex-1 truncate text-sm text-on-surface">
+                    {link.title}
+                    {link.folder_id && (
+                      <span className="ml-2 text-xs text-on-surface-variant">
+                        {folders.find((f) => f.id === link.folder_id)?.name}
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setLinkArchived(link, false)}
+                    className="flex items-center gap-1 rounded px-2 py-1 text-xs text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                  >
+                    <ArchiveRestore className="h-3.5 w-3.5" />
+                    Unarchive
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingLink(link)}
+                    aria-label={`Delete ${link.title}`}
+                    className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-error"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       <LinkFolderFormModal
         isOpen={isAddFolderOpen}
         heading="New folder"
@@ -487,6 +628,7 @@ export default function AppLibraryBoard() {
         heading={presetFolderName ? `New link in ${presetFolderName}` : 'New link'}
         folders={folders}
         initialValues={addLinkPreset}
+        existingLinks={[...links, ...archivedLinks]}
         onClose={() => setAddLinkPreset(null)}
         onSave={handleAddLink}
       />
@@ -496,6 +638,7 @@ export default function AppLibraryBoard() {
         heading="Edit link"
         folders={folders}
         initialValues={editingLink}
+        existingLinks={[...links, ...archivedLinks].filter((l) => l.id !== editingLink?.id)}
         onClose={() => setEditingLink(null)}
         onSave={handleEditLink}
       />

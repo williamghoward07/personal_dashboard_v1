@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { AlertTriangle, Loader2 } from 'lucide-react'
 import Modal from '../../Modal'
 import type { LinkFolder, QuickLink } from '@/lib/types'
+import { findDuplicateUrl } from '@/lib/utils/url'
 import FaviconTile from './FaviconTile'
 import { inputClass, labelClass } from './shared'
 
@@ -25,6 +27,7 @@ export default function QuickLinkFormModal({
   heading,
   folders,
   initialValues,
+  existingLinks = [],
   onSave,
   onClose,
 }: {
@@ -32,13 +35,19 @@ export default function QuickLinkFormModal({
   heading: string
   folders: LinkFolder[]
   initialValues?: Pick<QuickLink, 'title' | 'url' | 'folder_id' | 'favicon_custom_url' | 'favicon_path'> | null
-  onSave: (values: QuickLinkFormValues) => void
+  /** Other links to check the URL against (exclude the one being edited). */
+  existingLinks?: QuickLink[]
+  onSave: (values: QuickLinkFormValues) => Promise<void> | void
   onClose: () => void
 }) {
   const [values, setValues] = useState<QuickLinkFormValues>(EMPTY)
+  // Saving fetches the favicon first, which can take a few seconds — the
+  // flag stops a second click from inserting the link twice.
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
+      setSaving(false)
       setValues({
         title: initialValues?.title ?? '',
         url: initialValues?.url ?? '',
@@ -51,19 +60,26 @@ export default function QuickLinkFormModal({
   if (!isOpen) return null
 
   const canSubmit = values.title.trim().length > 0 && values.url.trim().length > 0
+  const duplicate = values.url.trim() ? findDuplicateUrl(existingLinks, values.url) : null
+  const duplicateFolder = duplicate?.folder_id ? folders.find((f) => f.id === duplicate.folder_id)?.name : null
 
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={saving ? () => {} : onClose}>
       <form
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault()
-          if (!canSubmit) return
-          onSave({
-            ...values,
-            title: values.title.trim(),
-            url: values.url.trim(),
-            favicon_custom_url: values.favicon_custom_url?.trim() || null,
-          })
+          if (!canSubmit || saving) return
+          setSaving(true)
+          try {
+            await onSave({
+              ...values,
+              title: values.title.trim(),
+              url: values.url.trim(),
+              favicon_custom_url: values.favicon_custom_url?.trim() || null,
+            })
+          } finally {
+            setSaving(false)
+          }
         }}
         className="flex flex-col gap-4"
       >
@@ -89,6 +105,14 @@ export default function QuickLinkFormModal({
             placeholder="https://example.com"
             className={inputClass}
           />
+          {duplicate && (
+            <span className="flex items-center gap-1.5 text-xs text-people-amber">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Already in your library as &ldquo;{duplicate.title}&rdquo;
+              {duplicateFolder ? ` · ${duplicateFolder}` : ''}
+              {duplicate.archived_at ? ' (archived)' : ''}
+            </span>
+          )}
         </label>
 
         <label className={labelClass}>
@@ -140,16 +164,19 @@ export default function QuickLinkFormModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high"
+            disabled={saving}
+            className="rounded-lg px-3 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high disabled:opacity-40"
           >
             Cancel
           </button>
           <button
             type="submit"
-            disabled={!canSubmit}
-            className="rounded-lg bg-outline px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110 disabled:opacity-40"
+            disabled={!canSubmit || saving}
+            aria-busy={saving}
+            className="flex items-center gap-1.5 rounded-lg bg-outline px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110 disabled:opacity-40"
           >
-            Save
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving ? 'Saving…' : duplicate ? 'Add anyway' : 'Save'}
           </button>
         </div>
       </form>

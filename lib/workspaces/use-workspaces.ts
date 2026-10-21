@@ -5,7 +5,10 @@ import { supabase } from '@/lib/supabase'
 import type { Workspace } from '@/lib/types'
 
 export type WorkspacePatch = Partial<
-  Pick<Workspace, 'title' | 'subtitle' | 'folder_id' | 'color' | 'hidden_sections' | 'collapsed_sections'>
+  Pick<
+    Workspace,
+    'title' | 'subtitle' | 'folder_id' | 'color' | 'hidden_sections' | 'collapsed_sections' | 'weekly_minutes_target'
+  >
 >
 
 export interface UseWorkspacesResult {
@@ -61,8 +64,10 @@ export function useWorkspaces(): UseWorkspacesResult {
       created_at: new Date().toISOString(),
       folder_id: folderId,
       color: null,
-      hidden_sections: [],
+      // Matches the column default: study sections start hidden.
+      hidden_sections: ['readings', 'time'],
       collapsed_sections: [],
+      weekly_minutes_target: null,
     }
     setWorkspaces((prev) => [optimisticWorkspace, ...prev])
     setError(null)

@@ -5,9 +5,10 @@ import { supabase } from '@/lib/supabase'
 import type { WorkspaceLink } from '@/lib/types'
 import { domainOf, resolveFaviconPath } from './favicon'
 import { detectLinkKind } from './kinds'
+import { normalizeUrl } from '@/lib/utils/url'
 
 export type WorkspaceLinkPatch = Partial<
-  Pick<WorkspaceLink, 'title' | 'kind' | 'citation' | 'doi' | 'meta_label'>
+  Pick<WorkspaceLink, 'title' | 'kind' | 'citation' | 'doi' | 'meta_label' | 'completed_at' | 'week'>
 >
 
 export interface UseWorkspaceLinksResult {
@@ -15,24 +16,11 @@ export interface UseWorkspaceLinksResult {
   loading: boolean
   error: string | null
   refresh: () => void
-  addLink: (rawUrl: string) => Promise<WorkspaceLink | null>
+  /** With a `week`, the link is added as a weekly reading. */
+  addLink: (rawUrl: string, options?: { week?: number | null }) => Promise<WorkspaceLink | null>
   updateLink: (id: string, patch: WorkspaceLinkPatch) => Promise<void>
   deleteLink: (id: string) => Promise<void>
   reorderLinks: (orderedIds: string[]) => Promise<void>
-}
-
-function normalizeUrl(rawUrl: string): string | null {
-  const trimmed = rawUrl.trim()
-  if (!trimmed) return null
-  try {
-    return new URL(trimmed).toString()
-  } catch {
-    try {
-      return new URL(`https://${trimmed}`).toString()
-    } catch {
-      return null
-    }
-  }
 }
 
 // Links for one workspace's grid. addLink() is the single entry point for
@@ -64,8 +52,9 @@ export function useWorkspaceLinks(workspaceId: string): UseWorkspaceLinksResult 
   }, [refresh])
 
   const addLink = useCallback(
-    async (rawUrl: string) => {
+    async (rawUrl: string, options?: { week?: number | null }) => {
       const url = normalizeUrl(rawUrl)
+      const week = options?.week ?? null
       if (!url) {
         setError('Not a valid URL')
         return null
@@ -86,6 +75,8 @@ export function useWorkspaceLinks(workspaceId: string): UseWorkspaceLinksResult 
         citation: null,
         doi: null,
         meta_label: null,
+        completed_at: null,
+        week,
         created_at: new Date().toISOString(),
       }
       setLinks((prev) => [...prev, optimisticLink])
@@ -93,7 +84,9 @@ export function useWorkspaceLinks(workspaceId: string): UseWorkspaceLinksResult 
 
       const { data, error: insertError } = await supabase
         .from('workspace_links')
-        .insert({ workspace_id: workspaceId, title, url, position, kind })
+        // week only when set, so adding a plain source never depends on
+        // the readings migration having been applied.
+        .insert({ workspace_id: workspaceId, title, url, position, kind, ...(week !== null ? { week } : {}) })
         .select()
         .single()
 
@@ -170,21 +163,23 @@ export function useWorkspaceLinks(workspaceId: string): UseWorkspaceLinksResult 
     [links]
   )
 
+  // Renumbers the given links 0..n. Sources and readings are reordered
+  // separately, so links not in `orderedIds` are kept as they are.
   const reorderLinks = useCallback(
     async (orderedIds: string[]) => {
       const previous = links
-      const reordered = orderedIds
-        .map((id, index) => {
-          const link = links.find((l) => l.id === id)
-          return link ? { ...link, position: index } : null
-        })
-        .filter((l): l is WorkspaceLink => l !== null)
+      const order = new Map(orderedIds.map((id, index) => [id, index]))
+      const moved = links
+        .filter((l) => order.has(l.id))
+        .map((l) => ({ ...l, position: order.get(l.id) as number }))
+      const movedById = new Map(moved.map((l) => [l.id, l]))
+      const next = links.map((l) => movedById.get(l.id) ?? l).sort((a, b) => a.position - b.position)
 
-      setLinks(reordered)
+      setLinks(next)
       setError(null)
 
       const results = await Promise.all(
-        reordered.map((l) => supabase.from('workspace_links').update({ position: l.position }).eq('id', l.id))
+        moved.map((l) => supabase.from('workspace_links').update({ position: l.position }).eq('id', l.id))
       )
       const failed = results.find((r) => r.error)
       if (failed?.error) {

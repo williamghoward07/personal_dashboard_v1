@@ -21,7 +21,7 @@ export default function TodoLinkAttachPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const available = useMemo(
-    () => links.filter((l) => !alreadyAttachedLinkIds.includes(l.id)),
+    () => links.filter((l) => !l.completed_at && !alreadyAttachedLinkIds.includes(l.id)),
     [links, alreadyAttachedLinkIds]
   )
 

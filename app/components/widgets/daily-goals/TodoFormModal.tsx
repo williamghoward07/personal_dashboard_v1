@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Star } from 'lucide-react'
 import Modal from '../../Modal'
 import { useTodoLists } from '@/lib/todos/use-todo-lists'
+import { useWorkspaceLookup } from '@/lib/workspaces/use-workspace-lookup'
 import type { Todo } from '@/lib/types'
 
 export interface TodoFormValues {
@@ -11,6 +13,8 @@ export interface TodoFormValues {
   due_time: string | null
   notes: string | null
   list_id: string | null
+  workspace_id: string | null
+  starred: boolean
 }
 
 const EMPTY: TodoFormValues = {
@@ -19,12 +23,18 @@ const EMPTY: TodoFormValues = {
   due_time: '',
   notes: '',
   list_id: null,
+  workspace_id: null,
+  starred: false,
 }
 
 const inputClass =
   'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-primary-container'
 const labelClass = 'flex flex-col gap-1 text-xs text-on-surface-variant'
 
+// The one todo editor, used everywhere a todo can be edited: the Todos
+// page, the home checklist, a workspace's next actions and Education notes
+// documents. Saving goes through each caller's hook, which pushes the
+// change to Microsoft To Do (title, notes, date, reminder time, list, star).
 export default function TodoFormModal({
   isOpen,
   heading,
@@ -40,6 +50,16 @@ export default function TodoFormModal({
 }) {
   const [values, setValues] = useState<TodoFormValues>(EMPTY)
   const { lists } = useTodoLists()
+  const workspaceLookup = useWorkspaceLookup()
+  // Archived workspaces are hidden from the picker unless the todo is
+  // already filed under one.
+  const workspaceOptions = useMemo(
+    () =>
+      [...workspaceLookup.values()]
+        .filter((w) => !w.archived || w.id === values.workspace_id)
+        .sort((a, b) => a.title.localeCompare(b.title)),
+    [workspaceLookup, values.workspace_id]
+  )
 
   useEffect(() => {
     if (isOpen) {
@@ -49,6 +69,8 @@ export default function TodoFormModal({
         due_time: initialValues?.due_time ?? '',
         notes: initialValues?.notes ?? '',
         list_id: initialValues?.list_id ?? null,
+        workspace_id: initialValues?.workspace_id ?? null,
+        starred: initialValues?.starred ?? false,
       })
     }
   }, [isOpen, initialValues])
@@ -67,11 +89,25 @@ export default function TodoFormModal({
             due_time: values.due_date ? values.due_time || null : null,
             notes: values.notes || null,
             list_id: values.list_id,
+            workspace_id: values.workspace_id,
+            starred: values.starred,
           })
         }}
         className="flex flex-col gap-3"
       >
-        <h2 className="font-display text-sm font-semibold text-on-surface">{heading}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-display text-sm font-semibold text-on-surface">{heading}</h2>
+          <button
+            type="button"
+            onClick={() => setValues((v) => ({ ...v, starred: !v.starred }))}
+            aria-pressed={values.starred}
+            aria-label={values.starred ? 'Unstar' : 'Star'}
+            title={values.starred ? 'Starred (Important in To Do)' : 'Star (Important in To Do)'}
+            className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+          >
+            <Star className={`h-4 w-4 ${values.starred ? 'fill-people-amber text-people-amber' : ''}`} />
+          </button>
+        </div>
 
         <label className={labelClass}>
           Title
@@ -95,7 +131,7 @@ export default function TodoFormModal({
           </label>
 
           <label className={labelClass}>
-            Time
+            Time (reminder)
             <input
               type="time"
               value={values.due_time ?? ''}
@@ -117,6 +153,23 @@ export default function TodoFormModal({
             {lists.map((list) => (
               <option key={list.id} value={list.id}>
                 {list.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className={labelClass}>
+          Workspace
+          <select
+            value={values.workspace_id ?? ''}
+            onChange={(e) => setValues((v) => ({ ...v, workspace_id: e.target.value || null }))}
+            className={inputClass}
+          >
+            <option value="">No workspace</option>
+            {workspaceOptions.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.title}
+                {w.archived ? ' (archived)' : ''}
               </option>
             ))}
           </select>

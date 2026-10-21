@@ -1,0 +1,26 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "study copilot",
+      "intents": [
+        { "name": "AMAZON.CancelIntent", "samples": [] },
+        { "name": "AMAZON.HelpIntent", "samples": [] },
+        { "name": "AMAZON.StopIntent", "samples": [] },
+        {
+          "name": "RemindIntent",
+          "slots": [
+            { "name": "date", "type": "AMAZON.DATE" },
+            { "name": "time", "type": "AMAZON.TIME" },
+            { "name": "task", "type": "AMAZON.SearchQuery" }
+          ],
+          "samples": [
+            "remind me {date} at {time} to {task}",
+            "remind me on {date} at {time} to {task}",
+            "remind me at {time} {date} to {task}",
+            "remind me at {time} on {date} to {task}"
+          ]
+        }
+      ]
+    }
+  }
+}

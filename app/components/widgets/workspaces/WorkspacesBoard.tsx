@@ -8,6 +8,7 @@ import {
   ArchiveRestore,
   ChevronDown,
   ChevronRight,
+  Clock,
   Folder,
   FolderKanban,
   FolderPlus,
@@ -34,6 +35,10 @@ import type { Accent } from '@/lib/theme'
 import type { Workspace, WorkspaceFolder } from '@/lib/types'
 import { useWorkspaces } from '@/lib/workspaces/use-workspaces'
 import { useWorkspaceFolders } from '@/lib/workspaces/use-workspace-folders'
+import { useStudyProgress } from '@/lib/workspaces/use-study-progress'
+import type { StudyProgress } from '@/lib/workspaces/study-progress'
+import { formatMinutes } from '@/lib/workspaces/time'
+import { ReadingBar } from './ReadingsSection'
 import {
   childFolders,
   descendantIds,
@@ -84,6 +89,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
     updateFolder,
     deleteFolder,
   } = useWorkspaceFolders()
+  const studyProgress = useStudyProgress()
 
   const [title, setTitle] = useState('')
   const [showArchived, setShowArchived] = useState(false)
@@ -299,6 +305,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
                       workspace={w}
                       folders={folders}
                       accent={accentOf(w)}
+                      study={studyProgress.get(w.id)}
                       onChange={(patch) => updateWorkspace(w.id, patch)}
                       onArchive={() => archiveWorkspace(w.id)}
                     />
@@ -433,6 +440,7 @@ function WorkspaceCard({
   workspace,
   folders,
   accent,
+  study,
   onChange,
   onArchive,
   onUnarchive,
@@ -440,12 +448,17 @@ function WorkspaceCard({
   workspace: Workspace
   folders: WorkspaceFolder[]
   accent: Accent
+  study?: StudyProgress
   onChange: (patch: { color?: string | null; folder_id?: string | null }) => void
   onArchive?: () => void
   onUnarchive?: () => void
 }) {
   const isArchived = !!workspace.archived_at
   const [menuOpen, setMenuOpen] = useState(false)
+  // Study modules (Readings / Study time switched on) show their progress.
+  const hidden = workspace.hidden_sections ?? []
+  const showReadings = !hidden.includes('readings')
+  const showTime = !hidden.includes('time')
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `ws:${workspace.id}`,
     data: { type: 'workspace', id: workspace.id },
@@ -494,6 +507,26 @@ function WorkspaceCard({
             onOpenChange={setMenuOpen}
           />
         </div>
+
+        {(showReadings || showTime) && !isArchived && (
+          <div className="flex flex-col gap-1.5 pt-1">
+            {showReadings && (
+              <div className="flex items-center gap-2">
+                <ReadingBar percent={study?.readings.percent ?? 0} className="h-1.5 flex-1" />
+                <span className="shrink-0 text-[11px] tabular-nums text-on-surface-variant">
+                  {study?.readings.done ?? 0}/{study?.readings.total ?? 0} read
+                </span>
+              </div>
+            )}
+            {showTime && (
+              <span className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
+                <Clock className="h-3 w-3 text-ws-accent" strokeWidth={1.75} aria-hidden />
+                <span className="tabular-nums text-on-surface">{formatMinutes(study?.minutesThisWeek ?? 0)}</span>
+                this week
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="mt-auto flex items-center justify-between gap-2 pt-1">
           <StatusBadge accent={isArchived ? 'neutral' : 'ws'} size="sm">

@@ -1,6 +1,6 @@
 'use client'
 
-import { GripVertical, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
+import { Archive, GripVertical, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import type { QuickLink } from '@/lib/types'
 import { onActivateKey } from '@/lib/utils/a11y'
@@ -15,6 +15,7 @@ export default function LinkTile({
   isPinned,
   onEdit,
   onDelete,
+  onArchive,
   onTogglePin,
 }: {
   link: QuickLink
@@ -25,6 +26,7 @@ export default function LinkTile({
   isPinned: boolean
   onEdit: () => void
   onDelete: () => void
+  onArchive: () => void
   onTogglePin: () => void
 }) {
   // Dragging starts from the grip only — the row itself opens the link.
@@ -93,6 +95,18 @@ export default function LinkTile({
           className="rounded p-1 text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
         >
           <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onArchive()
+          }}
+          aria-label={`Archive ${link.title}`}
+          title="Archive"
+          className="rounded p-1 text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface"
+        >
+          <Archive className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"

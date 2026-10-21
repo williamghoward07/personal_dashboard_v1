@@ -16,6 +16,7 @@ function todo(overrides: Partial<Todo> = {}): Todo {
     caldav_uid: null,
     mstodo_task_id: null,
     mstodo_list_id: null,
+    mstodo_checklist_item_id: null,
     starred: false,
     list_id: null,
     parent_id: null,

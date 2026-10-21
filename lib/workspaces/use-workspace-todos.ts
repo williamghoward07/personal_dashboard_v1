@@ -4,7 +4,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Todo } from '@/lib/types'
 import type { TodoSyncChanges } from '@/lib/microsoft/todo-mapping'
-import { pushTodoChange, pushTodoDelete, syncWarning } from '@/lib/todos/sync-client'
+import {
+  isOptimisticId,
+  pushTodoChange,
+  pushTodoCreate,
+  pushTodoDelete,
+  syncWarning,
+} from '@/lib/todos/sync-client'
+import { syncedChanges, type TodoPatch, type TodoSyncIds } from '@/lib/todos/patch'
 
 export interface UseWorkspaceTodosResult {
   todos: Todo[]
@@ -16,6 +23,7 @@ export interface UseWorkspaceTodosResult {
   detachTodo: (id: string) => Promise<void>
   toggleTodo: (id: string) => Promise<void>
   toggleStar: (id: string) => Promise<void>
+  updateTodo: (id: string, patch: TodoPatch) => Promise<void>
   deleteTodo: (id: string) => Promise<void>
 }
 
@@ -50,6 +58,11 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
     refresh()
   }, [refresh])
 
+  const mergeIds = useCallback((id: string, ids: TodoSyncIds | null | undefined) => {
+    if (!ids) return
+    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, ...ids } : t)))
+  }, [])
+
   const addTodo = useCallback(
     async (title: string) => {
       const trimmed = title.trim()
@@ -67,6 +80,7 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
         caldav_uid: null,
         mstodo_task_id: null,
         mstodo_list_id: null,
+        mstodo_checklist_item_id: null,
         starred: false,
         list_id: null,
         parent_id: null,
@@ -89,8 +103,9 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
       }
 
       setTodos((prev) => prev.map((t) => (t.id === optimisticId ? (data as Todo) : t)))
+      void pushTodoCreate(data.id).then((outcome) => mergeIds(data.id, outcome.ids))
     },
-    [workspaceId]
+    [workspaceId, mergeIds]
   )
 
   const attachTodos = useCallback(
@@ -155,12 +170,13 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
         return
       }
 
-      if (target.mstodo_task_id) {
-        const pushError = await pushTodoChange(id, changes)
-        if (pushError) setError(syncWarning(pushError))
+      if (Object.keys(changes).length > 0 && !isOptimisticId(id)) {
+        const outcome = await pushTodoChange(id, changes)
+        if (outcome.error) setError(syncWarning(outcome.error))
+        mergeIds(id, outcome.ids)
       }
     },
-    [todos]
+    [todos, mergeIds]
   )
 
   const toggleTodo = useCallback(
@@ -182,6 +198,17 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
     [todos, patchAndPush]
   )
 
+  // A todo moved to another workspace (or none) leaves this list.
+  const updateTodo = useCallback(
+    async (id: string, patch: TodoPatch) => {
+      await patchAndPush(id, patch, syncedChanges(patch))
+      if (patch.workspace_id !== undefined && patch.workspace_id !== workspaceId) {
+        setTodos((prev) => prev.filter((t) => t.id !== id))
+      }
+    },
+    [patchAndPush, workspaceId]
+  )
+
   const deleteTodo = useCallback(
     async (id: string) => {
       const index = todos.findIndex((t) => t.id === id)
@@ -190,7 +217,7 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
 
       // Same rule as the Todos page: delete the To Do task first, or the
       // next pull would bring the todo back.
-      if (target.mstodo_task_id) {
+      if (!isOptimisticId(id)) {
         const pushError = await pushTodoDelete(id)
         if (pushError) {
           setError(`Not deleted — Microsoft To Do: ${pushError}`)
@@ -215,5 +242,17 @@ export function useWorkspaceTodos(workspaceId: string): UseWorkspaceTodosResult 
     [todos]
   )
 
-  return { todos, loading, error, refresh, addTodo, attachTodos, detachTodo, toggleTodo, toggleStar, deleteTodo }
+  return {
+    todos,
+    loading,
+    error,
+    refresh,
+    addTodo,
+    attachTodos,
+    detachTodo,
+    toggleTodo,
+    toggleStar,
+    updateTodo,
+    deleteTodo,
+  }
 }

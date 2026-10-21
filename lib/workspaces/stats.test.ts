@@ -14,6 +14,7 @@ function todo(overrides: Partial<Todo> = {}): Todo {
     caldav_uid: null,
     mstodo_task_id: null,
     mstodo_list_id: null,
+    mstodo_checklist_item_id: null,
     starred: false,
     list_id: null,
     parent_id: null,
@@ -35,6 +36,8 @@ function link(overrides: Partial<WorkspaceLink> = {}): WorkspaceLink {
     citation: null,
     doi: null,
     meta_label: null,
+    completed_at: null,
+    week: null,
     created_at: '2026-08-01T00:00:00.000Z',
     ...overrides,
   }
@@ -83,6 +86,14 @@ describe('sourceFootprint', () => {
     expect(sourceFootprint(links).percent).toBe(50)
 
     expect(sourceFootprint([link({ kind: 'other' })]).percent).toBe(0)
+  })
+
+  it('ignores completed sources', () => {
+    const links = [
+      link({ kind: 'paper' }),
+      link({ kind: 'paper', completed_at: '2026-09-01T00:00:00.000Z' }),
+    ]
+    expect(sourceFootprint(links).breakdown).toBe('1 paper')
   })
 })
 

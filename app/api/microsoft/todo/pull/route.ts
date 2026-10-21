@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { listTasks, listTodoLists } from '@/lib/microsoft/todo'
+import { GraphApiError } from '@/lib/microsoft/graph'
+import { listTasks, listTasksWithSteps, listTodoLists } from '@/lib/microsoft/todo'
+import { linkUnsyncedTodos } from '@/lib/microsoft/todo-sync'
 import { friendlyGraphError, getTodoConnection, isAuthFailure } from '@/lib/microsoft/todo-connection'
 import {
   appListIdFor,
@@ -18,9 +20,13 @@ const UPSERT_CHUNK = 200
 
 // Pull: Microsoft To Do is the source of truth for every todo linked by
 // mstodo_task_id (title, notes, due date + reminder time, completion,
-// importance -> starred, list). App-created todos are never touched.
-// Edits made in the app are pushed straight away (../push), so a pull
-// only ever brings the app up to date with the phone.
+// importance -> starred, list, steps -> subtasks). Edits made in the app
+// are pushed straight away (../push), so a pull only ever brings the app
+// up to date with the phone.
+//
+// Before pulling, open todos that aren't in To Do yet are created there
+// (lib/microsoft/todo-sync.ts linkUnsyncedTodos): the backfill of older
+// app-only todos, and the retry for any create that failed.
 //
 // Each To Do list maps to the app list with the same name (created if
 // missing); the default "Tasks" list maps to no list. A task deleted in
@@ -42,11 +48,31 @@ export async function POST() {
   const recordError = (message: string) =>
     supabase.from('integrations').update({ last_error: message }).eq('id', connection.integrationId)
 
+  let pushed = { linked: 0, failed: 0 }
+  try {
+    pushed = await linkUnsyncedTodos(supabase, connection.accessToken)
+  } catch (error) {
+    // Never block the pull on the backfill; it retries next time.
+    console.error('To Do backfill failed:', error)
+  }
+
   let lists: Awaited<ReturnType<typeof listTodoLists>>
   let tasksByList: GraphTodoTask[][]
   try {
     lists = syncableLists(await listTodoLists(connection.accessToken))
-    tasksByList = await Promise.all(lists.map((list) => listTasks(connection.accessToken, list.id)))
+    tasksByList = await Promise.all(
+      lists.map(async (list) => {
+        try {
+          return await listTasksWithSteps(connection.accessToken, list.id)
+        } catch (error) {
+          // If $expand is ever rejected (as $select is on /tasks), fall
+          // back to tasks without steps: rows then carry steps: null and
+          // the RPC leaves subtasks alone.
+          if (!(error instanceof GraphApiError && error.status === 400)) throw error
+          return listTasks(connection.accessToken, list.id)
+        }
+      })
+    )
   } catch (error) {
     const message = friendlyGraphError(error)
     await recordError(message)
@@ -109,5 +135,12 @@ export async function POST() {
     .update({ last_synced_at: now, last_error: null })
     .eq('id', connection.integrationId)
 
-  return NextResponse.json({ state: 'ok', pulled: rows.length, removed: staleIds.length, syncedAt: now })
+  return NextResponse.json({
+    state: 'ok',
+    pulled: rows.length,
+    removed: staleIds.length,
+    pushed: pushed.linked,
+    pushFailed: pushed.failed,
+    syncedAt: now,
+  })
 }

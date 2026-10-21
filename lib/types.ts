@@ -152,15 +152,18 @@ export interface Todo {
   // Legacy Apple Reminders (CalDAV) link — that sync was removed (iCloud
   // never served upgraded reminders); the column remains, always null.
   caldav_uid: string | null
-  // Set for a todo pulled from Microsoft To Do — null for everything
-  // created directly in the app. See app/api/microsoft/todo/pull.
+  // The linked Microsoft To Do task. Every top-level todo is created in To
+  // Do too (lib/microsoft/todo-sync.ts); null until that succeeds (the next
+  // pull retries) or when Microsoft isn't connected.
   mstodo_task_id: string | null
   mstodo_list_id: string | null
+  // A subtask's linked To Do "step" (checklist item on the parent's task).
+  mstodo_checklist_item_id: string | null
   // Syncs with To Do's "important" flag for linked todos.
   starred: boolean
   list_id: string | null
-  // Self-referencing, single-level only — a To Do-linked todo can never
-  // be a parent or a child (enforced by a DB trigger, not just app code).
+  // Self-referencing, single-level only (DB trigger). Subtasks sync as To
+  // Do steps, so a To Do task is never itself a subtask.
   parent_id: string | null
   // Set when this todo is attached to a specific Education notes document
   // (see NotesDocument) — independent of list_id, a todo can carry both.
@@ -422,6 +425,8 @@ export interface LinkFolder {
   name: string
   color: string
   sort_order: number
+  /** Archived folders (and the links in them) only show under "Archived". */
+  archived_at: string | null
   created_at: string
 }
 
@@ -438,6 +443,7 @@ export interface QuickLink {
   is_pinned: boolean
   sort_order: number
   last_opened_at: string | null
+  archived_at: string | null
   created_at: string
 }
 
@@ -457,7 +463,9 @@ export type WorkspaceLinkKind = 'paper' | 'data' | 'doc' | 'other'
 export type WorkspaceNoteKind = 'realization' | 'discarded' | 'argument' | 'meeting' | 'note'
 // The workspace page's sections, as stored in hidden_sections /
 // collapsed_sections (DB check constraint uses the same four keys).
-export type WorkspaceSectionKey = 'stats' | 'sources' | 'actions' | 'log'
+// 'readings' and 'time' are for study-module workspaces and start hidden
+// (see 20261009020000_workspace_readings_and_time.sql).
+export type WorkspaceSectionKey = 'stats' | 'sources' | 'readings' | 'actions' | 'log' | 'time'
 
 export interface Workspace {
   id: string
@@ -472,6 +480,8 @@ export interface Workspace {
   color: string | null
   hidden_sections: WorkspaceSectionKey[]
   collapsed_sections: WorkspaceSectionKey[]
+  // Optional goal for the Study time card's ring; null = compare with last week.
+  weekly_minutes_target: number | null
 }
 
 export interface WorkspaceFolder {
@@ -497,6 +507,23 @@ export interface WorkspaceLink {
   doi: string | null
   // Display-only free text ("4.2 MB", "3,410 words") — never parsed.
   meta_label: string | null
+  // Ticked off like a todo; null = still open. Done sources live in a
+  // collapsed "Completed" sublist and are skipped by Launch set.
+  completed_at: string | null
+  // Set = a weekly reading (shown in Readings, grouped by week); null = a
+  // source. See lib/workspaces/readings.ts.
+  week: number | null
+  created_at: string
+}
+
+/** One logged block of study time on a workspace (e.g. from Opal). */
+export interface WorkspaceTimeLog {
+  id: string
+  workspace_id: string
+  // Europe/London calendar day, 'YYYY-MM-DD'.
+  day: string
+  minutes: number
+  note: string | null
   created_at: string
 }
 

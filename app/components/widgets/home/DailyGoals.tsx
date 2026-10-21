@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Target, Plus } from 'lucide-react'
+import { Pencil, Target, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { DailyGoalHabit, DailyGoalHabitCompletion, EducationTask, FollowUp } from '@/lib/types'
 import { londonDayBoundsUTC, londonWeekBoundsUTC } from '@/lib/google/london-day'
@@ -10,6 +10,8 @@ import { computeHabitSchedule, computeDailyGoalsRollup } from '@/lib/daily-goals
 import { capChecklist, selectChecklistTodos } from '@/lib/daily-goals/checklist'
 import { useTodos } from '@/lib/daily-goals/use-todos'
 import { HOME_PULL_INTERVAL_MS, TODO_CONNECT_HREF, pullIsDue } from '@/lib/todos/sync-client'
+import { formatDue } from '@/lib/todos/format'
+import { changedFields } from '@/lib/todos/patch'
 import { useHabitsVersion } from '@/lib/habits/events'
 import { useWorkspaceLookup } from '@/lib/workspaces/use-workspace-lookup'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
@@ -19,6 +21,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import StarButton from '../daily-goals/StarButton'
 import WorkspaceChip from '../workspaces/WorkspaceChip'
+import TodoFormModal from '../daily-goals/TodoFormModal'
+import type { Todo } from '@/lib/types'
 
 interface DomainData {
   educationTasksDueToday: EducationTask[]
@@ -41,9 +45,11 @@ export default function DailyGoals() {
     addTodo,
     toggleTodo,
     toggleStar,
+    updateTodo,
     syncTodos,
     syncStatus,
   } = useTodos(todayDateKey)
+  const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const workspaces = useWorkspaceLookup()
   const habitsVersion = useHabitsVersion()
 
@@ -231,6 +237,11 @@ export default function DailyGoals() {
                 const completed = todo.completed_at !== null
                 const inputId = `daily-goals-todo-${todo.id}`
                 const workspace = todo.workspace_id ? workspaces.get(todo.workspace_id) : undefined
+                // Everything here is about today, so "Today" alone is noise —
+                // but a reminder time, another day or overdue always shows.
+                const dueLabel = formatDue(todo, todayDateKey)
+                const due =
+                  dueLabel && (todo.due_time || dueLabel.overdue || todo.due_date !== todayDateKey) ? dueLabel : null
                 return (
                   <li key={todo.id} className="group flex min-h-7 items-center gap-2">
                     <input
@@ -249,9 +260,24 @@ export default function DailyGoals() {
                       {todo.title}
                     </label>
                     {workspace && <WorkspaceChip workspace={workspace} />}
-                    {todo.overdue && !completed && (
-                      <span className="shrink-0 text-xs font-medium text-academic-orange">Overdue</span>
+                    {due && (
+                      <span
+                        className={`shrink-0 text-xs font-medium tabular-nums ${
+                          due.overdue ? 'text-academic-orange' : 'text-on-surface-variant'
+                        }`}
+                      >
+                        {due.label}
+                      </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setEditingTodo(todo)}
+                      aria-label={`Edit ${todo.title}`}
+                      title="Edit"
+                      className="shrink-0 rounded p-1.5 text-on-surface-variant opacity-0 transition-opacity hover:bg-surface-container-high hover:text-on-surface focus-visible:opacity-100 group-hover:opacity-100"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
                     <StarButton starred={todo.starred} title={todo.title} onToggle={() => handleStar(todo.id)} />
                   </li>
                 )
@@ -302,6 +328,18 @@ export default function DailyGoals() {
           </form>
         </div>
       </GlassCardContent>
+
+      <TodoFormModal
+        isOpen={editingTodo !== null}
+        heading="Edit todo"
+        initialValues={editingTodo}
+        onClose={() => setEditingTodo(null)}
+        onSave={(values) => {
+          if (!editingTodo) return
+          updateTodo(editingTodo.id, changedFields(editingTodo, values))
+          setEditingTodo(null)
+        }}
+      />
     </ModuleGlassCard>
   )
 }

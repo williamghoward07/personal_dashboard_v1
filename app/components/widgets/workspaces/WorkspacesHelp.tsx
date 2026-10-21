@@ -44,17 +44,41 @@ export default function WorkspacesHelp({ align = 'start' }: { align?: 'start' | 
             + Task.
           </p>
           <p>
-            <span className="text-on-surface">Launch set</span> opens every source in its own tab. Browsers usually
+            Tick a source to finish it, like a todo. It greys out for a few seconds, then moves into the Completed list
+            under the sources (collapsed — click the arrow to see it). Untick it there to bring it back.
+          </p>
+          <p>
+            <span className="text-on-surface">Launch set</span> opens every unfinished source in its own tab. Browsers usually
             block all but the first tab — if that happens you&apos;ll get an Open next button, and you can allow pop-ups
             for this site (the blocked pop-up icon in the address bar) so the whole set opens in one click next time.
+          </p>
+        </Section>
+
+        <Section title="Uni modules: weekly readings & study time">
+          <p>
+            For a module, turn on <span className="text-on-surface">Weekly readings</span> and{' '}
+            <span className="text-on-surface">Study time</span> in Layout (they start hidden, so other workspaces stay
+            as they are). Put all your modules in one folder — e.g. Year 1 modules — and the folder shows each
+            module&apos;s readings bar and hours this week side by side.
+          </p>
+          <p>
+            Readings: paste a link or PDF URL and pick its week. They&apos;re grouped Week 1, Week 2… with a progress
+            bar on top and a count per week; tick one off when you&apos;ve read it (it stays in its week). Any source
+            can be moved into a week — or back to Sources — with its Week… control.
+          </p>
+          <p>
+            Study time: Log time on the Study time card. Tap a 15-minute block (15m, 30m, 45m, 1h…) or type the exact
+            time (50, 1:35, 1h35) — handy for copying sessions over from Opal. Pick an earlier day if you&apos;re catching
+            up. This week&apos;s entries can be edited or deleted there, and an optional weekly target fills the ring.
           </p>
         </Section>
 
         <Section title="Next actions">
           <p>
             These are ordinary todos filed under this workspace. They also appear on the Todos page and — when dated —
-            in Daily Goals, tagged with the workspace name. Attach an existing todo, link actions to sources, or remove
-            one from the workspace without deleting it.
+            in Daily Goals, tagged with the workspace name, and they sync to Microsoft To Do like every todo. Edit one
+            with its pencil (date, reminder time, workspace…), attach an existing todo, link actions to sources, or
+            remove one from the workspace without deleting it.
           </p>
         </Section>
 
@@ -76,8 +100,8 @@ export default function WorkspacesHelp({ align = 'start' }: { align?: 'start' | 
 
         <Section title="Stats, sessions & archive">
           <p>
-            The rings summarise progress: actions done, sources with a type, actions linked to a source, and log
-            entries from the last 7 days. Each visit counts as a session. Archive a workspace when it&apos;s finished;
+            The rings summarise progress: study time this week (when Study time is on), actions done, sources with a
+            type, actions linked to a source, and log entries from the last 7 days. Each visit counts as a session. Archive a workspace when it&apos;s finished;
             Export Markdown bundle (at the bottom) saves the whole workspace — hidden sections included — as one
             file.
           </p>

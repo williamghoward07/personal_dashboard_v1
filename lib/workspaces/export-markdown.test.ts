@@ -13,6 +13,7 @@ function workspace(overrides: Partial<Workspace> = {}): Workspace {
     color: null,
     hidden_sections: [],
     collapsed_sections: [],
+    weekly_minutes_target: null,
     ...overrides,
   }
 }
@@ -29,6 +30,8 @@ function link(overrides: Partial<WorkspaceLink> = {}): WorkspaceLink {
     citation: null,
     doi: null,
     meta_label: null,
+    completed_at: null,
+    week: null,
     created_at: '2026-08-02T00:00:00.000Z',
     ...overrides,
   }
@@ -46,6 +49,7 @@ function todo(overrides: Partial<Todo> = {}): Todo {
     caldav_uid: null,
     mstodo_task_id: null,
     mstodo_list_id: null,
+    mstodo_checklist_item_id: null,
     starred: false,
     list_id: null,
     parent_id: null,
@@ -115,6 +119,26 @@ describe('buildWorkspaceMarkdown', () => {
     expect(md).toContain('DOI: 10.1038/x')
   })
 
+  it('lists completed sources under a Completed subheading after the open ones', () => {
+    const md = buildWorkspaceMarkdown({
+      workspace: workspace(),
+      ...empty,
+      links: [
+        link({ title: 'Done Paper', completed_at: '2026-09-01T00:00:00.000Z' }),
+        link({ title: 'Open Paper' }),
+      ],
+    })
+    expect(md).toContain('## Sources (2)')
+    expect(md).toContain('### Completed (1)')
+    expect(md.indexOf('Open Paper')).toBeLessThan(md.indexOf('### Completed'))
+    expect(md.indexOf('### Completed')).toBeLessThan(md.indexOf('Done Paper'))
+  })
+
+  it('omits the Completed subheading when no source is done', () => {
+    const md = buildWorkspaceMarkdown({ workspace: workspace(), ...empty, links: [link()] })
+    expect(md).not.toContain('### Completed')
+  })
+
   it('omits citation and DOI lines when unset', () => {
     const md = buildWorkspaceMarkdown({ workspace: workspace(), ...empty, links: [link()] })
     expect(md).not.toContain('Citation:')
@@ -177,6 +201,36 @@ describe('buildWorkspaceMarkdown', () => {
       notes: [note({ tags: ['pricing', 'logo'] })],
     })
     expect(md).toContain('Tags: #pricing #logo')
+  })
+
+  it('lists weekly readings by week with ticks, and keeps them out of Sources', () => {
+    const md = buildWorkspaceMarkdown({
+      workspace: workspace(),
+      ...empty,
+      links: [
+        link({ title: 'Source A', week: null }),
+        link({ title: 'Reading 2', week: 2, completed_at: '2026-10-01T00:00:00.000Z' }),
+        link({ title: 'Reading 1', week: 1 }),
+      ],
+    })
+    expect(md).toContain('## Sources (1)')
+    expect(md).toContain('## Weekly readings (1/2 read)')
+    expect(md.indexOf('### Week 1 (0/1)')).toBeLessThan(md.indexOf('### Week 2 (1/1)'))
+    expect(md).toContain('- [x] **Reading 2**')
+    expect(md).toContain('- [ ] **Reading 1**')
+  })
+
+  it('totals logged study time', () => {
+    const md = buildWorkspaceMarkdown({
+      workspace: workspace(),
+      ...empty,
+      timeLogs: [
+        { id: 't1', workspace_id: 'ws-1', day: '2026-10-06', minutes: 45, note: 'Opal', created_at: '' },
+        { id: 't2', workspace_id: 'ws-1', day: '2026-10-05', minutes: 30, note: null, created_at: '' },
+      ],
+    })
+    expect(md).toContain('## Study time (1h 15m total)')
+    expect(md.indexOf('2026-10-05 — 30m')).toBeLessThan(md.indexOf('2026-10-06 — 45m · Opal'))
   })
 })
 

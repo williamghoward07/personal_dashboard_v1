@@ -21,9 +21,13 @@ create table if not exists public.notes_documents (
 );
 
 alter table public.notes_documents enable row level security;
+drop policy if exists "Select own notes_documents" on public.notes_documents;
 create policy "Select own notes_documents" on public.notes_documents for select to authenticated using (auth.uid() = user_id);
+drop policy if exists "Insert own notes_documents" on public.notes_documents;
 create policy "Insert own notes_documents" on public.notes_documents for insert to authenticated with check (auth.uid() = user_id);
+drop policy if exists "Update own notes_documents" on public.notes_documents;
 create policy "Update own notes_documents" on public.notes_documents for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "Delete own notes_documents" on public.notes_documents;
 create policy "Delete own notes_documents" on public.notes_documents for delete to authenticated using (auth.uid() = user_id);
 revoke all on public.notes_documents from anon;
 grant select, insert, update, delete on public.notes_documents to authenticated;

@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fetchTimetable, TimetableNotConfiguredError } from '@/lib/timetable/feed'
 import { sessionsInRange } from '@/lib/timetable/ics'
-import { countReadingsBySession, withPrep } from '@/lib/timetable/session'
+import { countReadingsBySession, countTasksBySession, trackedPrep, withPrep } from '@/lib/timetable/session'
 
 // Timetable sessions in [timeMin, timeMax) (or the whole feed when both are
 // omitted), each joined with its prep state: readings (workspace_links with
-// a session_uid), notes/no-readings (lecture_sessions) and the module
-// workspace for its code. Before 20261019000000 is applied those queries
-// fail; sessions are still returned, all red.
+// a session_uid), tasks and concepts (session_tasks), notes/no-readings
+// (lecture_sessions) and the module workspace for its code. `tracked` is the
+// same prep for Google events with prep switched on; the calendar joins it
+// to the events it already has. Before the migrations are applied those
+// queries fail; sessions are still returned, all red.
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const {
@@ -35,29 +37,35 @@ export async function GET(request: NextRequest) {
 
   const sessions = timeMin && timeMax ? sessionsInRange(all, timeMin, timeMax) : all
 
-  const [linksRes, statesRes, workspacesRes] = await Promise.all([
+  const [linksRes, statesRes, tasksRes, workspacesRes] = await Promise.all([
     supabase.from('workspace_links').select('session_uid, completed_at').not('session_uid', 'is', null),
-    // The whole table: one user, a row per touched session — and a long
-    // `in (uids…)` list would overflow the request URL.
-    supabase.from('lecture_sessions').select('uid, no_readings, notes_done_at, note'),
+    // The whole tables: one user, a row per touched session — and a long
+    // `in (uids…)` list would overflow the request URL. `*` so a missing
+    // `tracked` column (20261026000000 unapplied) doesn't fail the lookup.
+    supabase.from('lecture_sessions').select('*'),
+    supabase.from('session_tasks').select('session_uid, phase, done_at'),
     supabase.from('workspaces').select('id, module_code').not('module_code', 'is', null).is('archived_at', null),
   ])
 
-  const setupNeeded = !!(linksRes.error || statesRes.error || workspacesRes.error)
-  if (setupNeeded) {
+  const failure = linksRes.error ?? statesRes.error ?? tasksRes.error ?? workspacesRes.error
+  const setupNeeded = !!failure
+  if (failure) {
     console.error(
-      '[timetable] prep lookup failed (is 20261019000000_lecture_sessions.sql applied?):',
-      linksRes.error?.message ?? statesRes.error?.message ?? workspacesRes.error?.message
+      '[timetable] prep lookup failed (are 20261019000000 and 20261026000000 applied?):',
+      failure.message
     )
   }
 
+  const states = statesRes.data ?? []
+  const tasks = countTasksBySession(tasksRes.data ?? [])
   const result = withPrep(sessions, {
     readings: countReadingsBySession(linksRes.data ?? []),
-    states: new Map((statesRes.data ?? []).map((row) => [row.uid as string, row])),
+    tasks,
+    states: new Map(states.map((row) => [row.uid as string, row])),
     workspaceByCode: new Map(
       (workspacesRes.data ?? []).map((row) => [row.module_code as string, row.id as string])
     ),
   })
 
-  return NextResponse.json({ sessions: result, setupNeeded })
+  return NextResponse.json({ sessions: result, tracked: trackedPrep(states, tasks), setupNeeded })
 }

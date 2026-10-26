@@ -242,9 +242,16 @@ export default function CalendarPageView() {
   const itemsByDate = useMemo<Map<string, DayItem[]>>(
     () =>
       fetched
-        ? groupItemsByDate(fetched.events, fetched.tasks, fetched.sessions, fetched.routineInstances, timetable.sessions)
+        ? groupItemsByDate(
+            fetched.events,
+            fetched.tasks,
+            fetched.sessions,
+            fetched.routineInstances,
+            timetable.sessions,
+            timetable.tracked
+          )
         : new Map(),
-    [fetched, timetable.sessions]
+    [fetched, timetable.sessions, timetable.tracked]
   )
 
   const goPrev = () => {

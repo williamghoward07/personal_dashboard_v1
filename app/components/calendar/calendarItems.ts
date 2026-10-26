@@ -1,8 +1,9 @@
+import type { CSSProperties } from 'react'
 import type { Task, ActivitySession, RoutineInstance } from '@/lib/types'
 import { londonDateKey } from '@/lib/google/london-day'
 import { ACCENT_BAR, ACCENT_VAR } from '@/lib/theme'
-import { PREP_ACCENT } from '@/lib/timetable/format'
-import type { SessionWithPrep } from '@/lib/timetable/session'
+import { POST_ACCENT, PREP_ACCENT } from '@/lib/timetable/format'
+import { calendarEventSession, calendarEventUid, type SessionWithPrep, type TrackedPrep } from '@/lib/timetable/session'
 
 export interface CalendarEvent {
   id: string
@@ -44,8 +45,9 @@ export type DayItem =
       instance: RoutineInstance
     }
   | {
-      // A timetable session (lecture, seminar…) from the ICS feed, coloured
-      // by its prep traffic light. Clicking one opens SessionPopover.
+      // A timetable session (lecture, seminar…) from the ICS feed, or a
+      // Google event with prep tracked, coloured by its split traffic
+      // light. Clicking one opens SessionPopover.
       kind: 'session'
       id: string
       title: string
@@ -78,14 +80,46 @@ export function dotClassFor(item: DayItem): string {
   return item.kind === 'session' ? ACCENT_BAR[PREP_ACCENT[item.session.status]] : DOT_CLASS[item.kind]
 }
 
-/** The CSS colour of a session's traffic light, for pill borders/fills. */
-export function sessionColour(session: SessionWithPrep): string {
-  return ACCENT_VAR[PREP_ACCENT[session.status]]
+/**
+ * A session pill split down the middle: prep before on the left half,
+ * follow-up after on the right, each tinted and edged in its light's colour.
+ */
+/**
+ * One border colour as its four longhands, for pills that can turn into a
+ * session pill in place (tracking a Google event). Mixing the `borderColor`
+ * shorthand with longhands on one element makes React warn.
+ */
+export function borderColors(colour: string): CSSProperties {
+  return { borderTopColor: colour, borderRightColor: colour, borderBottomColor: colour, borderLeftColor: colour }
 }
 
-/** "Lecture: Physical Geography" — short enough for a grid cell. */
+export function sessionPillStyle(session: SessionWithPrep): CSSProperties {
+  const prep = ACCENT_VAR[PREP_ACCENT[session.status]]
+  const post = ACCENT_VAR[POST_ACCENT[session.postStatus]]
+  const tint = (colour: string) => `color-mix(in srgb, ${colour} 16%, transparent)`
+  const edge = `color-mix(in srgb, ${prep} 50%, ${post})`
+  // Longhands only: React warns when a shorthand (`borderColor`,
+  // `background`) is mixed with its longhands across re-renders.
+  return {
+    backgroundImage: `linear-gradient(90deg, ${tint(prep)} 50%, ${tint(post)} 50%)`,
+    borderTopColor: edge,
+    borderBottomColor: edge,
+    borderLeftColor: prep,
+    borderRightColor: post,
+    borderLeftWidth: 3,
+    borderRightWidth: 3,
+  }
+}
+
+/** "Lecture: Physical Geography" — short enough for a grid cell. A tracked event keeps its own title. */
 export function sessionItemTitle(session: SessionWithPrep): string {
-  return `${session.type}: ${session.moduleName}`
+  return session.source === 'calendar' ? session.title : `${session.type}: ${session.moduleName}`
+}
+
+/** An untracked timed Google event as a session, to open its popover (and its "track prep" switch). */
+export function calendarItemSession(item: Extract<DayItem, { kind: 'calendar' }>): SessionWithPrep | null {
+  if (item.allDay || !item.start) return null
+  return calendarEventSession({ id: item.id, title: item.title, start: item.start, end: item.end }, null, new Date())
 }
 
 export function formatSpanEnd(endKey: string) {
@@ -145,6 +179,10 @@ function resolveEventSpan(event: CalendarEvent): { startKey: string; endKey: str
 // (see getBarSpans) and filter these per-day entries out (see
 // isBarRenderedCalendarItem) to avoid showing it twice.
 //
+// A Google event with prep tracked (`tracked`, by `gcal:` uid) becomes a
+// 'session' item instead, so it gets the traffic light — only a same-day
+// timed event; an all-day or multi-day one stays a bar.
+//
 // A scheduled routine writes both a routine_instances row AND a real Google
 // Calendar event (see app/api/routines/schedule) — Google events whose id
 // matches a routine instance's google_event_id are dropped here so the same
@@ -154,7 +192,9 @@ export function groupItemsByDate(
   tasks: Task[],
   sessions: ActivitySession[],
   routineInstances: RoutineInstance[],
-  timetable: SessionWithPrep[] = []
+  timetable: SessionWithPrep[] = [],
+  tracked: Map<string, TrackedPrep> = new Map(),
+  now: Date = new Date()
 ): Map<string, DayItem[]> {
   const byDate = new Map<string, DayItem[]>()
   const routineEventIds = new Set(routineInstances.map((i) => i.google_event_id))
@@ -169,6 +209,19 @@ export function groupItemsByDate(
     if (routineEventIds.has(event.id)) continue
 
     const { startKey, endKey } = resolveEventSpan(event)
+    const prep = !event.allDay && startKey === endKey ? tracked.get(calendarEventUid(event.id)) : undefined
+    if (prep) {
+      const session = calendarEventSession(event, prep, now)
+      push(startKey, {
+        kind: 'session',
+        id: session.uid,
+        title: sessionItemTitle(session),
+        start: session.start,
+        end: session.end,
+        session,
+      })
+      continue
+    }
     for (const key of keysBetween(startKey, endKey)) {
       const isFirstDayTimed = !event.allDay && key === startKey
       push(key, {

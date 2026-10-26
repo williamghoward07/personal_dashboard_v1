@@ -61,17 +61,31 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
 - ✅ Timetable read straight from the Durham MyTimetable ICS feed
   (`TIMETABLE_ICS_URL`, cached 1h) — not via Google, so it's fresh within
   the hour and survives the weekly Google re-auth.
-- ✅ Per session: paste reading links (Talis/Blackboard are 2FA-locked, so
-  links only — never fetched), tick them off, "no readings for this one",
-  "Notes taken" and a short note. Traffic light: red = no readings added,
-  amber = some to do, green = all done; a tick = notes taken.
-- ✅ "Next 7 days" list + one card per module code; Create workspace makes
-  the module workspace (`workspaces.module_code`), which then lives on
+- ✅ Clicking a session (on `/lectures` or in a module workspace) opens a
+  Teams-style assignment view (`/lectures/session?uid=…`): notes, readings
+  and tasks, with **Mark as done** top right (Undo once handed in). Tasks
+  with a link are readings; pasting a link adds a reading directly —
+  Talis/Blackboard are 2FA-locked, so links are never fetched.
+- ✅ Prep only turns green when marked as done, even with every reading
+  ticked. Follow-up (concepts to review, "done — nothing left to follow
+  up") only appears once handed in, and has no due date.
+- ✅ Split traffic light: left half = prep (red nothing added, amber not
+  handed in, green done), right half = follow-up (grey until handed in,
+  then amber concepts outstanding, green done, red once the session ended
+  with nothing).
+- ✅ "Assignments" card above "Next 7 days", tabbed like Teams: Upcoming
+  (not handed in, soonest first), Past due ("Due n days ago", what's left,
+  one-click Mark as done), Completed (handed in, future sessions too) and
+  History (past due + completed), the last three most recent first. Only
+  prep counts towards past due. Then one card per module code; Create workspace
+  makes the module workspace (`workspaces.module_code`), which then lives on
   `/lectures`, not `/workspaces`, and has a Lectures section.
-- ✅ The same lights on `/calendar` (month dots, week/day pills, agenda);
-  clicking a session opens an anchored popover with its prep.
-- 🚧 Needs `20261019000000_lecture_sessions.sql` applied — until then lights
-  are all red and ticks don't save.
+- ✅ The same lights on `/calendar` (month dots, week/day pills split in
+  half, agenda); clicking a session opens an anchored popover with its prep,
+  Mark as done and an "Open full view" link.
+- ✅ Any timed Google event opens the same popover with a "Normal event /
+  Track prep" switch (default normal). Tracked, it gets tasks, readings,
+  concepts and the split light (e.g. an academic advisor meeting).
 
 ### Money (`/money`)
 - ✅ Overall balance, per-account cards, transactions list.

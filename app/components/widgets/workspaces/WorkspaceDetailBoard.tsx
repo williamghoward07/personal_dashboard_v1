@@ -439,9 +439,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
         <LecturesSection
           moduleCode={moduleCode}
           links={linksApi.links}
-          addLink={linksApi.addLink}
           updateLink={linksApi.updateLink}
-          deleteLink={linksApi.deleteLink}
         />
       )}
 

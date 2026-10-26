@@ -532,8 +532,29 @@ export interface LectureSession {
   title: string
   starts_at: string | null
   notes_done_at: string | null
+  // Retired: "nothing to prepare", backfilled into prep_done_at by 20261026010000.
   no_readings: boolean
+  // Prep handed in (Mark as done). Follow-up only shows after it.
+  prep_done_at: string | null
   note: string | null
+  // Prep tracking switched on for a Google event (uid `gcal:…`). Undefined
+  // until 20261026000000 is applied; timetable sessions ignore it.
+  tracked?: boolean
+  created_at: string
+}
+
+/**
+ * A to-do attached to one session (lib/timetable/session.ts): 'prep' before
+ * it, 'post' (a concept to review) after it. A url makes it a reading.
+ */
+export interface SessionTask {
+  id: string
+  session_uid: string
+  phase: 'prep' | 'post'
+  title: string
+  url: string | null
+  done_at: string | null
+  position: number
   created_at: string
 }
 

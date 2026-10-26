@@ -3,7 +3,7 @@
 import type { CSSProperties } from 'react'
 import type { RoutineInstance } from '@/lib/types'
 import type { DayItem } from '../calendarItems'
-import { formatTime, sessionColour } from '../calendarItems'
+import { borderColors, calendarItemSession, formatTime, sessionPillStyle } from '../calendarItems'
 import { TWO_LINE_PILL_HEIGHT_PX } from './grid-math'
 import PrepLight from '../../lectures/PrepLight'
 import { useOpenSession } from '../../lectures/SessionPopover'
@@ -40,7 +40,7 @@ export default function TimeGridPill({
 }) {
   const openSession = useOpenSession()
   const start = item.start
-  const colour = item.kind === 'routine' ? item.colour : item.kind === 'session' ? sessionColour(item.session) : null
+  const colour = item.kind === 'routine' ? item.colour : null
   const widthPct = 100 / columnCount
   const leftPct = column * widthPct
 
@@ -49,14 +49,13 @@ export default function TimeGridPill({
     height,
     left: `calc(${leftPct}% + 2px)`,
     width: `calc(${widthPct}% - 4px)`,
-    // Routine colours are hex (alpha suffix); a session's is a CSS variable.
-    backgroundColor:
-      item.kind === 'session'
-        ? `color-mix(in srgb, ${colour} 16%, transparent)`
-        : colour
-          ? `${colour}33`
-          : 'color-mix(in srgb, var(--color-secondary-container) 16%, transparent)',
-    borderColor: colour ?? 'var(--color-secondary-container)',
+    // Routine colours are hex (alpha suffix); a session's light is split.
+    ...(item.kind === 'session'
+      ? sessionPillStyle(item.session)
+      : {
+          backgroundColor: colour ? `${colour}33` : 'color-mix(in srgb, var(--color-secondary-container) 16%, transparent)',
+          ...borderColors(colour ?? 'var(--color-secondary-container)'),
+        }),
   }
 
   // Text never wraps into a pill it doesn't fit: a short pill gets one
@@ -83,7 +82,7 @@ export default function TimeGridPill({
         title={tooltip}
         className="absolute flex cursor-pointer items-start gap-1 overflow-hidden rounded-md border px-1.5 py-px text-left text-[11px] leading-4 text-on-surface"
       >
-        <PrepLight status={item.session.status} notesDone={item.session.notesDone} size="sm" className="mt-1" />
+        <PrepLight status={item.session.status} postStatus={item.session.postStatus} size="sm" className="mt-1" />
         <span className="min-w-0 flex-1">{content}</span>
       </button>
     )
@@ -103,9 +102,17 @@ export default function TimeGridPill({
     )
   }
 
+  // A Google event: opens its popover, where prep tracking can be switched on.
+  const eventSession = calendarItemSession(item)
   return (
-    <div style={style} title={tooltip} className="absolute overflow-hidden rounded-md border px-1.5 py-px text-left text-[11px] leading-4 text-on-surface">
+    <button
+      type="button"
+      onClick={(e) => eventSession && openSession?.(eventSession, e.currentTarget)}
+      style={style}
+      title={tooltip}
+      className="absolute cursor-pointer overflow-hidden rounded-md border px-1.5 py-px text-left text-[11px] leading-4 text-on-surface"
+    >
       {content}
-    </div>
+    </button>
   )
 }

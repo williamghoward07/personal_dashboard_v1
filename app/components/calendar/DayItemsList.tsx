@@ -1,6 +1,6 @@
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from './calendarItems'
-import { dotClassFor, formatSpanEnd, formatTime } from './calendarItems'
+import { calendarItemSession, dotClassFor, formatSpanEnd, formatTime } from './calendarItems'
 import PrepLight from '../lectures/PrepLight'
 import { useOpenSession } from '../lectures/SessionPopover'
 
@@ -44,7 +44,7 @@ export default function DayItemsList({
         return (
           <li key={`${item.kind}-${item.id}`} className="flex items-center gap-2">
             {item.kind === 'session' ? (
-              <PrepLight status={item.session.status} notesDone={item.session.notesDone} size="sm" />
+              <PrepLight status={item.session.status} postStatus={item.session.postStatus} size="sm" />
             ) : (
               <span
                 className={item.kind === 'routine' ? 'h-1.5 w-1.5 shrink-0 rounded-full' : `h-1.5 w-1.5 shrink-0 rounded-full ${dotClassFor(item)}`}
@@ -76,6 +76,17 @@ export default function DayItemsList({
               <button
                 type="button"
                 onClick={() => onSelectRoutineInstance(item.instance)}
+                className="truncate text-left text-on-surface hover:underline"
+              >
+                {item.title}
+              </button>
+            ) : item.kind === 'calendar' && calendarItemSession(item) ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  const eventSession = calendarItemSession(item)
+                  if (eventSession) openSession?.(eventSession, e.currentTarget)
+                }}
                 className="truncate text-left text-on-surface hover:underline"
               >
                 {item.title}

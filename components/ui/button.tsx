@@ -31,7 +31,8 @@ import { ACCENT_GHOST, ACCENT_SOLID, ACCENT_VAR, type UiAccent } from "@/lib/the
  */
 const buttonVariants = cva(
   [
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-transparent",
+    "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-transparent",
+    // Tailwind v4's preflight leaves buttons on the default arrow cursor.
     "font-display font-semibold",
     "transition-all duration-[var(--duration-normal)] ease-standard motion-reduce:transition-none",
     // DESIGN.md §4.6: never a browser ring. Keyboard focus is the §4.3

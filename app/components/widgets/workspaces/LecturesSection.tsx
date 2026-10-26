@@ -6,19 +6,19 @@ import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { ACCENT_BAR } from '@/lib/theme'
 import { cn } from '@/lib/utils/cn'
 import type { WorkspaceLink } from '@/lib/types'
-import type { AddLinkOptions, WorkspaceLinkPatch } from '@/lib/workspaces/use-workspace-links'
+import type { WorkspaceLinkPatch } from '@/lib/workspaces/use-workspace-links'
 import { useTimetable } from '@/lib/lectures/use-timetable'
 import { notifyLecturesChanged } from '@/lib/lectures/events'
-import { saveSessionState, type SessionStatePatch } from '@/lib/lectures/prep-writes'
 import { PREP_ACCENT, formatSessionDay, formatSessionTime } from '@/lib/timetable/format'
 import {
+  addCounts,
   countByStatus,
+  hasEnded,
+  postStatus,
   prepStatus,
   splitByTime,
   type PrepStatus,
-  type SessionWithPrep,
 } from '@/lib/timetable/session'
-import SessionPrepPanel, { type SessionPrepState } from '../../lectures/SessionPrepPanel'
 import SessionRow from '../../lectures/SessionRow'
 import { inputClass, microLabelClass, wsAccentStyle } from './shared'
 
@@ -36,30 +36,22 @@ function StatusCounts({ counts }: { counts: Record<PrepStatus, number> }) {
   )
 }
 
-// A module workspace's timetable: every session for its module code, with
-// its readings (links with that session_uid) ticked off in place. Readings
-// come from this page's own link state, so Sources, stats and this section
-// always agree; notes / "no readings" are saved to lecture_sessions.
+// A module workspace's timetable: every session for its module code, each
+// opening its assignment view. Reading counts come from this page's own
+// link state, so Sources, stats and this section always agree; task counts
+// and hand-in state come from the timetable fetch.
 export default function LecturesSection({
   moduleCode,
   links,
-  addLink,
   updateLink,
-  deleteLink,
 }: {
   moduleCode: string
   links: WorkspaceLink[]
-  addLink: (rawUrl: string, options?: AddLinkOptions) => Promise<WorkspaceLink | null>
   updateLink: (id: string, patch: WorkspaceLinkPatch) => Promise<void>
-  deleteLink: (id: string) => Promise<void>
 }) {
   const { sessions: all, loading, error, setupNeeded } = useTimetable()
   const [now] = useState(() => new Date())
-  const [expandedUid, setExpandedUid] = useState<string | null>(null)
   const [showPast, setShowPast] = useState(false)
-  // Saved state shown before the timetable refetch lands.
-  const [overrides, setOverrides] = useState<Map<string, Partial<SessionPrepState>>>(new Map())
-  const [saveError, setSaveError] = useState<string | null>(null)
 
   const sessions = useMemo(() => all.filter((s) => s.moduleCode === moduleCode), [all, moduleCode])
   const uids = useMemo(() => new Set(sessions.map((s) => s.uid)), [sessions])
@@ -80,45 +72,21 @@ export default function LecturesSection({
     (l) => (l.is_reading || l.week != null || l.session_uid) && (!l.session_uid || !uids.has(l.session_uid))
   )
 
-  const stateOf = (s: SessionWithPrep): SessionPrepState => ({
-    noReadings: s.noReadings,
-    notesDone: s.notesDone,
-    note: s.note,
-    ...overrides.get(s.uid),
-  })
-
   const live = sessions.map((s) => {
     const readings = readingsBySession.get(s.uid) ?? []
-    const state = stateOf(s)
-    const count = { done: readings.filter((r) => r.completed_at).length, total: readings.length }
-    return { session: s, readings, state, count, status: prepStatus(count, state.noReadings) }
+    const linkCount = { done: readings.filter((r) => r.completed_at).length, total: readings.length }
+    const count = addCounts(linkCount, s.tasks.prep)
+    return {
+      session: s,
+      count,
+      status: prepStatus(count, s.prepDone),
+      postStatus: postStatus(s.tasks.post, s.notesDone, s.prepDone, hasEnded(s, now)),
+    }
   })
   const { upcoming, past } = splitByTime(
     live.map((l) => ({ ...l.session, live: l })),
     now
   )
-
-  const saveState = async (session: SessionWithPrep, patch: SessionStatePatch) => {
-    const local: Partial<SessionPrepState> = {}
-    if ('no_readings' in patch) local.noReadings = !!patch.no_readings
-    if ('notes_done_at' in patch) local.notesDone = !!patch.notes_done_at
-    if ('note' in patch) local.note = patch.note ?? null
-    const previous = overrides.get(session.uid)
-    setOverrides((prev) => new Map(prev).set(session.uid, { ...prev.get(session.uid), ...local }))
-    setSaveError(null)
-    try {
-      await saveSessionState(session, patch)
-      notifyLecturesChanged()
-    } catch (err) {
-      setOverrides((prev) => {
-        const next = new Map(prev)
-        if (previous) next.set(session.uid, previous)
-        else next.delete(session.uid)
-        return next
-      })
-      setSaveError(err instanceof Error ? err.message : 'Failed to save')
-    }
-  }
 
   const afterWrite = <T,>(promise: Promise<T>) =>
     promise.then((result) => {
@@ -131,26 +99,9 @@ export default function LecturesSection({
       key={entry.session.uid}
       session={entry.session}
       status={entry.status}
-      readings={entry.count}
-      notesDone={entry.state.notesDone}
-      expanded={expandedUid === entry.session.uid}
-      onToggle={() => setExpandedUid((uid) => (uid === entry.session.uid ? null : entry.session.uid))}
-    >
-      <SessionPrepPanel
-        session={entry.session}
-        readings={entry.readings}
-        state={entry.state}
-        accent="ws"
-        showHeader={false}
-        onAddReading={(url) => afterWrite(addLink(url, { sessionUid: entry.session.uid }))}
-        onToggleReading={(link) =>
-          void afterWrite(updateLink(link.id, { completed_at: link.completed_at ? null : new Date().toISOString() }))
-        }
-        onRenameReading={(id, title) => void updateLink(id, { title })}
-        onRemoveReading={(id) => void afterWrite(deleteLink(id))}
-        onSaveState={(patch) => void saveState(entry.session, patch)}
-      />
-    </SessionRow>
+      postStatus={entry.postStatus}
+      prep={entry.count}
+    />
   )
 
   const upcomingCounts = countByStatus(upcoming.map((s) => s.live))
@@ -175,11 +126,6 @@ export default function LecturesSection({
       {setupNeeded && (
         <p className="text-sm text-on-surface-variant">
           Apply <code>20261019000000_lecture_sessions.sql</code> so prep can be saved.
-        </p>
-      )}
-      {saveError && (
-        <p role="alert" className="text-sm text-error">
-          {saveError}
         </p>
       )}
 
@@ -266,7 +212,7 @@ export default function LecturesSection({
                 />
                 <span className={microLabelClass}>Earlier ({past.length})</span>
                 <span className="text-[11px] text-on-surface-variant">
-                  notes taken for {past.filter((s) => s.live.state.notesDone).length}/{past.length}
+                  marked as done for {past.filter((s) => s.live.status === 'green').length}/{past.length}
                 </span>
               </button>
               {showPast && <ul className="flex flex-col gap-0.5">{past.map((s) => renderRow(s.live))}</ul>}

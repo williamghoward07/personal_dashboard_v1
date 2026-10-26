@@ -1,35 +1,30 @@
-import { Check } from 'lucide-react'
 import { ACCENT_BAR } from '@/lib/theme'
 import { cn } from '@/lib/utils/cn'
-import { PREP_ACCENT } from '@/lib/timetable/format'
-import { PREP_LABEL, type PrepStatus } from '@/lib/timetable/session'
+import { POST_ACCENT, PREP_ACCENT } from '@/lib/timetable/format'
+import { POST_LABEL, PREP_LABEL, type PostStatus, type PrepStatus } from '@/lib/timetable/session'
 
 /**
- * A session's prep traffic light, with a small tick beside it once notes
- * are taken. The label is in the title/sr text, so colour is never the
- * only signal.
+ * A session's traffic light, split in two: prep before the session on the
+ * left, follow-up after it on the right (neutral until it's due). The
+ * labels are in the title/sr text, so colour is never the only signal.
  */
 export default function PrepLight({
   status,
-  notesDone = false,
+  postStatus,
   size = 'md',
   className,
 }: {
   status: PrepStatus
-  notesDone?: boolean
+  postStatus: PostStatus
   size?: 'sm' | 'md'
   className?: string
 }) {
-  const label = `${PREP_LABEL[status]}${notesDone ? ' · notes taken' : ''}`
+  const label = `Before: ${PREP_LABEL[status]} · After: ${POST_LABEL[postStatus]}`
+  const half = cn(size === 'sm' ? 'h-1.5 w-1.5' : 'h-2.5 w-2.5')
   return (
-    <span className={cn('inline-flex shrink-0 items-center gap-0.5', className)} title={label}>
-      <span
-        className={cn('rounded-full', size === 'sm' ? 'h-1.5 w-1.5' : 'h-2.5 w-2.5', ACCENT_BAR[PREP_ACCENT[status]])}
-        aria-hidden
-      />
-      {notesDone && (
-        <Check className={cn('text-on-surface-variant', size === 'sm' ? 'h-2.5 w-2.5' : 'h-3 w-3')} strokeWidth={2.5} aria-hidden />
-      )}
+    <span className={cn('inline-flex shrink-0 items-center gap-px', className)} title={label}>
+      <span className={cn(half, 'rounded-l-full', ACCENT_BAR[PREP_ACCENT[status]])} aria-hidden />
+      <span className={cn(half, 'rounded-r-full', ACCENT_BAR[POST_ACCENT[postStatus]])} aria-hidden />
       <span className="sr-only">{label}</span>
     </span>
   )

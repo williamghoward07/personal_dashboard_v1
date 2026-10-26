@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findDuplicateUrl, normalizeUrl, urlKey } from './url'
+import { findDuplicateUrl, looksLikeUrl, normalizeUrl, urlKey } from './url'
 
 describe('normalizeUrl', () => {
   it('adds https when missing', () => {
@@ -27,5 +27,20 @@ describe('findDuplicateUrl', () => {
   })
   it('returns null without one', () => {
     expect(findDuplicateUrl(items, 'moodle.ac.uk')).toBeNull()
+  })
+})
+
+describe('looksLikeUrl', () => {
+  it('accepts links with or without a scheme', () => {
+    expect(looksLikeUrl('https://durham.rl.talis.com/items/1')).toBe(true)
+    expect(looksLikeUrl('durham.rl.talis.com/items/1')).toBe(true)
+    expect(looksLikeUrl('www.bbc.co.uk')).toBe(true)
+  })
+
+  it('treats words as a task', () => {
+    expect(looksLikeUrl('Read Harvey ch. 2')).toBe(false)
+    expect(looksLikeUrl('ch.2')).toBe(false)
+    expect(looksLikeUrl('Revise')).toBe(false)
+    expect(looksLikeUrl('')).toBe(false)
   })
 })

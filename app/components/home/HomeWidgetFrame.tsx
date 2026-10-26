@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useRef, type PointerEvent as ReactPointerEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { EyeOff, GripVertical, MoveHorizontal } from 'lucide-react'
 import { spanClass, spanFromPointer, type HomeWidgetSpan } from '@/lib/home/layout'
@@ -58,6 +58,26 @@ export default function HomeWidgetFrame({
 
   const nodeRef = useRef<HTMLDivElement | null>(null)
   const resizeRef = useRef<ResizeOrigin | null>(null)
+  // Masonry: the grid has 1px implicit rows and no row gap, so each card
+  // spans as many rows as it is tall (plus the gap) and the next card in
+  // its column packs straight up under it.
+  const [rowSpan, setRowSpan] = useState<number | null>(null)
+
+  useEffect(() => {
+    const node = nodeRef.current
+    const grid = gridRef.current
+    if (!node || !grid) return
+    const update = () => {
+      const gap = Number.parseFloat(window.getComputedStyle(grid).columnGap) || 0
+      const height = node.getBoundingClientRect().height
+      // A collapsed (empty) widget is display:none; give it no rows at all.
+      setRowSpan(height > 0 ? Math.ceil(height + gap) : 1)
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [gridRef])
 
   const setRefs = useCallback(
     (node: HTMLDivElement | null) => {
@@ -143,6 +163,7 @@ export default function HomeWidgetFrame({
           ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)`
           : undefined,
         transition: transition ?? undefined,
+        gridRowEnd: rowSpan ? `span ${rowSpan}` : undefined,
       }}
       className={[
         spanClass(span),

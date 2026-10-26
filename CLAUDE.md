@@ -51,7 +51,7 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
 - `quick_links.sort_order` is global. A move renumbers every link (`lib/app-launcher/order.ts`).
 - `link_folders.color` can't be teal.
 - `user_settings`: one row per user for UI layout and visibility (`home_layout`, `hidden_nav_items`, `launcher_link_ids`), via `useSettings()` (`lib/settings/use-settings.ts`). Falls back to defaults when the row or table is missing.
-- Lecture prep: the timetable is never stored — it's read from the ICS feed (`lib/timetable/CLAUDE.md`). `lecture_sessions` holds per-session state keyed by ICS UID; readings are `workspace_links` with `session_uid`; `workspaces.module_code` marks a module workspace.
+- Lecture prep: the timetable is never stored — it's read from the ICS feed (`lib/timetable/CLAUDE.md`). `lecture_sessions` holds per-session state keyed by ICS UID (or `gcal:<id>` for a Google event with prep tracked); module readings are `workspace_links` with `session_uid`; tasks and post-session concepts are `session_tasks`; `workspaces.module_code` marks a module workspace. Prep is green only once handed in with Mark as done (`prep_done_at`); follow-up never makes a session overdue.
 - `launcher_link_ids` is the home launcher's membership and order. `quick_links.is_pinned` is retired: it's only read once to seed that array.
 
 ## Integrations and boundaries

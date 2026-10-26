@@ -34,9 +34,11 @@ import { homeWidgetComponent } from './widget-registry'
  * The home bento grid: widget order, column spans and visibility, saved per
  * user in `user_settings.home_layout`.
  *
- * Height is deliberately *not* fixed. `auto-rows-min` plus `items-start`
- * means a card is as tall as its own content and no taller — resizing
- * changes width only. The one persisted knob is the column span.
+ * Height is deliberately *not* fixed. `items-start` means a card is as tall
+ * as its own content and no taller, and 1px implicit rows (no row gap) let
+ * each frame span its measured height so cards pack masonry-style instead of
+ * leaving a gap under short cards. Resizing changes width only. The one
+ * persisted knob is the column span.
  *
  * State model: `saved` is what the settings row says; `pending` is the
  * in-flight arrangement (only set while a resize is being dragged, or for
@@ -166,7 +168,7 @@ export default function HomeGrid() {
         <SortableContext items={visible.map((entry) => entry.id)} strategy={rectSortingStrategy}>
           <div
             ref={gridRef}
-            className="grid flex-1 auto-rows-min grid-cols-1 items-start gap-card-gap sm:grid-cols-2 xl:grid-cols-4"
+            className="grid flex-1 auto-rows-[1px] grid-cols-1 items-start gap-x-card-gap gap-y-0 sm:grid-cols-2 xl:grid-cols-4"
           >
             {visible.map((entry) => {
               const Widget = homeWidgetComponent(entry.id)

@@ -372,6 +372,13 @@ Restrained and continuous, never transitional:
 
 No page transitions, no entrance animations, no parallax.
 
+One exception, because handing in has to feel acknowledged: **Mark as done**
+(lecture prep, `HandInButton`). Hover previews the done state (mint fill + glow,
+slight scale). A click pops a check in (`.hand-in-pop`, 400ms) with a single mint
+ring burst (`.hand-in-burst`, 700ms), holds a solid "Done" for ~1.2s, then
+settles into a mint "Done" that reads "Undo" on hover. Both animations are off
+under `prefers-reduced-motion`.
+
 ---
 
 ## 7. Mockup vs. shipped app

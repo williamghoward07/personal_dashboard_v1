@@ -1,13 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { SessionWithPrep } from '@/lib/timetable/session'
+import type { SessionWithPrep, TrackedPrep } from '@/lib/timetable/session'
 import { useLecturesVersion } from './events'
 
 export type TimetableError = 'not_configured' | 'unauthenticated' | 'failed' | null
 
 export interface UseTimetableResult {
   sessions: SessionWithPrep[]
+  /** Google events with prep switched on, by session uid (`gcal:…`). */
+  tracked: Map<string, TrackedPrep>
   loading: boolean
   error: TimetableError
   /** The prep tables aren't there yet (migration unapplied): lights are all red. */
@@ -20,6 +22,7 @@ export interface UseTimetableResult {
 export function useTimetable(range?: { timeMin: string; timeMax: string } | null): UseTimetableResult {
   const version = useLecturesVersion()
   const [sessions, setSessions] = useState<SessionWithPrep[]>([])
+  const [tracked, setTracked] = useState<Map<string, TrackedPrep>>(() => new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<TimetableError>(null)
   const [setupNeeded, setSetupNeeded] = useState(false)
@@ -40,6 +43,7 @@ export function useTimetable(range?: { timeMin: string; timeMax: string } | null
         } else {
           setError(null)
           setSessions((json.sessions ?? []) as SessionWithPrep[])
+          setTracked(new Map(((json.tracked ?? []) as TrackedPrep[]).map((t) => [t.uid, t])))
           setSetupNeeded(!!json.setupNeeded)
         }
       })
@@ -54,5 +58,5 @@ export function useTimetable(range?: { timeMin: string; timeMax: string } | null
     }
   }, [timeMin, timeMax, version])
 
-  return { sessions, loading, error, setupNeeded }
+  return { sessions, tracked, loading, error, setupNeeded }
 }

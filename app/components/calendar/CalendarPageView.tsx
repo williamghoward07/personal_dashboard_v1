@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Wand2, ZoomIn, ZoomOut } from 'lucide-react'
 import { FilterTabs } from '@/components/ui/filter-tabs'
 import { supabase } from '@/lib/supabase'
+import { useSettings } from '@/lib/settings/use-settings'
 import type { ActivitySession, RoutineInstance, Task } from '@/lib/types'
 import { useTimetable } from '@/lib/lectures/use-timetable'
 import { connectGoogleCalendar } from '@/lib/google/connect'
@@ -149,7 +150,14 @@ const MIN_GRID_CONTAINER_PX = 480
 const SSR_FALLBACK_VIEWPORT_PX = RESERVED_CHROME_PX + MIN_GRID_CONTAINER_PX
 
 export default function CalendarPageView() {
-  const [view, setView] = useState<ViewMode>('month')
+  const { settings, updateSettings } = useSettings()
+  const [viewOverride, setViewOverride] = useState<ViewMode | null>(null)
+  // Saved view once settings load; 'week' until then (and when nothing is saved).
+  const view: ViewMode = viewOverride ?? settings.calendar_view
+  const setView = (next: ViewMode) => {
+    setViewOverride(next)
+    void updateSettings({ calendar_view: next })
+  }
   const [gridMode, setGridMode] = useState<GridMode>('grid')
   // null = not manually zoomed — pxPerMin below opens at a readable
   // DEFAULT_PX_PER_MIN (or the viewport fit, if that's already roomier)

@@ -1,11 +1,13 @@
 'use client'
 
+import { useCallback, useRef } from 'react'
 import { Archive, ChevronDown, ChevronRight, GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Accent } from '@/lib/theme'
 import { ACCENT_BAR } from '@/lib/theme'
 import type { QuickLink } from '@/lib/types'
+import { useMasonryRowSpan } from '@/lib/ui/use-masonry-row-span'
 import LinkTile, { linkDragId } from './LinkTile'
 
 export interface FolderGroup {
@@ -66,13 +68,24 @@ export default function FolderTile({
     data: { type: 'folder-drop', folderKey: folder.id },
   })
 
+  const nodeRef = useRef<HTMLDivElement | null>(null)
+  const rowSpan = useMasonryRowSpan(nodeRef)
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      nodeRef.current = node
+      setNodeRef(node)
+    },
+    [setNodeRef]
+  )
+
   const style = {
+    gridRowEnd: rowSpan ? `span ${rowSpan}` : undefined,
     transform: transform ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)` : undefined,
     transition: transition ?? undefined,
   }
 
   return (
-    <div ref={setNodeRef} style={style} className={isDragging ? 'relative z-20 opacity-70' : undefined}>
+    <div ref={setRefs} style={style} className={isDragging ? 'relative z-20 opacity-70' : undefined}>
       <div
         ref={setDropRef}
         className={`flex flex-col gap-2 rounded-lg border bg-surface-container-low p-3 transition-colors ${

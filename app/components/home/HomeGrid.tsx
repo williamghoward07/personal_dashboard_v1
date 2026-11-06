@@ -22,6 +22,7 @@ import {
   reorderLayout,
   resolveHomeLayout,
   setWidgetHidden,
+  setWidgetHeight,
   setWidgetSpan,
   visibleWidgets,
   type HomeLayoutEntry,
@@ -37,8 +38,8 @@ import { homeWidgetComponent } from './widget-registry'
  * Height is deliberately *not* fixed. `items-start` means a card is as tall
  * as its own content and no taller, and 1px implicit rows (no row gap) let
  * each frame span its measured height so cards pack masonry-style instead of
- * leaving a gap under short cards. Resizing changes width only. The one
- * persisted knob is the column span.
+ * leaving a gap under short cards. Resizing sets the column span and, optionally,
+ * a minimum height (`height`, px) that stretches the card; unset stays auto.
  *
  * State model: `saved` is what the settings row says; `pending` is the
  * in-flight arrangement (only set while a resize is being dragged, or for
@@ -100,16 +101,16 @@ export default function HomeGrid() {
 
   // Dragging the corner only touches local state; the write happens once,
   // on release, rather than on every pointer move.
-  const handleSpanPreview = useCallback(
-    (id: string, span: HomeWidgetSpan) => {
-      setPending(setWidgetSpan(layout, id, span))
+  const handleSizePreview = useCallback(
+    (id: string, span: HomeWidgetSpan, height: number | undefined) => {
+      setPending(setWidgetHeight(setWidgetSpan(layout, id, span), id, height))
     },
     [layout]
   )
 
-  const handleSpanCommit = useCallback(
-    (id: string, span: HomeWidgetSpan) => {
-      void persist(setWidgetSpan(layout, id, span))
+  const handleSizeCommit = useCallback(
+    (id: string, span: HomeWidgetSpan, height: number | undefined) => {
+      void persist(setWidgetHeight(setWidgetSpan(layout, id, span), id, height))
     },
     [layout, persist]
   )
@@ -179,11 +180,12 @@ export default function HomeGrid() {
                   id={entry.id}
                   label={homeWidgetLabel(entry.id)}
                   span={entry.span}
+                  height={entry.height}
                   editing={editing}
                   gridRef={gridRef}
                   onHide={handleHide}
-                  onSpanPreview={handleSpanPreview}
-                  onSpanCommit={handleSpanCommit}
+                  onSizePreview={handleSizePreview}
+                  onSizeCommit={handleSizeCommit}
                 >
                   <Widget span={entry.span} />
                 </HomeWidgetFrame>

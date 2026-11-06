@@ -16,6 +16,24 @@ export interface HomeLayoutEntry {
   id: string
   span: HomeWidgetSpan
   hidden: boolean
+  /** Minimum card height in px. Absent = size to content (the default). */
+  height?: number
+}
+
+export const MIN_WIDGET_HEIGHT = 120
+export const MAX_WIDGET_HEIGHT = 1600
+
+/** Clamps a stored height; anything unparseable means "auto" (undefined). */
+export function clampHeight(height: unknown): number | undefined {
+  if (height == null) return undefined
+  const n = typeof height === 'number' ? height : Number(height)
+  if (!Number.isFinite(n) || n <= 0) return undefined
+  return Math.min(MAX_WIDGET_HEIGHT, Math.max(MIN_WIDGET_HEIGHT, Math.round(n)))
+}
+
+function withHeight(entry: HomeLayoutEntry, height: unknown): HomeLayoutEntry {
+  const clamped = clampHeight(height)
+  return clamped === undefined ? entry : { ...entry, height: clamped }
 }
 
 /** The normalised, always-valid shape the rest of the app reads/writes. */
@@ -23,11 +41,20 @@ export interface UserSettings {
   home_layout: HomeLayoutEntry[]
   hidden_nav_items: string[]
   launcher_link_ids: string[]
+  calendar_view: CalendarView
+}
+
+export type CalendarView = 'month' | 'week' | 'day' | 'routines'
+export const CALENDAR_VIEWS: CalendarView[] = ['month', 'week', 'day', 'routines']
+
+/** Falls back to 'week' for anything unrecognised. */
+export function parseCalendarView(value: unknown): CalendarView {
+  return CALENDAR_VIEWS.includes(value as CalendarView) ? (value as CalendarView) : 'week'
 }
 
 /** What a user with no `user_settings` row yet sees. */
 export function defaultSettings(): UserSettings {
-  return { home_layout: [], hidden_nav_items: [], launcher_link_ids: [] }
+  return { home_layout: [], hidden_nav_items: [], launcher_link_ids: [], calendar_view: 'week' }
 }
 
 /** Clamps to a valid span, defaulting to 1 for anything unparseable. */
@@ -37,7 +64,7 @@ export function clampSpan(span: unknown): HomeWidgetSpan {
   return Math.min(4, Math.max(1, Math.round(n))) as HomeWidgetSpan
 }
 
-function isPlainHomeLayoutEntry(value: unknown): value is { id: string; span?: unknown; hidden?: unknown } {
+function isPlainHomeLayoutEntry(value: unknown): value is { id: string; span?: unknown; hidden?: unknown; height?: unknown } {
   return typeof value === 'object' && value !== null && typeof (value as { id?: unknown }).id === 'string'
 }
 
@@ -54,7 +81,7 @@ export function parseHomeLayout(raw: unknown): HomeLayoutEntry[] {
   for (const item of raw) {
     if (!isPlainHomeLayoutEntry(item) || seen.has(item.id)) continue
     seen.add(item.id)
-    entries.push({ id: item.id, span: clampSpan(item.span), hidden: Boolean(item.hidden) })
+    entries.push(withHeight({ id: item.id, span: clampSpan(item.span), hidden: Boolean(item.hidden) }, item.height))
   }
   return entries
 }
@@ -70,7 +97,7 @@ function parseStringArray(raw: unknown): string[] {
  */
 export function parseUserSettings(
   row:
-    | { home_layout?: unknown; hidden_nav_items?: unknown; launcher_link_ids?: unknown }
+    | { home_layout?: unknown; hidden_nav_items?: unknown; launcher_link_ids?: unknown; calendar_view?: unknown }
     | null
     | undefined
 ): UserSettings {
@@ -79,6 +106,7 @@ export function parseUserSettings(
     home_layout: parseHomeLayout(row.home_layout),
     hidden_nav_items: parseStringArray(row.hidden_nav_items),
     launcher_link_ids: parseStringArray(row.launcher_link_ids),
+    calendar_view: parseCalendarView(row.calendar_view),
   }
 }
 
@@ -106,7 +134,7 @@ export function mergeHomeLayout(
   for (const entry of stored ?? []) {
     if (!entry || !known.has(entry.id) || seen.has(entry.id)) continue
     seen.add(entry.id)
-    merged.push({ id: entry.id, span: clampSpan(entry.span), hidden: Boolean(entry.hidden) })
+    merged.push(withHeight({ id: entry.id, span: clampSpan(entry.span), hidden: Boolean(entry.hidden) }, entry.height))
   }
   for (const id of knownIds) {
     if (!seen.has(id)) merged.push({ id, span: 1, hidden: false })

@@ -135,11 +135,13 @@ describe('parseUserSettings', () => {
       home_layout: [{ id: 'money', span: 2, hidden: false }],
       hidden_nav_items: ['/todos'],
       launcher_link_ids: ['11111111-1111-1111-1111-111111111111'],
+      calendar_view: 'day',
     }
     expect(parseUserSettings(row)).toEqual({
       home_layout: [{ id: 'money', span: 2, hidden: false }],
       hidden_nav_items: ['/todos'],
       launcher_link_ids: ['11111111-1111-1111-1111-111111111111'],
+      calendar_view: 'day',
     })
   })
 
@@ -149,11 +151,13 @@ describe('parseUserSettings', () => {
         home_layout: 'not an array',
         hidden_nav_items: [1, 2, '/todos'],
         launcher_link_ids: null,
+        calendar_view: 'bogus',
       })
     ).toEqual({
       home_layout: [],
       hidden_nav_items: ['/todos'],
       launcher_link_ids: [],
+      calendar_view: 'week',
     })
   })
 })

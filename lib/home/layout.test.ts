@@ -11,6 +11,8 @@ import {
   isDefaultLayout,
   reorderLayout,
   resolveHomeLayout,
+  heightFromPointer,
+  setWidgetHeight,
   setWidgetHidden,
   setWidgetSpan,
   spanClass,
@@ -215,5 +217,25 @@ describe('spanFromPointer', () => {
   it('keeps the current span when the grid measures as zero-width', () => {
     expect(spanFromPointer(left + 400, left, 0, 0, 3)).toBe(3)
     expect(spanFromPointer(left + 400, left, Number.NaN, gap, 2)).toBe(2)
+  })
+})
+
+describe('widget height', () => {
+  it('sets, clamps and clears a widget height', () => {
+    const base = defaultHomeLayout()
+    const set = setWidgetHeight(base, 'money', 400)
+    expect(set.find((e) => e.id === 'money')?.height).toBe(400)
+    expect(setWidgetHeight(base, 'money', 5).find((e) => e.id === 'money')?.height).toBe(120)
+    expect('height' in setWidgetHeight(set, 'money', undefined).find((e) => e.id === 'money')!).toBe(false)
+  })
+
+  it('survives resolveHomeLayout and breaks isDefaultLayout', () => {
+    const set = setWidgetHeight(defaultHomeLayout(), 'money', 400)
+    expect(resolveHomeLayout(set).find((e) => e.id === 'money')?.height).toBe(400)
+    expect(isDefaultLayout(set)).toBe(false)
+  })
+
+  it('snaps pointer height to 8px', () => {
+    expect(heightFromPointer(503, 100)).toBe(400)
   })
 })

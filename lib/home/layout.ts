@@ -9,7 +9,7 @@
 // which never throws and never loses a saved arrangement just because a
 // widget was added to or removed from the codebase.
 
-import { clampSpan, mergeHomeLayout, type HomeLayoutEntry, type HomeWidgetSpan } from '@/lib/settings/schema'
+import { MIN_WIDGET_HEIGHT, clampHeight, clampSpan, mergeHomeLayout, type HomeLayoutEntry, type HomeWidgetSpan } from '@/lib/settings/schema'
 
 export type { HomeLayoutEntry, HomeWidgetSpan }
 
@@ -177,6 +177,21 @@ export function setWidgetSpan(layout: readonly HomeLayoutEntry[], id: string, sp
   return layout.map((entry) => (entry.id === id ? { ...entry, span: clamped } : entry))
 }
 
+/** Sets one widget's minimum height in px (clamped); `undefined` returns it to auto. */
+export function setWidgetHeight(
+  layout: readonly HomeLayoutEntry[],
+  id: string,
+  height: number | undefined
+): HomeLayoutEntry[] {
+  const clamped = clampHeight(height)
+  return layout.map((entry) => {
+    if (entry.id !== id) return entry
+    const { height: _drop, ...rest } = entry
+    void _drop
+    return clamped === undefined ? rest : { ...rest, height: clamped }
+  })
+}
+
 /** Hidden means "not rendered"; the widget's own data is untouched. */
 export function setWidgetHidden(layout: readonly HomeLayoutEntry[], id: string, hidden: boolean): HomeLayoutEntry[] {
   return layout.map((entry) => (entry.id === id ? { ...entry, hidden } : entry))
@@ -192,7 +207,7 @@ export function isDefaultLayout(layout: readonly HomeLayoutEntry[]): boolean {
   if (layout.length !== defaults.length) return false
   return defaults.every((expected, index) => {
     const actual = layout[index]
-    return actual.id === expected.id && actual.span === expected.span && actual.hidden === expected.hidden
+    return actual.id === expected.id && actual.span === expected.span && actual.hidden === expected.hidden && actual.height === undefined
   })
 }
 
@@ -215,4 +230,10 @@ export function spanFromPointer(
   const step = trackWidth + gap
   if (!Number.isFinite(step) || step <= 0) return fallback
   return clampSpan(Math.round((pointerX - widgetLeft + gap) / step))
+}
+
+/** Card height implied by dragging the corner to `pointerY`, snapped to 8px. */
+export function heightFromPointer(pointerY: number, widgetTop: number, offset = 0): number {
+  const raw = pointerY - widgetTop - offset
+  return clampHeight(Math.round(raw / 8) * 8) ?? MIN_WIDGET_HEIGHT
 }

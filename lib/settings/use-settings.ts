@@ -14,7 +14,7 @@ export interface UseSettingsResult {
   updateSettings: (patch: UserSettingsPatch) => Promise<void>
 }
 
-const SELECT_COLUMNS = 'home_layout, hidden_nav_items, launcher_link_ids'
+const SELECT_COLUMNS = 'home_layout, hidden_nav_items, launcher_link_ids, calendar_view'
 
 // `user_settings` (supabase/migrations/20260920000000_user_settings.sql) is
 // applied by hand, per this repo's convention, so the table may not exist

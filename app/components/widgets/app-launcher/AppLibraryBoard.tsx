@@ -480,7 +480,7 @@ export default function AppLibraryBoard() {
           onDragCancel={handleDragCancel}
         >
           <SortableContext items={folders.map((f) => folderDragId(f.id))} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid auto-rows-[1px] grid-cols-1 items-start gap-x-4 gap-y-0 sm:grid-cols-2 xl:grid-cols-3">
               {folderGroups.map((group) => (
                 <FolderTile
                   key={group.id}

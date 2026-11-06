@@ -13,8 +13,8 @@ import HomeWidgetFrame from './HomeWidgetFrame'
 function renderFrame(props: Partial<React.ComponentProps<typeof HomeWidgetFrame>> = {}) {
   const gridRef = createRef<HTMLDivElement>()
   const onHide = vi.fn()
-  const onSpanPreview = vi.fn()
-  const onSpanCommit = vi.fn()
+  const onSizePreview = vi.fn()
+  const onSizeCommit = vi.fn()
 
   const utils = render(
     <DndContext>
@@ -26,8 +26,8 @@ function renderFrame(props: Partial<React.ComponentProps<typeof HomeWidgetFrame>
           editing={false}
           gridRef={gridRef}
           onHide={onHide}
-          onSpanPreview={onSpanPreview}
-          onSpanCommit={onSpanCommit}
+          onSizePreview={onSizePreview}
+          onSizeCommit={onSizeCommit}
           {...props}
         >
           <p>widget body</p>
@@ -36,7 +36,7 @@ function renderFrame(props: Partial<React.ComponentProps<typeof HomeWidgetFrame>
     </DndContext>
   )
 
-  return { ...utils, onHide, onSpanPreview, onSpanCommit }
+  return { ...utils, onHide, onSizePreview, onSizeCommit }
 }
 
 describe('HomeWidgetFrame', () => {
@@ -44,7 +44,7 @@ describe('HomeWidgetFrame', () => {
     const { queryByLabelText, getByText } = renderFrame()
     expect(queryByLabelText('Reorder Money')).toBeNull()
     expect(queryByLabelText('Hide Money')).toBeNull()
-    expect(queryByLabelText('Money width')).toBeNull()
+    expect(queryByLabelText('Money size')).toBeNull()
     expect(getByText('widget body').textContent).toBe('widget body')
     cleanup()
   })
@@ -53,7 +53,7 @@ describe('HomeWidgetFrame', () => {
     const { getByLabelText } = renderFrame({ editing: true })
     expect(getByLabelText('Reorder Money')).not.toBeNull()
     expect(getByLabelText('Hide Money')).not.toBeNull()
-    expect(getByLabelText('Money width').getAttribute('aria-valuenow')).toBe('1')
+    expect(getByLabelText('Money size').getAttribute('aria-valuenow')).toBe('1')
     cleanup()
   })
 
@@ -74,25 +74,25 @@ describe('HomeWidgetFrame', () => {
 
   it('commits a keyboard resize once, clamped to 1-4', () => {
     const one = renderFrame({ editing: true, span: 1 })
-    fireEvent.keyDown(one.getByLabelText('Money width'), { key: 'ArrowRight' })
-    expect(one.onSpanCommit).toHaveBeenCalledTimes(1)
-    expect(one.onSpanCommit).toHaveBeenCalledWith('money', 2)
+    fireEvent.keyDown(one.getByLabelText('Money size'), { key: 'ArrowRight' })
+    expect(one.onSizeCommit).toHaveBeenCalledTimes(1)
+    expect(one.onSizeCommit).toHaveBeenCalledWith('money', 2, undefined)
     // No half-committed preview state on the keyboard path.
-    expect(one.onSpanPreview).not.toHaveBeenCalled()
+    expect(one.onSizePreview).not.toHaveBeenCalled()
     // The frame is controlled by `span`, so shrinking below 1 is a no-op —
     // it does not re-commit the span it already has.
-    fireEvent.keyDown(one.getByLabelText('Money width'), { key: 'ArrowLeft' })
-    expect(one.onSpanCommit).toHaveBeenCalledTimes(1)
+    fireEvent.keyDown(one.getByLabelText('Money size'), { key: 'ArrowLeft' })
+    expect(one.onSizeCommit).toHaveBeenCalledTimes(1)
     cleanup()
 
     const two = renderFrame({ editing: true, span: 2 })
-    fireEvent.keyDown(two.getByLabelText('Money width'), { key: 'ArrowLeft' })
-    expect(two.onSpanCommit).toHaveBeenCalledWith('money', 1)
+    fireEvent.keyDown(two.getByLabelText('Money size'), { key: 'ArrowLeft' })
+    expect(two.onSizeCommit).toHaveBeenCalledWith('money', 1, undefined)
     cleanup()
 
     const four = renderFrame({ editing: true, span: 4 })
-    fireEvent.keyDown(four.getByLabelText('Money width'), { key: 'ArrowRight' })
-    expect(four.onSpanCommit).not.toHaveBeenCalled()
+    fireEvent.keyDown(four.getByLabelText('Money size'), { key: 'ArrowRight' })
+    expect(four.onSizeCommit).not.toHaveBeenCalled()
     cleanup()
   })
 })

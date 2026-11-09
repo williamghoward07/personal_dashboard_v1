@@ -16,13 +16,11 @@ After changing code, rebuild and press the reload icon on the extension's card. 
 
 ## Side panel
 
-It follows the NorthStar-style panel spec: warm base colours with one terracotta accent, light/dark that follows the system, and a manual toggle. It's separate from the dashboard's DESIGN.md.
+Warm base colours with one terracotta accent; light or dark follows the system. It's separate from the dashboard's DESIGN.md. Each function appears once.
 
-- **Header:** connection chip. On open it does one `users/me` check: "Blackboard connected" or "Not logged in".
-- **Strip:** the round button syncs. Course chips open a detail card with counts and Open in Blackboard.
-- **Overview:** Sync now, last sync, what was found, and how Blackboard was reached ("In the background" = the service worker's own requests worked; "Through your open tab" = it needed the content-script fallback).
-- **Courses:** one card per course, modules first.
-- **Running now:** the five-step roadmap and step list, then the result card.
+- **Header:** connection status. On open it does one `users/me` check: "Blackboard connected" or "Not logged in".
+- **Overview:** one card with Sync now, last sync and what was found. While syncing, or after a failure, it shows the one progress bar (five steps, horizontal) with a line of text under it. "Read in the background" means the service worker's own requests worked; "Read through your open Blackboard tab" means it needed the content-script fallback.
+- **Courses:** one card per course, modules first, each with Open.
 
 The sync runs in the service worker, not the panel. Closing the panel or switching tabs doesn't stop it, and reopening the panel picks up the run in progress (state is in `chrome.storage.session`).
 

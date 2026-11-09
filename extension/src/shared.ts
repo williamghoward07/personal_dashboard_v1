@@ -68,7 +68,6 @@ export const STORAGE = {
   lastSummary: 'lastSummary',
   syncState: 'syncState',
   session: 'sessionCheck',
-  theme: 'theme',
 } as const
 
 export function errorMessage(err: unknown): string {

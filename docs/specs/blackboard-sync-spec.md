@@ -32,7 +32,7 @@ Pull my own Blackboard Ultra data (assignments, due dates, grades, announcements
 | What is synced? | Assignments + due dates, grades/feedback, announcements, course content. |
 | When does it sync? | **Three triggers:** a manual Sync button in the extension popup; a quiet sync whenever I open a Blackboard tab (throttled to once per 30 min); a **daily background pull** (`chrome.alarms`). |
 | Session expired? | **Extension badge only.** A red `!` on the icon. Clicking it opens Blackboard, and it syncs automatically after login. No Chrome notifications. |
-| Where do assignments live? | **Their own tables (`bb_*`)**, not `tasks` / `education_tasks`, so the known Education split is left alone. A "Plan this" button copies an assignment into `education_tasks` when I want it in Daily Goals / time-blocking. |
+| Where do assignments live? | **Their own tables (`bb_*`)**, not `tasks` / `education_tasks`, so the known Education split is left alone. |
 | Course content → lecture prep | **Module library + suggestions.** All content is listed per module workspace. Session prep shows "Suggested from Blackboard" items I tick to attach. Nothing is auto-attached. |
 | Week numbering | Blackboard folders are inconsistent: some count teaching weeks from 1, some use the university week (e.g. Week 12). **I use the university numbering** (it matches OneNote). Each course has a week offset; see §5. |
 | Claude access | **Yes:** a read-only, token-authed MCP endpoint (§8). |
@@ -85,11 +85,11 @@ All tables: `user_id default auth.uid()`, four own-row RLS policies, `revoke …
 | table | key columns |
 |---|---|
 | `bb_courses` | `bb_id`, `course_code` (`GEOG1241_2026`), `module_code` (`GEOG1241`), `name`, `term`, `workspace_id` (nullable, auto-matched on `workspaces.module_code`, manual override), `week_offset int default 0`, `url` |
-| `bb_assignments` | `bb_id` (To Do item / column id), `course_id`, `title`, `due_at timestamptz`, `bb_content_id`, `status` (`not_submitted` / `submitted` / `graded`, from Blackboard), `done_at` (my own Mark as done, for things with no submission), `url`, `education_task_id` (set by "Plan this") |
+| `bb_assignments` | `bb_id` (To Do item / column id), `course_id`, `title`, `due_at timestamptz`, `bb_content_id`, `status` (`not_submitted` / `submitted` / `graded`, from Blackboard), `url` |
 | `bb_grades` | `bb_column_id`, `course_id`, `assignment_id` nullable, `score`, `possible`, `display_grade`, `feedback` (plain text), `released_at` |
 | `bb_announcements` | `bb_id`, `course_id`, `title`, `body_text` (HTML stripped server-side), `posted_at`, `url`, `read_at` (dashboard-side only) |
 | `bb_content` | `bb_id`, `course_id`, `parent_bb_id`, `title`, `kind` (`folder` / `document` / `link` / `file` / `assignment` / …), `available_from`, `path` (breadcrumb of folder titles), `week_label int` (parsed from the title, e.g. "Week 5"), `url` |
-| `bb_sync_runs` | `started_at`, `finished_at`, `trigger` (`manual` / `visit` / `daily`), `ok`, `counts jsonb`, `error`. Append-only, used for "last synced" and the staleness banner |
+| `bb_sync_runs` | `started_at`, `finished_at`, `trigger` (`manual` / `visit` / `daily`), `ok`, `counts jsonb`, `error`. Append-only, used for "last synced" |
 
 **Week mapping.** University week = `week_label + bb_courses.week_offset`. Matching a content item to a timetable session tries, in order:
 1. `available_from` falls in the session's week (date-based, no labels needed);
@@ -106,21 +106,18 @@ Dates are stored as UTC and shown as Europe/London days (`lib/google/london-day.
 | route | |
 |---|---|
 | `POST /api/blackboard/sync` | Body `BbSyncPayload`. Validates (zod), upserts everything in one RPC/transaction, marks missing rows `removed_at` **only for courses included in this payload**, writes a `bb_sync_runs` row. Returns counts |
-| `GET /api/blackboard/status` | Last run, staleness, needs-login hint for the dashboard banner |
 
 **Auth:** `lib/blackboard/auth.ts`, the same shape as `lib/timer/auth.ts`. The extension sends `Authorization: Bearer $BLACKBOARD_SYNC_TOKEN`, acts as the owner user id, and uses the service-role client. The token is accepted only on `/api/blackboard/*` and `/api/mcp`. Add `/api/blackboard` to `PUBLIC_PATHS` in `proxy.ts`. Add the env var names to `.env.example`. A separate token from `TIMER_API_TOKEN`, so leaking one doesn't open the other.
 
-No AI in the sync path. (Optional later: a one-line announcement summary through `lib/ai/gemini.ts`, logged to `ai_usage`.)
+No AI in the sync path.
 
 ---
 
 ## 7. Dashboard UI
 
-- **Lectures → Assignments tab** (replaces the placeholder in `LecturesBoard.tsx`): the same Upcoming · Past due · Completed · History tabs and module filter as Lectures. Each row shows module, title, due date, Blackboard status, grade when released, **Open in Blackboard**, **Plan this**, and **Mark as done** for items with no submission.
+- **Lectures → Assignments tab** (replaces the placeholder in `LecturesBoard.tsx`): the same Upcoming · Past due · Completed · History tabs and module filter as Lectures. Each row shows module, title, due date, Blackboard status, grade when released, and **Open in Blackboard**.
 - **Workspace (module) page**: a "Blackboard" section with announcements (unread first) and the content library as a collapsible folder tree, labelled in university-week numbering.
 - **Session prep**: a "Suggested from Blackboard" list (§5).
-- **Calendar**: due dates as all-day pills (optional, phase 4).
-- **Staleness banner** on the Assignments tab when the last good sync is older than 36 h: "Last synced 2 days ago, open Blackboard to refresh."
 - Follows `DESIGN.md` and shared components (`FilterTabs`, `DataTable*`, `StatusBadge`, `MetadataChip`).
 
 ---
@@ -163,9 +160,9 @@ The data comes only from Supabase, never live from Blackboard. Nothing in the MC
 | phase | scope | done when |
 |---|---|---|
 | **1. Extension spike** ✅ built | Bare extension: Sync button → fetch every endpoint in §3 → store + summarise the payload (Download JSON). Worker fetch with open-tab fallback; badge on login loss | a full payload for all 10 current courses from one click; 401 handling sets the badge |
-| **2. Schema + sync API** | migration (not applied), `lib/blackboard/*` normalisers + tests, `/api/blackboard/sync` + `status`, token auth, proxy entry | the extension's payload lands in Supabase; re-sync is idempotent; vanished items get `removed_at` |
-| **3. Assignments tab** | real Assignments tab, Plan this, Mark as done, staleness banner | coursework shows with correct London due dates and tabs |
-| **4. Content + announcements** | module Blackboard section, week offset setting, prep suggestions, calendar pills | a week's readings appear as suggestions on the right sessions |
+| **2. Schema + sync API** | migration (not applied), `lib/blackboard/*` normalisers + tests, `/api/blackboard/sync`, token auth, proxy entry | the extension's payload lands in Supabase; re-sync is idempotent; vanished items get `removed_at` |
+| **3. Assignments tab** | real Assignments tab | coursework shows with correct London due dates and tabs |
+| **4. Content + announcements** | module Blackboard section, week offset setting, prep suggestions | a week's readings appear as suggestions on the right sessions |
 | **5. MCP** | `/api/mcp` tools in §8 | Claude can answer "what's due this week?" from the synced data |
 | **6. Triggers polish** | daily alarm, on-visit sync, badge flow | badge appears when logged out; syncs itself after login |
 
@@ -174,6 +171,15 @@ Each phase is its own Claude Code session.
 ---
 
 ## 11. Open questions
+
+**Not planned unless asked for** (ideas only; nothing is built for them):
+- "Plan this": copy an assignment into `education_tasks` for Daily Goals / time-blocking.
+- "Mark as done" for coursework with no Blackboard submission.
+- Due dates as pills on the calendar.
+- A "last synced" banner on the dashboard (the extension badge already covers logging in).
+- An AI summary of announcements.
+
+Questions:
 
 - Is the week offset the same for every module in a term, or does it vary by module? (The schema supports per-course; the UI could default to one term-wide value.)
 - Durham's IT acceptable-use policy: reading my own data with my own session at a gentle rate should be fine, but check that it doesn't forbid automated access.

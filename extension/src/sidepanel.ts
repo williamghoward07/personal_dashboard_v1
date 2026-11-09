@@ -1,24 +1,22 @@
 // Side panel. Stays open while you switch tabs, and rebuilds itself from
 // chrome.storage whenever it opens, so a sync already running in the worker
-// shows up as running.
+// shows up as running. Each function appears once: one Sync button, one
+// progress bar, one course list.
 import { BB_ORIGIN, type SnapshotSummary } from '@/lib/blackboard/client'
 import { icon } from './icons'
 import { STORAGE, SYNC_STALE_MS, type LastRun, type SessionCheck, type SyncState, type WorkerMessage } from './shared'
 
-type Tab = 'overview' | 'courses' | 'running'
-type Theme = 'light' | 'dark'
+type Tab = 'overview' | 'courses'
 type CourseRow = SnapshotSummary['courses'][number]
 
 const state: {
   tab: Tab
-  selected: string | null
   lastRun?: LastRun
   /** Last successful sync, kept when a later run fails. */
   lastSummary?: SnapshotSummary
   sync?: SyncState
   session?: SessionCheck
-  theme?: Theme
-} = { tab: 'overview', selected: null }
+} = { tab: 'overview' }
 
 // ---------- tiny DOM helper ----------
 
@@ -43,13 +41,7 @@ function h(tag: string, props: Props = {}, ...children: Child[]): HTMLElement {
 
 // ---------- derived state ----------
 
-const STEPS: { stage: SyncState['stage']; name: string }[] = [
-  { stage: 'session', name: 'Check your login' },
-  { stage: 'courses', name: 'Find your courses' },
-  { stage: 'content', name: 'Read each course' },
-  { stage: 'todo', name: 'Read due dates' },
-  { stage: 'saving', name: 'Save on this computer' },
-]
+const STAGES: SyncState['stage'][] = ['session', 'courses', 'content', 'todo', 'saving']
 
 function activeSync(): SyncState | undefined {
   const sync = state.sync
@@ -61,49 +53,20 @@ function summary(): SnapshotSummary | undefined {
   return state.lastRun?.ok ? state.lastRun.summary : state.lastSummary
 }
 
-type StepStatus = 'done' | 'current' | 'todo' | 'error'
-
-function stepStatuses(): StepStatus[] | null {
-  const sync = activeSync()
-  const run = state.lastRun
-  let at: number
-  let mode: 'current' | 'error' | 'done'
-  if (sync) {
-    at = STEPS.findIndex((s) => s.stage === sync.stage)
-    mode = 'current'
-  } else if (run && !run.ok) {
-    at = Math.max(0, STEPS.findIndex((s) => s.stage === run.stage))
-    mode = 'error'
-  } else if (run?.ok) {
-    return STEPS.map(() => 'done')
-  } else {
-    return null
-  }
-  return STEPS.map((_, i) => (i < at ? 'done' : i === at ? mode : 'todo'))
-}
-
-function stepDetail(index: number, status: StepStatus): string {
-  const sync = activeSync()
-  const run = state.lastRun
-  const s = summary()
-  const p = sync?.progress
-  if (status === 'error' && run && !run.ok) return run.error
-  switch (STEPS[index].stage) {
+/** What the single line under the progress bar says while syncing. */
+function stepText(sync: SyncState): string {
+  const p = sync.progress
+  switch (sync.stage) {
     case 'session':
-      return status === 'done' ? (sync?.via ?? (run?.ok ? run.via : 'worker')) === 'tab' ? 'Through your open Blackboard tab' : 'Using your Blackboard login' : 'Checking Blackboard'
-    case 'courses': {
-      const count = sync?.courseCount ?? s?.courses.length
-      return status === 'done' && count != null ? `${count} courses` : status === 'current' ? 'Listing this year’s courses' : 'Courses you’re enrolled on'
-    }
+      return 'Checking your login'
+    case 'courses':
+      return 'Finding your courses'
     case 'content':
-      if (status === 'current' && p?.stage === 'content') return `${shortCode(p.courseCode ?? '')} · ${p.courseIndex} of ${p.courseCount}`
-      if (status === 'done' && s) return `${s.courses.reduce((n, c) => n + c.contents, 0)} items, ${s.courses.reduce((n, c) => n + c.announcements, 0)} announcements`
-      return status === 'done' ? 'Done' : 'Content, announcements and grades'
+      return p?.stage === 'content' ? `Reading ${shortCode(p.courseCode ?? '')} (${p.courseIndex} of ${p.courseCount})` : 'Reading your courses'
     case 'todo':
-      if (status === 'current' && p?.stage === 'todo') return `Part ${p.windowIndex} of ${p.windowCount}`
-      return status === 'done' && s ? `${s.todoItems} due in the next 12 weeks` : 'Coursework deadlines'
+      return p?.stage === 'todo' ? `Reading due dates (${p.windowIndex} of ${p.windowCount})` : 'Reading due dates'
     case 'saving':
-      return status === 'done' ? 'Kept in this browser. Not sent anywhere yet' : 'Kept in this browser'
+      return 'Saving'
   }
 }
 
@@ -117,12 +80,6 @@ function courseLabel(c: CourseRow): string {
 
 function courseUrl(c: CourseRow): string {
   return `${BB_ORIGIN}/ultra/courses/${encodeURIComponent(c.bbId)}/outline`
-}
-
-function sortedCourses(): CourseRow[] {
-  const courses = summary()?.courses ?? []
-  // Modules first (they map to workspaces), then org courses.
-  return [...courses].sort((a, b) => Number(!a.moduleCode) - Number(!b.moduleCode) || courseLabel(a).localeCompare(courseLabel(b)))
 }
 
 function relativeTime(iso: string): string {
@@ -141,7 +98,6 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 function startSync() {
   if (activeSync()) return
-  state.tab = 'running'
   // Optimistic: the worker writes the real state a moment later.
   state.sync = { running: true, startedAt: new Date().toISOString(), updatedAt: Date.now(), via: 'worker', stage: 'session' }
   render()
@@ -166,135 +122,27 @@ async function downloadSnapshot() {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function effectiveTheme(): Theme {
-  return state.theme ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-}
-
-function toggleTheme() {
-  state.theme = effectiveTheme() === 'dark' ? 'light' : 'dark'
-  void chrome.storage.local.set({ [STORAGE.theme]: state.theme })
-  render()
-}
-
 // ---------- views ----------
 
 function header(): HTMLElement {
   const session = state.session
-  const sync = activeSync()
-  let dotOn = false
+  let on = false
   let text = 'Checking Blackboard…'
-  if (sync) {
-    dotOn = true
-    text = 'Syncing…'
-  } else if (session?.status === 'connected') {
-    dotOn = true
+  if (activeSync() || session?.status === 'connected') {
+    on = true
     text = 'Blackboard connected'
   } else if (session?.status === 'login') text = 'Not logged in'
   else if (session?.status === 'error') text = 'Blackboard unreachable'
-  const theme = effectiveTheme()
   return h(
     'header',
     { class: 'header' },
     h('div', { class: 'brand' }, 'Blackboard Sync'),
-    h(
-      'div',
-      { class: 'header-right' },
-      h('div', { class: 'status', title: session?.status === 'login' ? session.reason : '' }, h('span', { class: `status-dot${dotOn ? ' on' : ''}` }), text),
-      h(
-        'button',
-        { class: 'icon-button', title: theme === 'dark' ? 'Light mode' : 'Dark mode', 'aria-label': 'Toggle light or dark mode', onclick: toggleTheme },
-        icon(theme === 'dark' ? 'sun' : 'moon', 16),
-      ),
-    ),
-  )
-}
-
-function strip(): HTMLElement {
-  const sync = activeSync()
-  const courses = sortedCourses()
-  const chips = h(
-    'div',
-    {
-      class: 'chips',
-      // Mouse wheels scroll the strip sideways.
-      onwheel: (event: Event) => {
-        const wheel = event as WheelEvent
-        if (Math.abs(wheel.deltaY) > Math.abs(wheel.deltaX)) {
-          ;(wheel.currentTarget as HTMLElement).scrollLeft += wheel.deltaY
-          wheel.preventDefault()
-        }
-      },
-    },
-    ...(courses.length
-      ? courses.map((c) =>
-          h(
-            'button',
-            {
-              class: `chip${state.selected === c.bbId ? ' selected' : ''}`,
-              title: c.name,
-              'aria-label': `${courseLabel(c)}, ${c.name}`,
-              'aria-pressed': state.selected === c.bbId ? 'true' : 'false',
-              onclick: () => {
-                state.selected = state.selected === c.bbId ? null : c.bbId
-                render()
-              },
-            },
-            icon('bookOpen', 16, 1.75),
-            courseLabel(c),
-          ),
-        )
-      : [h('span', { class: 'chips-empty' }, 'Your courses appear here after a sync')]),
-  )
-  return h(
-    'div',
-    { class: 'strip' },
-    h(
-      'button',
-      { class: `round${sync ? ' spinning' : ''}`, title: sync ? 'Syncing…' : 'Sync now', 'aria-label': 'Sync now', disabled: !!sync, onclick: startSync },
-      icon('refresh', 16),
-    ),
-    chips,
-  )
-}
-
-function detailCard(): HTMLElement | null {
-  const c = sortedCourses().find((course) => course.bbId === state.selected)
-  if (!c) return null
-  return h(
-    'section',
-    { class: 'card' },
-    h('h2', {}, c.name),
-    h('p', {}, c.moduleCode ? `${c.moduleCode} · module, links to its workspace` : `${shortCode(c.courseCode)} · not a module`),
-    h(
-      'div',
-      { class: 'rows' },
-      row('Announcements', c.announcements),
-      row('Content items', c.skippedFolders ? `${c.contents}+` : c.contents),
-      row('Gradebook', `${plural(c.columns, 'column')} · ${plural(c.grades, 'grade')}`),
-      c.errors ? row('Problems', c.errors, 'alert') : null,
-    ),
-    h('button', { class: 'secondary', onclick: () => openUrl(courseUrl(c)) }, icon('externalLink', 15), 'Open in Blackboard'),
-  )
-}
-
-function row(label: string, value: string | number, mark?: 'tick' | 'alert'): HTMLElement {
-  return h(
-    'div',
-    { class: 'row' },
-    h('span', { class: 'row-label' }, label),
-    h(
-      'span',
-      { class: 'row-value' },
-      String(value),
-      mark === 'tick' ? h('span', { class: 'tick' }, icon('check', 11, 3.5)) : null,
-      mark === 'alert' ? h('span', { class: 'alert' }, icon('alert', 18)) : null,
-    ),
+    h('div', { class: 'status' }, h('span', { class: `status-dot${on ? ' on' : ''}` }), text),
   )
 }
 
 function tabs(): HTMLElement {
-  const sync = activeSync()
-  const tab = (id: Tab, label: string, dot = false) =>
+  const tab = (id: Tab, label: string) =>
     h(
       'button',
       {
@@ -307,172 +155,108 @@ function tabs(): HTMLElement {
         },
       },
       label,
-      dot ? h('span', { class: 'tab-dot', 'aria-label': 'running' }) : null,
     )
-  return h('nav', { class: 'tabs', role: 'tablist' }, tab('overview', 'Overview'), tab('courses', 'Courses'), tab('running', 'Running now', !!sync))
+  return h('nav', { class: 'tabs', role: 'tablist' }, tab('overview', 'Overview'), tab('courses', 'Courses'))
 }
 
-function banner(): HTMLElement | null {
-  if (state.tab === 'running') return null
-  const sync = activeSync()
-  if (sync) {
-    const at = STEPS.findIndex((s) => s.stage === sync.stage)
-    return h(
-      'button',
-      { class: 'banner', onclick: () => ((state.tab = 'running'), render()) },
-      h('span', { class: 'status-dot on' }),
-      h('span', { class: 'grow' }, `Syncing Blackboard · ${STEPS[at].name}`),
-      h('span', { class: 'count' }, `${at + 1} of ${STEPS.length}`),
+/** The one progress indicator: five circles joined by a line. */
+function progressBar(at: number, mode: 'current' | 'error'): HTMLElement {
+  const bar = h('div', { class: 'roadmap', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(STAGES.length), 'aria-valuenow': String(at) })
+  STAGES.forEach((_, i) => {
+    const status = i < at ? 'done' : i === at ? mode : 'todo'
+    if (i > 0) bar.append(h('span', { class: `line${i <= at ? ' done' : ''}` }))
+    bar.append(
+      h(
+        'span',
+        { class: `circle ${status}` },
+        status === 'done' ? icon('check', 13, 3.5) : null,
+        status === 'error' ? h('strong', { class: 'bang' }, '!') : null,
+      ),
     )
-  }
-  const run = state.lastRun
-  if (run && !run.ok && run.loginRequired) {
-    return h(
-      'button',
-      { class: 'banner urgent', onclick: () => openUrl(`${BB_ORIGIN}/ultra/course`) },
-      h('span', { class: 'alert' }, icon('alert', 16)),
-      h('span', { class: 'grow' }, 'Log in to Blackboard, then sync again'),
-      icon('externalLink', 14),
-    )
-  }
-  return null
+  })
+  return bar
+}
+
+function row(label: string, value: string): HTMLElement {
+  return h('div', { class: 'row' }, h('span', { class: 'row-label' }, label), h('span', { class: 'row-value' }, value))
 }
 
 function overview(): HTMLElement[] {
   const sync = activeSync()
   const run = state.lastRun
   const s = summary()
-  const via = run?.ok ? run.via : state.session?.status === 'connected' ? state.session.via : undefined
-  const cards: HTMLElement[] = [
+  const failed = !sync && run && !run.ok ? run : undefined
+
+  let progress: HTMLElement | null = null
+  if (sync) {
+    const at = STAGES.indexOf(sync.stage)
+    progress = h('div', { class: 'progress' }, progressBar(at, 'current'), h('div', { class: 'step-text' }, `Step ${at + 1} of ${STAGES.length} · ${stepText(sync)}`))
+  } else if (failed) {
+    const at = Math.max(0, STAGES.indexOf(failed.stage ?? 'session'))
+    progress = h(
+      'div',
+      { class: 'progress' },
+      progressBar(at, 'error'),
+      h('div', { class: 'step-text error-text' }, failed.error),
+      failed.loginRequired
+        ? h('button', { class: 'secondary', onclick: () => openUrl(`${BB_ORIGIN}/ultra/course`) }, icon('externalLink', 15), 'Open Blackboard to log in')
+        : null,
+    )
+  }
+
+  const via = run?.ok ? run.via : undefined
+  return [
     h(
       'section',
       { class: 'card' },
       h('h2', {}, 'Sync Blackboard'),
       h('p', {}, 'Reads your courses, due dates, grades, announcements and course content. Read-only: nothing on Blackboard changes.'),
+      progress,
       h(
         'div',
         { class: 'rows' },
         row('Last sync', run ? `${relativeTime(run.at)}${run.ok ? '' : ', failed'}` : 'Never'),
-        s ? row('Found', `${plural(s.courses.length, 'course')} · ${s.todoItems} due`) : null,
-        row('Reads Blackboard', via === 'tab' ? 'Through your open tab' : via === 'worker' ? 'In the background' : '–'),
+        s ? row('Found', `${plural(s.courses.length, 'course')} · ${s.todoItems} due · ${s.courses.reduce((n, c) => n + c.contents, 0)} items`) : null,
       ),
       h('button', { class: 'primary', disabled: !!sync, onclick: startSync }, sync ? 'Syncing…' : 'Sync now'),
-      s
-        ? h('div', { class: 'note' }, h('button', { class: 'link', onclick: () => void downloadSnapshot() }, icon('download', 14), 'Download last sync (JSON)'))
+      s || via
+        ? h(
+            'div',
+            { class: 'note' },
+            // Phase 1 diagnostic: did the background worker reach Blackboard itself?
+            via ? h('span', {}, via === 'tab' ? 'Read through your open Blackboard tab' : 'Read in the background') : h('span'),
+            s ? h('button', { class: 'link', onclick: () => void downloadSnapshot() }, icon('download', 14), 'Download JSON') : null,
+          )
         : null,
     ),
   ]
-  // A login failure is already the banner; other failures get a card.
-  if (run && !run.ok && !run.loginRequired && !sync) {
-    cards.push(
-      h(
-        'section',
-        { class: 'card' },
-        h('div', { class: 'card-label' }, 'Last sync didn’t finish'),
-        h('p', { class: 'error-text' }, run.error),
-      ),
-    )
-  }
-  return cards
 }
 
 function courses(): HTMLElement[] {
-  const list = sortedCourses()
+  const list = [...(summary()?.courses ?? [])].sort(
+    // Modules first (they map to workspaces), then org courses.
+    (a, b) => Number(!a.moduleCode) - Number(!b.moduleCode) || courseLabel(a).localeCompare(courseLabel(b)),
+  )
   if (list.length === 0) return [h('div', { class: 'empty' }, 'No courses yet. Sync to pull them in.')]
   const card = (c: CourseRow) =>
     h(
       'section',
       { class: 'card' },
       h('h2', {}, c.name),
-      h('p', {}, `${courseLabel(c)} · ${plural(c.announcements, 'announcement')} · ${plural(c.contents, 'content item')}`),
+      h('p', {}, `${courseLabel(c)} · ${plural(c.announcements, 'announcement')} · ${plural(c.contents, 'item')}`),
       h(
         'div',
         { class: 'course-meta' },
-        h('span', {}, c.errors ? h('span', { class: 'error-text' }, plural(c.errors, 'problem')) : `${plural(c.columns, 'gradebook column')} · ${plural(c.grades, 'grade')}`),
-        h('div', { class: 'course-actions' }, h('button', { class: 'text-button', onclick: () => openUrl(courseUrl(c)) }, 'Open')),
+        c.errors ? h('span', { class: 'error-text' }, plural(c.errors, 'problem')) : h('span', {}, `${plural(c.grades, 'grade')} released`),
+        h('button', { class: 'text-button', onclick: () => openUrl(courseUrl(c)) }, 'Open'),
       ),
     )
-  const modules = list.filter((c) => c.moduleCode)
   const other = list.filter((c) => !c.moduleCode)
   return [
-    ...modules.map(card),
+    ...list.filter((c) => c.moduleCode).map(card),
     other.length ? h('div', { class: 'group-label' }, 'Other courses') : null,
     ...other.map(card),
   ].filter((el): el is HTMLElement => el !== null)
-}
-
-function running(): HTMLElement[] {
-  const statuses = stepStatuses()
-  if (!statuses) return [h('div', { class: 'empty' }, 'Nothing running. Press Sync now to start.')]
-  const circle = (status: StepStatus) =>
-    h(
-      'span',
-      { class: `circle ${status}` },
-      status === 'done' ? icon('check', 13, 3.5) : null,
-      status === 'error' ? h('strong', { style: 'font-size:13px;line-height:1' }, '!') : null,
-    )
-
-  const roadmap = h('section', { class: 'card roadmap', 'aria-label': 'Progress' })
-  statuses.forEach((status, i) => {
-    if (i > 0) roadmap.append(h('span', { class: `line${status === 'done' || status === 'current' || status === 'error' ? ' done' : ''}` }))
-    roadmap.append(circle(status))
-  })
-
-  const steps = h(
-    'section',
-    { class: 'card' },
-    h(
-      'ol',
-      { class: 'steps' },
-      ...STEPS.map((step, i) =>
-        h(
-          'li',
-          { class: `step ${statuses[i]}`, 'aria-current': statuses[i] === 'current' ? 'step' : undefined },
-          circle(statuses[i]),
-          h('div', { class: 'step-name' }, step.name),
-          statuses[i] === 'todo' && i === STEPS.length - 1 ? null : h('div', { class: 'step-detail' }, stepDetail(i, statuses[i])),
-        ),
-      ),
-    ),
-  )
-
-  const out = [roadmap, steps]
-  const run = state.lastRun
-  const s = summary()
-  if (!activeSync() && run?.ok && s) {
-    const content = s.courses.reduce((n, c) => n + c.contents, 0)
-    const announcements = s.courses.reduce((n, c) => n + c.announcements, 0)
-    const grades = s.courses.reduce((n, c) => n + c.grades, 0)
-    out.push(
-      h(
-        'section',
-        { class: 'card' },
-        h('div', { class: 'card-label' }, `Synced ${relativeTime(run.at).toLowerCase()}`),
-        h(
-          'div',
-          {},
-          row('Courses', s.courses.length, 'tick'),
-          row('Content items', content, 'tick'),
-          row('Announcements', announcements, 'tick'),
-          row('Grades released', grades, 'tick'),
-          row('Due items', s.todoItems, 'tick'),
-          row('Problems', s.errors, s.errors ? 'alert' : 'tick'),
-        ),
-        h('div', { class: 'note' }, 'Nothing on Blackboard was changed.'),
-        h('div', { class: 'note' }, h('button', { class: 'link', onclick: () => void downloadSnapshot() }, icon('download', 14), 'Download JSON')),
-      ),
-    )
-  } else if (!activeSync() && run && !run.ok && run.loginRequired) {
-    out.push(
-      h(
-        'section',
-        { class: 'card' },
-        h('p', {}, 'Your Blackboard login has ended. Log in, then sync again.'),
-        h('button', { class: 'primary', onclick: () => openUrl(`${BB_ORIGIN}/ultra/course`) }, 'Open Blackboard'),
-      ),
-    )
-  }
-  return out
 }
 
 // ---------- render ----------
@@ -480,13 +264,7 @@ function running(): HTMLElement[] {
 const app = document.getElementById('app')!
 
 function render() {
-  document.documentElement.dataset.theme = state.theme ?? ''
-  if (!state.theme) delete document.documentElement.dataset.theme
-  const body = state.tab === 'overview' ? overview() : state.tab === 'courses' ? courses() : running()
-  const scroll = app.querySelector('.chips')?.scrollLeft ?? 0
-  app.replaceChildren(header(), strip(), tabs(), h('main', { class: 'content', role: 'tabpanel' }, banner(), detailCard(), ...body))
-  const chips = app.querySelector('.chips')
-  if (chips) chips.scrollLeft = scroll
+  app.replaceChildren(header(), tabs(), h('main', { class: 'content', role: 'tabpanel' }, ...(state.tab === 'overview' ? overview() : courses())))
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -498,22 +276,17 @@ chrome.storage.onChanged.addListener((changes, area) => {
   render()
 })
 
-matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render)
-
 async function init() {
   const [local, session] = await Promise.all([
-    chrome.storage.local.get([STORAGE.lastRun, STORAGE.lastSummary, STORAGE.theme]),
+    chrome.storage.local.get([STORAGE.lastRun, STORAGE.lastSummary]),
     chrome.storage.session.get([STORAGE.syncState, STORAGE.session]),
   ])
   state.lastRun = local[STORAGE.lastRun] as LastRun | undefined
   // Installs from before lastSummary existed still have it inside lastRun.
   const last = state.lastRun
   state.lastSummary = (local[STORAGE.lastSummary] as SnapshotSummary | undefined) ?? (last?.ok ? last.summary : undefined)
-  state.theme = local[STORAGE.theme] as Theme | undefined
   state.sync = session[STORAGE.syncState] as SyncState | undefined
   state.session = session[STORAGE.session] as SessionCheck | undefined
-  // Reopened mid-sync: go straight to the run.
-  if (activeSync()) state.tab = 'running'
   render()
   // Fresh "connected" check each time the panel opens (one request).
   if (!activeSync()) void chrome.runtime.sendMessage<WorkerMessage, SessionCheck>({ type: 'check' })

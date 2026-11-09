@@ -7,8 +7,8 @@
     <style>
       /*
         Extension side panel. Not part of the dashboard, so it follows its own
-        spec (warm base colours + one terracotta accent, light/dark with a
-        manual toggle) instead of DESIGN.md.
+        look (warm base colours + one terracotta accent, light or dark from the
+        system setting) instead of DESIGN.md.
       */
       :root {
         --bg: #faf9f5;
@@ -18,25 +18,16 @@
         --border: #dad8d2;
         --accent: #d97757;
         --on-accent: #ffffff;
-        color-scheme: light;
+        color-scheme: light dark;
       }
       @media (prefers-color-scheme: dark) {
-        :root:not([data-theme='light']) {
+        :root {
           --bg: #1f1e1d;
           --surface: #2a2927;
           --ink: #faf9f5;
           --muted: #a3a199;
           --border: #3d3c39;
-          color-scheme: dark;
         }
-      }
-      :root[data-theme='dark'] {
-        --bg: #1f1e1d;
-        --surface: #2a2927;
-        --ink: #faf9f5;
-        --muted: #a3a199;
-        --border: #3d3c39;
-        color-scheme: dark;
       }
 
       * { box-sizing: border-box; }
@@ -51,100 +42,52 @@
       button:disabled { cursor: default; }
       :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       svg { display: block; flex: none; }
-      [hidden] { display: none !important; }
 
-      /* Header */
-      .header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; }
+      .header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 16px 16px 4px; }
       .brand { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-      .header-right { display: flex; align-items: center; gap: 10px; min-width: 0; }
-      .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; white-space: nowrap; }
       .status-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; border: 1.5px solid var(--muted); }
       .status-dot.on { background: var(--accent); border-color: var(--accent); }
-      .icon-button { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
-      .icon-button:hover { color: var(--ink); }
 
-      /* Shortcut strip */
-      .strip { position: relative; display: flex; align-items: center; padding: 0 16px 0 16px; }
-      .round { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); display: grid; place-items: center; flex: none; position: relative; z-index: 2; }
-      .round:hover:not(:disabled) { border-color: var(--ink); }
-      .round.spinning svg { animation: spin 1s linear infinite; }
-      @keyframes spin { to { transform: rotate(360deg); } }
-      .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 2px 20px; margin-left: -12px; scroll-padding-left: 20px; }
-      .chips::-webkit-scrollbar { display: none; }
-      /* The one gradient: chips fade as they slide under the pinned button. */
-      .strip::after { content: ''; position: absolute; left: 52px; top: 0; bottom: 0; width: 18px; background: linear-gradient(to right, var(--bg), transparent); pointer-events: none; z-index: 1; }
-      .chip { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); white-space: nowrap; flex: none; }
-      .chip:hover { border-color: var(--muted); }
-      .chip.selected { border-color: var(--accent); box-shadow: inset 0 0 0 0.5px var(--accent); }
-      .chip svg { color: var(--muted); }
-      .chips-empty { color: var(--muted); font-size: 13px; padding-left: 20px; }
-
-      /* Tabs */
       .tabs { display: flex; gap: 22px; padding: 0 16px; margin-top: 14px; border-bottom: 1px solid var(--border); }
-      .tab { padding: 6px 0 8px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+      .tab { padding: 6px 0 8px; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--muted); }
       .tab:hover { color: var(--ink); }
       .tab.active { color: var(--ink); font-weight: 500; border-bottom-color: var(--ink); }
-      .tab-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
-      /* Content */
       .content { padding: 16px; display: grid; gap: 12px; }
       .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
       .card h2 { font-size: 16px; font-weight: 500; margin: 0 0 4px; letter-spacing: -0.01em; }
       .card p { margin: 0; color: var(--muted); }
-      .card-label { color: var(--muted); margin-bottom: 8px; }
       .rows { margin-top: 14px; }
       .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--border); }
       .row-label { color: var(--muted); }
-      .row-value { display: flex; align-items: center; gap: 10px; text-align: right; }
-      .tick { width: 18px; height: 18px; border-radius: 50%; background: var(--ink); color: var(--bg); display: grid; place-items: center; }
-      .alert { color: var(--accent); }
+      .row-value { text-align: right; }
       .primary { width: 100%; height: 40px; margin-top: 12px; border-radius: 9px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
       .primary:hover:not(:disabled) { filter: brightness(0.96); }
       .primary:disabled { opacity: 0.55; }
       .secondary { width: 100%; height: 38px; margin-top: 12px; border-radius: 9px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; gap: 8px; }
       .secondary:hover { border-color: var(--ink); }
-      .link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+      .note { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; color: var(--muted); font-size: 13px; }
+      .link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
       .link:hover { color: var(--ink); }
-      .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
       .error-text { color: var(--accent); }
 
-      /* Course list (Saved routines pattern) */
-      .course-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; color: var(--muted); }
-      .course-actions { display: flex; gap: 16px; flex: none; }
-      .text-button { color: var(--ink); font-weight: 500; }
-      .text-button.accent { color: var(--accent); }
-      .group-label { color: var(--muted); font-size: 13px; margin: 4px 2px -4px; }
-
-      /* Banner */
-      .banner { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); text-align: left; }
-      .banner:hover { border-color: var(--muted); }
-      .banner .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .banner .count { color: var(--muted); font-variant-numeric: tabular-nums; }
-      .banner.urgent { border-color: var(--accent); }
-
-      /* Roadmap */
-      .roadmap { display: flex; align-items: center; padding: 18px 20px; }
+      /* Progress: the one indicator, horizontal. */
+      .progress { margin-top: 14px; }
+      .roadmap { display: flex; align-items: center; padding: 4px 2px; }
       .roadmap .line { flex: 1; height: 1.5px; background: var(--border); }
       .roadmap .line.done { background: var(--ink); }
-      .circle { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--border); background: var(--surface); display: grid; place-items: center; flex: none; position: relative; }
-      .circle.done { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+      .circle { width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--border); background: var(--surface); display: grid; place-items: center; flex: none; }
+      .circle.done { background: var(--ink); border-color: var(--ink); color: var(--surface); }
       .circle.current { border-color: var(--accent); }
       .circle.current::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
       .circle.error { border-color: var(--accent); color: var(--accent); }
+      .bang { font-size: 13px; line-height: 1; }
+      .step-text { margin-top: 10px; font-size: 13px; color: var(--muted); }
 
-      /* Step list */
-      .steps { list-style: none; margin: 0; padding: 4px 0 0; }
-      .step { position: relative; padding: 0 0 16px 38px; min-height: 40px; }
-      .step:last-child { padding-bottom: 0; min-height: 0; }
-      .step .circle { position: absolute; left: 0; top: 0; }
-      .step::before { content: ''; position: absolute; left: 11.25px; top: 24px; bottom: 0; width: 1.5px; background: var(--border); }
-      .step.done::before { background: var(--ink); }
-      .step:last-child::before { display: none; }
-      .step-name { font-weight: 500; line-height: 24px; }
-      .step.todo .step-name { color: var(--muted); font-weight: 400; }
-      .step-detail { color: var(--muted); font-size: 13px; }
-      .step.error .step-detail { color: var(--accent); }
-
+      .course-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; color: var(--muted); }
+      .text-button { color: var(--ink); font-weight: 500; }
+      .group-label { color: var(--muted); font-size: 13px; margin: 4px 2px -4px; }
       .empty { color: var(--muted); text-align: center; padding: 28px 12px; }
     </style>
   </head>

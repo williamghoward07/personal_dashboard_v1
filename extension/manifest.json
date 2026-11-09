@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Study Copilot: Blackboard Sync",
+  "version": "0.2.0",
+  "description": "Reads my own Blackboard Ultra data with my logged-in session. Read-only.",
+  "action": {
+    "default_title": "Blackboard Sync"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+  "permissions": ["storage", "unlimitedStorage", "sidePanel"],
+  "host_permissions": ["https://blackboard.durham.ac.uk/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://blackboard.durham.ac.uk/*"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

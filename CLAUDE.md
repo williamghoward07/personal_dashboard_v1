@@ -59,6 +59,7 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
 - Instagram: no API, scraping or automation. Follows are imported only from the user's data export (`following.json`), and re-importing is additive-only.
 - Perplexity: links are saved manually. There is no public API.
 - Bible: store references only, never scripture text. No Bible API, zero AI calls.
+- Blackboard: read-only, through my logged-in browser (Chrome extension in `extension/`, logic in `lib/blackboard/client.ts`). Never store credentials. Rules: `lib/blackboard/CLAUDE.md`.
 - `/api/alexa` is public in `proxy.ts` and verifies requests itself (`lib/alexa/CLAUDE.md`).
 - No push or email notifications are built yet.
 - Env vars are documented in `.env.example`. Never commit values.

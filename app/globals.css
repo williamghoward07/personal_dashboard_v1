@@ -319,6 +319,28 @@ body {
   }
 }
 
+/* HoldRadialMenu: the wheel grows out of the held button. */
+.radial-in {
+  animation: radial-in var(--duration-normal) var(--ease-standard);
+}
+
+@keyframes radial-in {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radial-in {
+    animation: none;
+  }
+}
+
 @keyframes led-pulse {
   0%,
   100% {

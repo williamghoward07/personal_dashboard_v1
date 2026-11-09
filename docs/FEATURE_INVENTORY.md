@@ -73,13 +73,20 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
   handed in, green done), right half = follow-up (grey until handed in,
   then amber concepts outstanding, green done, red once the session ended
   with nothing).
-- ✅ "Assignments" card above "Next 7 days", tabbed like Teams: Upcoming
+- ✅ A Lectures | Assignments switch at the top of the page (the Lectures
+  one shows the total past-due count). Assignments is a placeholder until
+  the Blackboard scraper exists; there's no assignments schema yet.
+- ✅ Module filter (All + one chip per module code, each with its past-due
+  count) above the tabbed list; filtering shows the module's name and an
+  Open workspace link and drops the module column from the rows.
+- ✅ Tabbed session list above "Next 7 days", tabbed like Teams: Upcoming
   (not handed in, soonest first), Past due ("Due n days ago", what's left,
   one-click Mark as done), Completed (handed in, future sessions too) and
   History (past due + completed), the last three most recent first. Only
   prep counts towards past due. Then one card per module code; Create workspace
   makes the module workspace (`workspaces.module_code`), which then lives on
-  `/lectures`, not `/workspaces`, and has a Lectures section.
+  `/lectures`, not `/workspaces`, and has a Lectures section showing the
+  same tabbed list for its module (`SessionAssignmentsList`).
 - ✅ The same lights on `/calendar` (month dots, week/day pills split in
   half, agenda); clicking a session opens an anchored popover with its prep,
   Mark as done and an "Open full view" link.
@@ -334,7 +341,9 @@ Markdown export (always complete, even for hidden sections).
 - **Study time** (Layout → Study time; hidden by default): a stat card with
   this week's hours (ring vs an optional `weekly_minutes_target`, else last
   week) and a Log time popover — 15-minute chips or exact minutes, any past
-  day, optional note; this week's entries editable. Entered by hand from
+  day, optional note; this week's entries editable. Press and hold Log
+  time (250ms) for a radial wheel of the quick durations: release on one
+  logs it for today (`HoldRadialMenu`, geometry in `lib/ui/radial.ts`). Entered by hand from
   Opal (no Opal API). Table `workspace_time_logs`; logic
   `lib/workspaces/time.ts`. Separate from Education's `time_logs`.
 - **Module overview:** workspace cards on `/workspaces` show the readings

@@ -59,7 +59,8 @@ export default function WorkspacesHelp({ align = 'start' }: { align?: 'start' | 
             Give a workspace a <span className="text-on-surface">module code</span> (e.g. GEOG1081, in the palette
             menu next to the title) — or use Create workspace on the Lectures tab — and it becomes a module workspace.
             It moves from here to the Lectures tab and gets a Lectures section listing every session for that module
-            from your timetable.
+            from your timetable, with the same Upcoming · Past due · Completed · History tabs as the Lectures tab, so
+            you can mark past-due sessions as done right here.
           </p>
           <p>
             Open a session to paste its reading links (Talis, Blackboard…) and tick them off, mark &quot;no readings&quot;,
@@ -85,6 +86,8 @@ export default function WorkspacesHelp({ align = 'start' }: { align?: 'start' | 
             Study time: Log time on the Study time card. Tap a 15-minute block (15m, 30m, 45m, 1h…) or type the exact
             time (50, 1:35, 1h35) — handy for copying sessions over from Opal. Pick an earlier day if you&apos;re catching
             up. This week&apos;s entries can be edited or deleted there, and an optional weekly target fills the ring.
+            For a quick log, press and hold Log time: a wheel of durations pops up round the button. Slide onto one and
+            release to log it for today (release in the middle or press Esc to cancel).
           </p>
         </Section>
 

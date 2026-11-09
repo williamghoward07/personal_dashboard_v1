@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Clock, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { ProgressRing } from '@/components/ui/progress-ring'
@@ -16,6 +16,7 @@ import {
 } from '@/lib/workspaces/time'
 import type { TimeLogInput } from '@/lib/workspaces/use-workspace-time'
 import Popover from '../../Popover'
+import HoldRadialMenu from '../../HoldRadialMenu'
 import ConfirmDialog from '../../ConfirmDialog'
 import {
   filterChipActiveClass,
@@ -27,6 +28,8 @@ import {
   primaryButtonClass,
   wsAccentStyle,
 } from './shared'
+
+const RADIAL_ITEMS = QUICK_MINUTES.map((m) => ({ value: m as number, label: formatMinutes(m) }))
 
 const WEEKDAY = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })
 const dayLabel = (day: string) => WEEKDAY.format(new Date(`${day}T00:00:00Z`))
@@ -191,6 +194,15 @@ export default function StudyTimeCard({
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<WorkspaceTimeLog | null>(null)
   const [targetDraft, setTargetDraft] = useState<string | null>(null)
+  const [wheelOpen, setWheelOpen] = useState(false)
+  const [quickLogged, setQuickLogged] = useState<string | null>(null)
+  const quickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(
+    () => () => {
+      if (quickTimer.current) clearTimeout(quickTimer.current)
+    },
+    []
+  )
 
   const summary = useMemo(() => timeSummary(logs), [logs])
   const percent = weekRingPercent(summary, targetMinutes)
@@ -211,6 +223,15 @@ export default function StudyTimeCard({
     }
   }
 
+  // Hold Log time → wheel → release: logs today straight away, no popover.
+  const quickLog = async (m: number) => {
+    if (quickTimer.current) clearTimeout(quickTimer.current)
+    setQuickLogged(`Logging ${formatMinutes(m)}…`)
+    const ok = await addLog({ day: todayKey(), minutes: m, note: null })
+    setQuickLogged(ok ? `Logged ${formatMinutes(m)} today` : `Couldn't log ${formatMinutes(m)}`)
+    quickTimer.current = setTimeout(() => setQuickLogged(null), 2500)
+  }
+
   const commitTarget = () => {
     if (targetDraft === null) return
     const hours = Number(targetDraft)
@@ -228,7 +249,7 @@ export default function StudyTimeCard({
       style={wsAccentStyle}
       size="sm"
       // Raised while the log is open so it paints over the cards below.
-      className={`flex items-center justify-between gap-3 ${open ? 'relative z-30' : ''}`}
+      className={`flex items-center justify-between gap-3 ${open || wheelOpen ? 'relative z-30' : ''}`}
     >
       <div className="flex min-w-0 flex-col gap-1">
         <span className={microLabelClass}>Study time · this week</span>
@@ -243,11 +264,27 @@ export default function StudyTimeCard({
           onOpenChange={setOpen}
           className="mt-1 w-fit"
           panelClassName="w-80"
-          trigger={(props) => (
-            <button type="button" {...props} className={`${primaryButtonClass} w-fit py-1`}>
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-              Log time
-            </button>
+          trigger={({ onClick, ...props }) => (
+            <HoldRadialMenu
+              items={RADIAL_ITEMS}
+              onPick={(m) => void quickLog(m)}
+              onClick={onClick}
+              onOpenChange={setWheelOpen}
+              hint="Release to log"
+            >
+              {(hold) => (
+                <button
+                  type="button"
+                  {...props}
+                  {...hold}
+                  title="Click to log time · hold to quick-log today"
+                  className={`${primaryButtonClass} w-fit touch-none py-1 select-none`}
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                  Log time
+                </button>
+              )}
+            </HoldRadialMenu>
           )}
         >
           <form
@@ -332,6 +369,11 @@ export default function StudyTimeCard({
             </label>
           </div>
         </Popover>
+        {quickLogged && (
+          <span role="status" className="text-xs text-ws-accent">
+            {quickLogged}
+          </span>
+        )}
       </div>
 
       <div title={targetMinutes ? 'This week against your weekly target' : 'This week against last week'}>

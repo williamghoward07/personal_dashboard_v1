@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, Presentation } from 'lucide-react'
+import { Presentation } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { ACCENT_BAR } from '@/lib/theme'
 import { cn } from '@/lib/utils/cn'
@@ -18,8 +18,9 @@ import {
   prepStatus,
   splitByTime,
   type PrepStatus,
+  type SessionWithPrep,
 } from '@/lib/timetable/session'
-import SessionRow from '../../lectures/SessionRow'
+import SessionAssignmentsList from '../../lectures/SessionAssignmentsList'
 import { inputClass, microLabelClass, wsAccentStyle } from './shared'
 
 function StatusCounts({ counts }: { counts: Record<PrepStatus, number> }) {
@@ -36,7 +37,8 @@ function StatusCounts({ counts }: { counts: Record<PrepStatus, number> }) {
   )
 }
 
-// A module workspace's timetable: every session for its module code, each
+// A module workspace's timetable: every session for its module code, in the
+// same Upcoming / Past due / Completed / History view as /lectures, each
 // opening its assignment view. Reading counts come from this page's own
 // link state, so Sources, stats and this section always agree; task counts
 // and hand-in state come from the timetable fetch.
@@ -51,7 +53,6 @@ export default function LecturesSection({
 }) {
   const { sessions: all, loading, error, setupNeeded } = useTimetable()
   const [now] = useState(() => new Date())
-  const [showPast, setShowPast] = useState(false)
 
   const sessions = useMemo(() => all.filter((s) => s.moduleCode === moduleCode), [all, moduleCode])
   const uids = useMemo(() => new Set(sessions.map((s) => s.uid)), [sessions])
@@ -72,21 +73,24 @@ export default function LecturesSection({
     (l) => (l.is_reading || l.week != null || l.session_uid) && (!l.session_uid || !uids.has(l.session_uid))
   )
 
-  const live = sessions.map((s) => {
-    const readings = readingsBySession.get(s.uid) ?? []
-    const linkCount = { done: readings.filter((r) => r.completed_at).length, total: readings.length }
-    const count = addCounts(linkCount, s.tasks.prep)
-    return {
-      session: s,
-      count,
-      status: prepStatus(count, s.prepDone),
-      postStatus: postStatus(s.tasks.post, s.notesDone, s.prepDone, hasEnded(s, now)),
-    }
-  })
-  const { upcoming, past } = splitByTime(
-    live.map((l) => ({ ...l.session, live: l })),
-    now
+  const live: SessionWithPrep[] = useMemo(
+    () =>
+      sessions.map((s) => {
+        const readings = readingsBySession.get(s.uid) ?? []
+        const linkCount = {
+          done: readings.filter((r) => r.completed_at).length,
+          total: readings.length,
+        }
+        return {
+          ...s,
+          readings: linkCount,
+          status: prepStatus(addCounts(linkCount, s.tasks.prep), s.prepDone),
+          postStatus: postStatus(s.tasks.post, s.notesDone, s.prepDone, hasEnded(s, now)),
+        }
+      }),
+    [sessions, readingsBySession, now]
   )
+  const { upcoming, past } = splitByTime(live, now)
 
   const afterWrite = <T,>(promise: Promise<T>) =>
     promise.then((result) => {
@@ -94,29 +98,20 @@ export default function LecturesSection({
       return result
     })
 
-  const renderRow = (entry: (typeof live)[number]) => (
-    <SessionRow
-      key={entry.session.uid}
-      session={entry.session}
-      status={entry.status}
-      postStatus={entry.postStatus}
-      prep={entry.count}
-    />
-  )
+  const upcomingCounts = countByStatus(upcoming)
 
-  const upcomingCounts = countByStatus(upcoming.map((s) => s.live))
+  // Without a list to sit in, the title stands alone.
+  const bareTitle = !!error || (!loading && sessions.length === 0)
 
   return (
     <ModuleGlassCard style={wsAccentStyle} size="sm" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {bareTitle && (
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
           <Presentation className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
           Lectures
           <span className="font-mono text-[11px] font-normal text-on-surface-variant">{moduleCode}</span>
         </h2>
-        {upcoming.length > 0 && <StatusCounts counts={upcomingCounts} />}
-      </div>
-
+      )}
       {error === 'not_configured' && (
         <p className="text-sm text-on-surface-variant">
           The timetable isn&apos;t connected — set <code>TIMETABLE_ICS_URL</code> (see the Lectures tab).
@@ -142,7 +137,9 @@ export default function LecturesSection({
                   className="min-w-0 flex-1 truncate text-on-surface hover:underline"
                 >
                   {link.title}
-                  {link.week != null && <span className="ml-1.5 text-xs text-on-surface-variant">week {link.week}</span>}
+                  {link.week != null && (
+                    <span className="ml-1.5 text-xs text-on-surface-variant">week {link.week}</span>
+                  )}
                 </a>
                 <select
                   value=""
@@ -187,38 +184,26 @@ export default function LecturesSection({
         </div>
       )}
 
-      {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading timetable…</p>
-      ) : !error && sessions.length === 0 ? (
+      {!loading && !error && sessions.length === 0 ? (
         <p className="text-sm text-on-surface-variant">No sessions for {moduleCode} on the timetable.</p>
       ) : (
-        <>
-          {upcoming.length > 0 ? (
-            <ul className="flex flex-col gap-0.5">{upcoming.map((s) => renderRow(s.live))}</ul>
-          ) : (
-            !error && <p className="text-sm text-on-surface-variant">No more sessions this term.</p>
-          )}
-
-          {past.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <button
-                type="button"
-                onClick={() => setShowPast((v) => !v)}
-                aria-expanded={showPast}
-                className="flex items-center gap-2 text-left"
-              >
-                <ChevronDown
-                  className={cn('h-3 w-3 text-on-surface-variant transition-transform', showPast ? '' : '-rotate-90')}
-                />
-                <span className={microLabelClass}>Earlier ({past.length})</span>
-                <span className="text-[11px] text-on-surface-variant">
-                  marked as done for {past.filter((s) => s.live.status === 'green').length}/{past.length}
-                </span>
-              </button>
-              {showPast && <ul className="flex flex-col gap-0.5">{past.map((s) => renderRow(s.live))}</ul>}
-            </div>
-          )}
-        </>
+        !error && (
+          <SessionAssignmentsList
+            sessions={live}
+            now={now}
+            accent="ws"
+            loading={loading}
+            showModule={false}
+            title={
+              <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
+                <Presentation className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
+                Lectures
+                <span className="font-mono text-[11px] font-normal text-on-surface-variant">{moduleCode}</span>
+                {upcoming.length > 0 && <StatusCounts counts={upcomingCounts} />}
+              </h2>
+            }
+          />
+        )
       )}
     </ModuleGlassCard>
   )

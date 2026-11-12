@@ -110,12 +110,41 @@ async function ensureDailyAlarm() {
 }
 
 async function readClock(): Promise<TriggerClock> {
-  const stored = await chrome.storage.local.get([STORAGE.syncStartedAt, STORAGE.lastAttemptAt, STORAGE.lastSuccessAt])
+  const stored = await chrome.storage.local.get([
+    STORAGE.syncStartedAt,
+    STORAGE.lastAttemptAt,
+    STORAGE.lastSuccessAt,
+    STORAGE.lastRun,
+  ])
+  const lastRun = stored[STORAGE.lastRun] as LastRun | undefined
   return {
     syncStartedAt: stored[STORAGE.syncStartedAt] as number | undefined,
     lastAttemptAt: stored[STORAGE.lastAttemptAt] as number | undefined,
     lastSuccessAt: stored[STORAGE.lastSuccessAt] as number | undefined,
+    // The last run stopped at Blackboard's login page: a visit soon after is
+    // probably me having just logged in, so it may retry early.
+    lastAttemptLoginNeeded: lastRun != null && !lastRun.ok && lastRun.loginRequired === true,
   }
+}
+
+/** Attachment id -> the version this extension gave up reading, and why. Ids and reasons only: never bytes or text. */
+type TriedDocuments = Record<string, { version: string; reason: string; at: number }>
+const TRIED_DOCUMENTS_MAX = 500
+
+async function readTriedDocuments(): Promise<TriedDocuments> {
+  const stored = await chrome.storage.local.get(STORAGE.documentsTried)
+  return (stored[STORAGE.documentsTried] as TriedDocuments | undefined) ?? {}
+}
+
+/** Adds this run's given-up files, keeping the newest TRIED_DOCUMENTS_MAX. */
+async function saveTriedDocuments(tried: TriedDocuments, settled: DocumentsResult['settled']) {
+  const at = Date.now()
+  const merged: TriedDocuments = { ...tried }
+  for (const [id, entry] of Object.entries(settled)) merged[id] = { ...entry, at }
+  const newest = Object.entries(merged)
+    .sort(([, a], [, b]) => b.at - a.at)
+    .slice(0, TRIED_DOCUMENTS_MAX)
+  await chrome.storage.local.set({ [STORAGE.documentsTried]: Object.fromEntries(newest) })
 }
 
 /**
@@ -338,7 +367,9 @@ async function syncDocuments(
     return browserFetch(url)
   }
   await writeState(via, 'documents', undefined, { done: 0, total: wanted.length })
-  return readDocuments(snap, wanted, {
+  const tried = await readTriedDocuments()
+  const result = await readDocuments(snap, wanted, {
+    settled: Object.fromEntries(Object.entries(tried).map(([id, entry]) => [id, entry.version])),
     bbFetch,
     pause,
     download: (url) => downloadLimited(workerFetch, url, DOCUMENT_MAX_BYTES),
@@ -352,6 +383,8 @@ async function syncDocuments(
     },
     onProgress: (done, total) => void writeState(via, 'documents', undefined, { done, total }),
   })
+  if (Object.keys(result.settled).length > 0) await saveTriedDocuments(tried, result.settled)
+  return result
 }
 
 async function fail(err: unknown, loginRequired: boolean): Promise<LastRun> {

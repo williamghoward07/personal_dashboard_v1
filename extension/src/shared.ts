@@ -121,6 +121,8 @@ export const STORAGE = {
   lastAttemptAt: 'lastAttemptAt',
   lastSuccessAt: 'lastSuccessAt',
   lastAutoRun: 'lastAutoRun',
+  /** Documents this extension gave up reading (attachment id -> version, reason). Never bytes or text. */
+  documentsTried: 'documentsTried',
 } as const
 
 export const SYNC_PATH = '/api/blackboard/sync'

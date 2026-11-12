@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { clampSpan, defaultSettings, mergeHomeLayout, parseHomeLayout, parseUserSettings } from './schema'
+import {
+  clampSpan,
+  defaultSettings,
+  defaultWorkFilter,
+  mergeHomeLayout,
+  parseHomeLayout,
+  parseUserSettings,
+  parseWeekOneStart,
+  parseWorkFilter,
+} from './schema'
 
 describe('clampSpan', () => {
   it('passes valid spans through', () => {
@@ -136,12 +145,16 @@ describe('parseUserSettings', () => {
       hidden_nav_items: ['/todos'],
       launcher_link_ids: ['11111111-1111-1111-1111-111111111111'],
       calendar_view: 'day',
+      work_filter: { tab: 'pastDue', categories: ['summative', 'lecture_prep'], modules: ['GEOG1081'] },
+      week_one_start: '2026-07-20',
     }
     expect(parseUserSettings(row)).toEqual({
       home_layout: [{ id: 'money', span: 2, hidden: false }],
       hidden_nav_items: ['/todos'],
       launcher_link_ids: ['11111111-1111-1111-1111-111111111111'],
       calendar_view: 'day',
+      work_filter: { tab: 'pastDue', categories: ['summative', 'lecture_prep'], modules: ['GEOG1081'] },
+      week_one_start: '2026-07-20',
     })
   })
 
@@ -152,12 +165,88 @@ describe('parseUserSettings', () => {
         hidden_nav_items: [1, 2, '/todos'],
         launcher_link_ids: null,
         calendar_view: 'bogus',
+        work_filter: 'nope',
+        week_one_start: 'soon',
       })
     ).toEqual({
       home_layout: [],
       hidden_nav_items: ['/todos'],
       launcher_link_ids: [],
       calendar_view: 'week',
+      work_filter: defaultWorkFilter(),
+      week_one_start: null,
     })
+  })
+
+  it('a row from before the work columns existed gets their defaults', () => {
+    const parsed = parseUserSettings({ home_layout: [], hidden_nav_items: [], launcher_link_ids: [], calendar_view: 'month' })
+    expect(parsed.work_filter).toEqual(defaultWorkFilter())
+    expect(parsed.week_one_start).toBeNull()
+  })
+
+  it('round-trips its own output', () => {
+    const settings = {
+      ...defaultSettings(),
+      work_filter: { tab: 'completed' as const, categories: 'all' as const, modules: ['GEOG1061', 'GEOG1222'] },
+      week_one_start: '2026-07-20',
+    }
+    expect(parseUserSettings(JSON.parse(JSON.stringify(settings)))).toEqual(settings)
+  })
+})
+
+describe('parseWorkFilter', () => {
+  it('defaults to Upcoming, every category except lecture prep, every module', () => {
+    expect(defaultWorkFilter()).toEqual({
+      tab: 'upcoming',
+      categories: ['summative', 'formative', 'test', 'tutorial', 'session_task', 'other'],
+      modules: 'all',
+    })
+    expect(parseWorkFilter(undefined)).toEqual(defaultWorkFilter())
+    expect(parseWorkFilter({})).toEqual(defaultWorkFilter()) // the column's '{}' default
+    expect(parseWorkFilter([])).toEqual(defaultWorkFilter())
+    expect(parseWorkFilter(null)).toEqual(defaultWorkFilter())
+  })
+
+  it("keeps 'all' and valid lists", () => {
+    expect(parseWorkFilter({ tab: 'completed', categories: 'all', modules: 'all' })).toEqual({
+      tab: 'completed',
+      categories: 'all',
+      modules: 'all',
+    })
+    expect(parseWorkFilter({ tab: 'upcoming', categories: [], modules: [] })).toEqual({
+      tab: 'upcoming',
+      categories: [],
+      modules: [],
+    })
+  })
+
+  it('drops unknown categories and duplicates; all-unknown falls back to the default set', () => {
+    expect(parseWorkFilter({ categories: ['formative', 'essay', 'formative', 3] }).categories).toEqual(['formative'])
+    expect(parseWorkFilter({ categories: ['essay', 'exam'] }).categories).toEqual(defaultWorkFilter().categories)
+    expect(parseWorkFilter({ categories: 'some' }).categories).toEqual(defaultWorkFilter().categories)
+  })
+
+  it('cleans module codes and falls back on a bad tab', () => {
+    expect(parseWorkFilter({ tab: 'history', modules: [' GEOG1081 ', 'GEOG1081', '', 7] })).toEqual({
+      ...defaultWorkFilter(),
+      tab: 'upcoming',
+      modules: ['GEOG1081'],
+    })
+    expect(parseWorkFilter({ modules: 'GEOG1081' }).modules).toBe('all')
+  })
+})
+
+describe('parseWeekOneStart', () => {
+  it('accepts a real date and snaps it to its Monday', () => {
+    expect(parseWeekOneStart('2026-07-20')).toBe('2026-07-20')
+    expect(parseWeekOneStart('2026-07-22')).toBe('2026-07-20')
+    expect(parseWeekOneStart('2026-07-20T00:00:00+00:00')).toBe('2026-07-20')
+  })
+
+  it('rejects anything else', () => {
+    expect(parseWeekOneStart(null)).toBeNull()
+    expect(parseWeekOneStart('2026-02-30')).toBeNull()
+    expect(parseWeekOneStart('20/07/2026')).toBeNull()
+    expect(parseWeekOneStart(20260720)).toBeNull()
   })
 })

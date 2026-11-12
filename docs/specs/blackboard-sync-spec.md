@@ -155,7 +155,7 @@ The data comes only from Supabase, never live from Blackboard. Nothing in the MC
 
 ### Phase 2 result (9 Nov 2026)
 
-Built: `supabase/migrations/20261109000000_blackboard_sync.sql` (**not applied yet**), `lib/blackboard/normalise.ts` + tests, `lib/blackboard/auth.ts`, `POST /api/blackboard/sync`, and the extension's upload plus Dashboard card. The migration and `bb_sync_apply` were checked in PGlite (Postgres in WASM): the migration re-runs cleanly; re-posting a snapshot changes nothing but `last_seen_at`; RLS hides other users' rows; anon is denied.
+Built: `supabase/migrations/20261109000000_blackboard_sync.sql` (applied to the live DB on 12 Nov 2026), `lib/blackboard/normalise.ts` + tests, `lib/blackboard/auth.ts`, `POST /api/blackboard/sync`, and the extension's upload plus Dashboard card. The migration and `bb_sync_apply` were checked in PGlite (Postgres in WASM): the migration re-runs cleanly; re-posting a snapshot changes nothing but `last_seen_at`; RLS hides other users' rows; anon is denied.
 
 How removal is scoped (never from a partial read):
 - **Courses**: missing from memberships → `removed_at` (memberships never come back partial: a lost session aborts the snapshot). Their child rows are left as they were.

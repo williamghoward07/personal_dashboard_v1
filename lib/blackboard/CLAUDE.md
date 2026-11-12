@@ -1,6 +1,6 @@
 # Blackboard sync
 
-Spec: `docs/specs/blackboard-sync-spec.md`. Phases 1 (extension) and 2 (schema + sync API) are built. The migration `20261109000000_blackboard_sync.sql` may not be applied yet.
+Spec: `docs/specs/blackboard-sync-spec.md`. Phases 1 (extension) and 2 (schema + sync API) are built. The migration `20261109000000_blackboard_sync.sql` is live (applied 12 Nov 2026).
 
 - `client.ts` fetches from Blackboard. It's pure: fetch is injected, and it's bundled into the Chrome extension (`extension/`, `npm run build:extension`). It must stay free of `server-only`, Next and Supabase imports.
 - It runs in my logged-in browser and rides Blackboard's session cookie. Never handle passwords, 2FA, or the OAuth token that Ultra's page exchanges (`oauth2/tokeninfo`).

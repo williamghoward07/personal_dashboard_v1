@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react'
 import type { RoutineInstance } from '@/lib/types'
 import type { DayItem } from '../calendarItems'
 import { borderColors, calendarItemSession, formatTime, sessionPillStyle } from '../calendarItems'
-import { TWO_LINE_PILL_HEIGHT_PX } from './grid-math'
+import { TWO_LINE_PILL_HEIGHT_PX, pillTitleLines } from './grid-math'
 import PrepLight from '../../lectures/PrepLight'
 import { useOpenSession } from '../../lectures/SessionPopover'
 
@@ -58,18 +58,28 @@ export default function TimeGridPill({
         }),
   }
 
-  // Text never wraps into a pill it doesn't fit: a short pill gets one
-  // truncated line, and the full text is always on hover.
-  const tooltip = `${formatTime(start)} ${item.title}`
+  // Title first, then time, as Google Calendar does: the title is what you
+  // scan a week for. Text never wraps into a pill it doesn't fit — a short
+  // pill gets one truncated line, and the full text is always on hover.
+  const end =
+    item.kind === 'routine' ? new Date(new Date(start).getTime() + item.durationMinutes * 60_000).toISOString() : item.end
+  const timeLabel = end ? `${formatTime(start)}–${formatTime(end)}` : formatTime(start)
+  const tooltip = `${item.title}\n${timeLabel}`
   const content =
     height >= TWO_LINE_PILL_HEIGHT_PX ? (
       <>
-        <span className="block font-semibold">{formatTime(start)}</span>
-        <span className="block break-words">{item.title}</span>
+        <span
+          className="overflow-hidden font-semibold break-words hyphens-auto"
+          style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: pillTitleLines(height) }}
+        >
+          {item.title}
+        </span>
+        <span className="block truncate text-on-surface-variant">{timeLabel}</span>
       </>
     ) : (
       <span className="block truncate">
-        <span className="font-semibold">{formatTime(start)}</span> {item.title}
+        <span className="font-semibold">{item.title}</span>
+        <span className="text-on-surface-variant">, {formatTime(start)}</span>
       </span>
     )
 

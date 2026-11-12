@@ -19,25 +19,31 @@ import TimeGridPill, { isTimedDayItem } from './time-grid/TimeGridPill'
 import CurrentTimeLine, { useCurrentTimeMinutes } from './time-grid/CurrentTimeLine'
 import { TimeGridHourLabels, TimeGridLines } from './time-grid/TimeGridChrome'
 import UntimedItemRow from './time-grid/UntimedItemRow'
+import { useScrollBox } from './time-grid/use-scroll-box'
+import DayHeading from './DayHeading'
 
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const LANE_PX = 20
+
+const HOUR_LABEL_ROOM_PX = 8
 
 function itemKey(item: DayItem): string {
   return `${item.kind}-${item.id}`
 }
 
-// Full 24h scrollable hour grid across seven day columns, sharing one hour
-// gutter. All-day events render as spanning bars above the grid (reusing
-// the same lane-packing Month/Week's compact view already uses), each
-// day's timed items get their own independent side-by-side overlap layout,
-// and the current-time line only appears in today's column, if visible.
+// Google Calendar's week layout: one bordered frame with a fixed header
+// (day names, then an all-day band: spanning bars over per-day untimed
+// items) above a 24h hour grid that scrolls and fills the rest of the
+// height. The header is padded by the grid's scrollbar width so its seven
+// columns line up with the ones that scroll. Each day's timed items get
+// their own side-by-side overlap layout; the current-time line only
+// appears in today's column.
 export default function WeekGridView({
   weekKeys,
   itemsByDate,
   spans,
   todayKey,
   pxPerMin,
-  maxContainerHeightPx,
+  onGridViewportHeight,
   onSelectDate,
   onSelectTask,
   onSelectRoutineInstance,
@@ -47,20 +53,33 @@ export default function WeekGridView({
   spans: EventSpan[]
   todayKey: string
   pxPerMin: number
-  maxContainerHeightPx: number
+  onGridViewportHeight: (px: number) => void
   onSelectDate: (dateKey: string) => void
   onSelectTask: (task: Task) => void
   onSelectRoutineInstance: (instance: RoutineInstance) => void
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const { height: viewportPx, scrollbarPx } = useScrollBox(scrollRef)
   const nowMinutes = useCurrentTimeMinutes()
   const todayInWeek = weekKeys.includes(todayKey)
 
   const placedBars = useMemo(() => layoutBarsForWeek(weekKeys, spans), [weekKeys, spans])
   const laneCount = laneCountForWeek(placedBars)
+  const untimedByDay = weekKeys.map((dateKey) =>
+    (itemsByDate.get(dateKey) ?? []).filter((item) => !isTimedDayItem(item) && item.kind !== 'calendar')
+  )
+  const hasAllDayBand = laneCount > 0 || untimedByDay.some((items) => items.length > 0)
+  const columns = `${GUTTER_PX}px repeat(${weekKeys.length}, minmax(0, 1fr))`
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(todayInWeek, nowMinutes), pxPerMin) })
+    if (viewportPx > 0) onGridViewportHeight(viewportPx)
+  }, [viewportPx, onGridViewportHeight])
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({
+      // A little above the hour line, so that hour's label isn't clipped.
+      top: minutesToPx(defaultScrollMinutes(todayInWeek, nowMinutes), pxPerMin) - HOUR_LABEL_ROOM_PX,
+    })
     // Only re-run when the visible week or zoom level changes — the
     // current-time tick shouldn't yank the user's scroll position back
     // every minute.
@@ -68,78 +87,64 @@ export default function WeekGridView({
   }, [weekKeys[0], pxPerMin])
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex">
-        <div style={{ width: GUTTER_PX }} className="shrink-0" />
-        {weekKeys.map((dateKey, i) => {
-          const isToday = dateKey === todayKey
-          return (
-            <button
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-outline-variant/60">
+      <div className="shrink-0 border-b border-outline-variant/60" style={{ paddingRight: scrollbarPx }}>
+        <div className="grid" style={{ gridTemplateColumns: columns }}>
+          <div />
+          {weekKeys.map((dateKey) => (
+            <DayHeading
               key={dateKey}
-              type="button"
+              dateKey={dateKey}
+              isToday={dateKey === todayKey}
               onClick={() => onSelectDate(dateKey)}
-              className="flex-1 rounded-lg px-1.5 py-1 text-left transition-colors duration-200 hover:bg-surface-container-high"
-            >
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
-                {WEEKDAY_LABELS[i]}
-              </div>
-              <div
-                className={`text-xs font-semibold tabular-nums ${isToday ? 'text-secondary-container' : 'text-on-surface'}`}
-              >
-                {Number(dateKey.slice(-2))}
-              </div>
-            </button>
-          )
-        })}
-      </div>
+              className="border-l border-outline-variant/20"
+            />
+          ))}
+        </div>
 
-      {laneCount > 0 && (
-        <div className="flex">
-          <div style={{ width: GUTTER_PX }} className="shrink-0" />
-          <div className="flex flex-1" style={{ minHeight: laneCount * 20 }}>
-            {weekKeys.map((_, col) => (
-              <div key={col} className="relative flex-1" style={{ height: laneCount * 20 }}>
-                {placedBars
-                  .filter((bar) => bar.colStart === col)
-                  .map((bar) => (
-                    <div
-                      key={bar.id}
-                      style={{
-                        top: bar.lane * 20,
-                        width: `calc(${bar.colSpan * 100}% - 4px)`,
-                      }}
-                      className="absolute left-0.5 truncate rounded border border-on-surface-variant/30 bg-on-surface-variant/15 px-1 text-[10px] font-medium leading-4 text-on-surface"
-                    >
-                      {bar.title}
-                    </div>
-                  ))}
+        {hasAllDayBand && (
+          <div
+            className="grid max-h-40 overflow-y-auto pb-1"
+            style={{
+              gridTemplateColumns: columns,
+              gridTemplateRows: `${laneCount > 0 ? `repeat(${laneCount}, ${LANE_PX}px) ` : ''}auto`,
+            }}
+          >
+            {weekKeys.map((dateKey, col) => (
+              <div
+                key={`col-${dateKey}`}
+                style={{ gridColumn: col + 2, gridRow: '1 / -1' }}
+                className="border-l border-outline-variant/20"
+              />
+            ))}
+            {placedBars.map((bar) => (
+              <div
+                key={bar.id}
+                title={bar.title}
+                style={{ gridColumn: `${bar.colStart + 2} / span ${bar.colSpan}`, gridRow: bar.lane + 1 }}
+                className="mx-0.5 mt-0.5 truncate rounded border border-on-surface-variant/30 bg-on-surface-variant/15 px-1.5 text-[11px] font-medium leading-4 text-on-surface"
+              >
+                {bar.title}
               </div>
             ))}
+            {untimedByDay.map((items, col) =>
+              items.length > 0 ? (
+                <div
+                  key={`untimed-${weekKeys[col]}`}
+                  style={{ gridColumn: col + 2, gridRow: laneCount + 1 }}
+                  className="flex min-w-0 flex-col gap-0.5 px-0.5 pt-0.5"
+                >
+                  {items.map((item) => (
+                    <UntimedItemRow key={itemKey(item)} item={item} onSelectTask={onSelectTask} />
+                  ))}
+                </div>
+              ) : null
+            )}
           </div>
-        </div>
-      )}
-
-      <div className="flex">
-        <div style={{ width: GUTTER_PX }} className="shrink-0" />
-        {weekKeys.map((dateKey) => {
-          const items = (itemsByDate.get(dateKey) ?? []).filter(
-            (item) => !isTimedDayItem(item) && item.kind !== 'calendar'
-          )
-          return (
-            <div key={dateKey} className="flex flex-1 flex-col gap-0.5 px-0.5">
-              {items.map((item) => (
-                <UntimedItemRow key={itemKey(item)} item={item} onSelectTask={onSelectTask} />
-              ))}
-            </div>
-          )
-        })}
+        )}
       </div>
 
-      <div
-        ref={scrollRef}
-        className="relative overflow-y-auto rounded-lg border border-outline-variant/60"
-        style={{ height: Math.min(maxContainerHeightPx, gridHeightPx(pxPerMin)) }}
-      >
+      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
           <TimeGridHourLabels pxPerMin={pxPerMin} />
           <div className="relative flex flex-1">
@@ -156,7 +161,7 @@ export default function WeekGridView({
               const layouts = new Map(layoutOverlappingBlocks(blocks).map((l) => [l.id, l]))
 
               return (
-                <div key={dateKey} className="relative flex-1 border-l border-outline-variant/20 first:border-l-0">
+                <div key={dateKey} className="relative min-w-0 flex-1 border-l border-outline-variant/20">
                   <TimeGridLines pxPerMin={pxPerMin} />
                   {isToday && <CurrentTimeLine nowMinutes={nowMinutes} pxPerMin={pxPerMin} />}
                   {timed.map((item) => {

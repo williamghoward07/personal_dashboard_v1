@@ -22,6 +22,8 @@ interface GoogleCalendarEvent {
   end?: GoogleEventDateTime
 }
 
+const MAX_PAGES = 8
+
 export async function fetchTodayGoogleCalendarEvents(): Promise<CalendarEvent[]> {
   const { timeMin, timeMax } = londonDayBoundsUTC()
   return fetchGoogleCalendarEvents(timeMin, timeMax)
@@ -35,25 +37,35 @@ export async function fetchGoogleCalendarEvents(
 ): Promise<CalendarEvent[]> {
   const accessToken = await getValidGoogleAccessToken()
 
-  const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
-  url.searchParams.set('singleEvents', 'true')
-  url.searchParams.set('orderBy', 'startTime')
-  url.searchParams.set('maxResults', '250')
-  url.searchParams.set('timeMin', timeMin)
-  url.searchParams.set('timeMax', timeMax)
+  // Google pages at 250 events; follow nextPageToken (bounded) so a long
+  // range — the Tests tab's year view — isn't silently cut short.
+  const items: GoogleCalendarEvent[] = []
+  let pageToken: string | undefined
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
+    url.searchParams.set('singleEvents', 'true')
+    url.searchParams.set('orderBy', 'startTime')
+    url.searchParams.set('maxResults', '250')
+    url.searchParams.set('timeMin', timeMin)
+    url.searchParams.set('timeMax', timeMax)
+    if (pageToken) url.searchParams.set('pageToken', pageToken)
 
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: 'no-store',
-  })
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    })
 
-  if (!res.ok) {
-    throw new Error(`Google Calendar API error: ${res.status}`)
+    if (!res.ok) {
+      throw new Error(`Google Calendar API error: ${res.status}`)
+    }
+
+    const json = (await res.json()) as { items?: GoogleCalendarEvent[]; nextPageToken?: string }
+    items.push(...(json.items ?? []))
+    pageToken = json.nextPageToken
+    if (!pageToken) break
   }
 
-  const json = (await res.json()) as { items?: GoogleCalendarEvent[] }
-
-  return (json.items ?? [])
+  return items
     .map((item): CalendarEvent | null => {
       const start = item.start?.dateTime ?? item.start?.date
       if (!start) return null

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { UiAccent } from '@/lib/theme'
 import { ACCENT_GLOW, ACCENT_TEXT } from '@/lib/theme'
+import { cn } from '@/lib/utils/cn'
 
 // The bento card every home widget renders inside — DESIGN.md §4.2's
 // canonical card (1px outline-variant border, rounded-xl, 24px padding) with
@@ -22,9 +23,13 @@ export default function WidgetCard({
 }) {
   return (
     <section
-      className={`group flex flex-col gap-3 rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-container-padding transition-all duration-300 ease-out hover:-translate-y-1 ${ACCENT_GLOW[accent]} ${className}`}
+      className={cn(
+        'group flex flex-col gap-3 rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-container-padding transition-all duration-300 ease-out hover:-translate-y-1',
+        ACCENT_GLOW[accent],
+        className
+      )}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
           {icon && (
             <span className={`transition-transform duration-300 group-hover:scale-[1.15] ${ACCENT_TEXT[accent]}`}>

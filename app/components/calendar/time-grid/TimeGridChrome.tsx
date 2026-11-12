@@ -5,7 +5,8 @@ import { GUTTER_PX, HOURS, gridHeightPx, minutesToPx } from './grid-math'
 export function TimeGridHourLabels({ pxPerMin }: { pxPerMin: number }) {
   return (
     <div className="relative shrink-0" style={{ width: GUTTER_PX, height: gridHeightPx(pxPerMin) }}>
-      {HOURS.map((h) => (
+      {/* No 00:00 label: centred on the top edge it would be cut in half. */}
+      {HOURS.filter((h) => h > 0).map((h) => (
         <div
           key={h}
           className="absolute right-1.5 -translate-y-1/2 text-[10px] text-on-surface-variant"

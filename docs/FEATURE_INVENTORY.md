@@ -73,9 +73,13 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
   handed in, green done), right half = follow-up (grey until handed in,
   then amber concepts outstanding, green done, red once the session ended
   with nothing).
-- ✅ A Lectures | Assignments switch at the top of the page (the Lectures
-  one shows the total past-due count). Assignments is a placeholder until
-  the Blackboard scraper exists; there's no assignments schema yet.
+- ✅ A Lectures | Assignments | Tests switch at the top of the page (the
+  Lectures one shows the total past-due count). Assignments is a placeholder
+  until the Blackboard scraper exists; there's no assignments schema yet.
+- ✅ Tests tab (Upcoming / Past, with a countdown badge): timetable sessions
+  of type Test, plus Google events with test/exam in the title
+  (`lib/timetable/tests.ts`; quizzes, revision, tips and briefings are left
+  out, and a Google copy of a timetable test is dropped). Nothing stored.
 - ✅ Module filter (All + one chip per module code, each with its past-due
   count) above the tabbed list; filtering shows the module's name and an
   Open workspace link and drops the module column from the rows.
@@ -145,7 +149,11 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
 
 ### Calendar (`/calendar`)
 - ✅ Month / Week / Day grids (real 24-hour grid), Grid/Agenda toggle,
-  hour-density zoom.
+  hour-density zoom (Fit = whole day, no scrolling).
+- ✅ Google Calendar-style layout: grid and month views fill the window
+  (measured, so the page never scrolls), one toolbar row, day headings as
+  "MON 9" on one line with today's date in a filled circle, pills titled
+  first, and month rows filled with the neighbouring months' days.
 - ✅ **Google Calendar** (read-only; Google is the source of truth).
 - ✅/🐛 **Routines** — build a template, drag it onto a day, it creates a
   real Google event. Bug: clicking a routine yanks the panel up the page.

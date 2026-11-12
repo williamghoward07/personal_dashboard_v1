@@ -11,6 +11,7 @@ import {
   FolderPlus,
   GraduationCap,
   Presentation,
+  ClipboardCheck,
 } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { Button } from '@/components/ui/button'
@@ -33,12 +34,15 @@ import {
 import { PREP_ACCENT, formatSessionDay, formatSessionTime } from '@/lib/timetable/format'
 import SessionAssignmentsList from './SessionAssignmentsList'
 import SessionRow from './SessionRow'
+import TestsList from './TestsList'
 
 const ACCENT = 'orange'
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const ALL_MODULES = 'all'
 
-type BoardView = 'lectures' | 'assignments'
+type BoardView = 'lectures' | 'assignments' | 'tests'
+
+const VIEW_TITLE: Record<BoardView, string> = { lectures: 'Lectures', assignments: 'Assignments', tests: 'Tests' }
 
 const microLabel = 'font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-on-surface-variant/70'
 
@@ -138,11 +142,11 @@ export default function LecturesBoard() {
     <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
       <div className="flex flex-col gap-3">
         <h1 className="font-display text-headline-lg font-bold text-academic-orange">
-          {view === 'lectures' ? 'Lectures' : 'Assignments'}
+          {VIEW_TITLE[view]}
         </h1>
         <FilterTabs
           accent={ACCENT}
-          aria-label="Lectures or assignments"
+          aria-label="Lectures, assignments or tests"
           value={view}
           onChange={setView}
           options={[
@@ -157,11 +161,20 @@ export default function LecturesBoard() {
               label: 'Assignments',
               icon: <FileText className="h-3.5 w-3.5" strokeWidth={1.75} />,
             },
+            {
+              value: 'tests',
+              label: 'Tests',
+              icon: <ClipboardCheck className="h-3.5 w-3.5" strokeWidth={1.75} />,
+            },
           ]}
         />
       </div>
 
-      {view === 'assignments' ? (
+      {view === 'tests' ? (
+        <ModuleGlassCard accent={ACCENT} size="sm">
+          <TestsList sessions={sessions} now={now} accent={ACCENT} timetableLoading={loading} />
+        </ModuleGlassCard>
+      ) : view === 'assignments' ? (
         <Notice title="Blackboard assignments aren't connected yet">
           Coursework from Blackboard will be listed here with the same Upcoming · Past due · Completed · History tabs
           once the Blackboard scraper is built.

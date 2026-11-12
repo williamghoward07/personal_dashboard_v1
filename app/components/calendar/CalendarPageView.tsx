@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Wand2, ZoomIn, ZoomOut } from 'lucide-react'
+import { useFillViewportHeight } from '@/lib/ui/use-fill-viewport-height'
 import { FilterTabs } from '@/components/ui/filter-tabs'
 import { supabase } from '@/lib/supabase'
 import { useSettings } from '@/lib/settings/use-settings'
@@ -81,7 +82,18 @@ function mondayOfWeek(key: string): string {
 
 function getRangeForView(view: ViewMode, dateKey: string): LondonDateRange {
   const [y, m, d] = dateKey.split('-').map(Number)
-  if (view === 'month') return londonMonthBoundsUTC(y, m)
+  if (view === 'month') {
+    // Whole weeks, like the grid: the days before the 1st and after the
+    // last day fill the first and last rows (dimmed), with their events.
+    const month = londonMonthBoundsUTC(y, m)
+    const first = mondayOfWeek(month.startDateKey)
+    const last = mondayOfWeek(addDaysToKey(month.endDateKey, -1))
+    const [fy, fm, fd] = first.split('-').map(Number)
+    const [ly, lm, ld] = last.split('-').map(Number)
+    const start = londonWeekBoundsUTC(new Date(Date.UTC(fy, fm - 1, fd, 12)))
+    const end = londonWeekBoundsUTC(new Date(Date.UTC(ly, lm - 1, ld, 12)))
+    return { timeMin: start.timeMin, timeMax: end.timeMax, startDateKey: start.startDateKey, endDateKey: end.endDateKey }
+  }
   if (view === 'week') {
     const [wy, wm, wd] = mondayOfWeek(dateKey).split('-').map(Number)
     return londonWeekBoundsUTC(new Date(Date.UTC(wy, wm - 1, wd, 12)))
@@ -116,8 +128,8 @@ function formatTitle(view: ViewMode, dateKey: string): string {
     })
     return `${start} – ${end}`
   }
+  // No weekday: the day column's own heading shows it.
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
-    weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
@@ -139,15 +151,14 @@ const GRID_MODE_OPTIONS: { value: GridMode; label: string }[] = [
   { value: 'agenda', label: 'Agenda' },
 ]
 
-// Everything rendered above the hour grid box (sticky top bar, page header,
-// widget card chrome, the calendar's own title/toolbar row) — used as a
-// generous, shared-across-Day/Week estimate so the grid can size itself to
-// "whatever's left" of the viewport instead of a small fixed pixel cap.
-const RESERVED_CHROME_PX = 360
-// Reuses the old fixed cap as a floor, so a short/laptop viewport still
-// looks exactly like it used to rather than shrinking further.
-const MIN_GRID_CONTAINER_PX = 480
-const SSR_FALLBACK_VIEWPORT_PX = RESERVED_CHROME_PX + MIN_GRID_CONTAINER_PX
+// Below the calendar body: the card's bottom padding and border, then the
+// page's bottom padding. The body itself is measured, so it ends exactly
+// at the bottom of the window whatever sits above it.
+const BODY_BOTTOM_GAP_PX = 24 + 1 + 24
+// On a short window the body stops shrinking here and the page scrolls.
+const MIN_BODY_PX = 420
+// Until the hour grid has been measured (first paint, SSR).
+const FALLBACK_GRID_PX = 560
 
 export default function CalendarPageView() {
   const { settings, updateSettings } = useSettings()
@@ -164,10 +175,11 @@ export default function CalendarPageView() {
   // until the user picks a zoom level themselves. "Fit day" sets it to the
   // fit value.
   const [manualPxPerMin, setManualPxPerMin] = useState<number | null>(null)
-  // Read only after mount (see effect below) — window isn't available
-  // during SSR, so this fallback keeps the first client render matching
-  // the server-rendered markup exactly.
-  const [viewportH, setViewportH] = useState(SSR_FALLBACK_VIEWPORT_PX)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const bodyHeight = useFillViewportHeight(bodyRef, BODY_BOTTOM_GAP_PX, MIN_BODY_PX)
+  // The hour grid's visible height, reported by Week/Day once laid out:
+  // "Fit day" zooms the whole 24h into exactly this.
+  const [gridViewportPx, setGridViewportPx] = useState(0)
   const [selectedDateKey, setSelectedDateKey] = useState(() => todayKeyLondon())
   const [fetched, setFetched] = useState<{
     events: CalendarEvent[]
@@ -185,20 +197,12 @@ export default function CalendarPageView() {
   const [refreshToken, setRefreshToken] = useState(0)
   const refetch = () => setRefreshToken((t) => t + 1)
 
-  const maxContainerHeightPx = Math.max(MIN_GRID_CONTAINER_PX, viewportH - RESERVED_CHROME_PX)
-  const fitPxPerMin = maxContainerHeightPx / MINUTES_PER_DAY
+  const fitPxPerMin = (gridViewportPx || FALLBACK_GRID_PX) / MINUTES_PER_DAY
   const zoomMaxPxPerMin = Math.max(MAX_PX_PER_MIN, fitPxPerMin * 2)
   // The actual zoom level in effect: whatever the user picked, or the
   // readable default if they haven't touched the zoom.
   const pxPerMin = manualPxPerMin ?? Math.min(zoomMaxPxPerMin, Math.max(fitPxPerMin, DEFAULT_PX_PER_MIN))
   const setZoom = (next: number) => setManualPxPerMin(Math.min(zoomMaxPxPerMin, Math.max(fitPxPerMin, next)))
-
-  useEffect(() => {
-    const updateViewportH = () => setViewportH(window.innerHeight)
-    updateViewportH()
-    window.addEventListener('resize', updateViewportH)
-    return () => window.removeEventListener('resize', updateViewportH)
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -279,15 +283,95 @@ export default function CalendarPageView() {
   const todayKey = todayKeyLondon()
   const [year, month] = selectedDateKey.split('-').map(Number)
 
+  const isGrid = (view === 'day' || view === 'week') && gridMode === 'grid'
+  // Grid and month views fill the window like Google Calendar; agenda and
+  // routines are lists and keep their natural height.
+  const fillsBody = isGrid || view === 'month'
+  const timeBlockButton = (
+    <button
+      type="button"
+      onClick={() => setTimeBlockOpen(true)}
+      className="flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-1 text-xs font-semibold text-on-surface hover:bg-surface-container-high"
+    >
+      <Wand2 className="h-3.5 w-3.5" />
+      Auto time-block today
+    </button>
+  )
+  const iconButton =
+    'rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40'
+
   return (
     <WidgetCard
-      title="Calendar"
+      title={
+        <span className="flex items-center gap-2">
+          {needsReconnect ? 'Calendar' : formatTitle(view, selectedDateKey)}
+          {loading && fetched && <span className="text-xs font-normal text-on-surface-variant">Loading…</span>}
+        </span>
+      }
       icon={<CalendarDays className="h-4 w-4" />}
       accent="neutral"
-      className="sm:col-span-2 xl:col-span-4"
+      className="hover:translate-y-0 sm:col-span-2 xl:col-span-4"
       action={
         !needsReconnect && (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={goToday}
+                aria-label="Jump to today"
+                title="Jump to today"
+                className="rounded-md border border-outline-variant px-2.5 py-1 text-xs font-semibold tabular-nums text-on-surface hover:bg-surface-container-high"
+              >
+                {formatSelectedDayLabel(selectedDateKey, todayKey)}
+              </button>
+              <button type="button" onClick={goPrev} aria-label="Previous" className={iconButton}>
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={goNext} aria-label="Next" className={iconButton}>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            {isGrid && (
+              <div
+                className="flex items-center gap-0.5"
+                title="Zoom the hour grid — Fit shows the whole day with no scrolling"
+              >
+                <button
+                  type="button"
+                  onClick={() => setZoom(pxPerMin / ZOOM_STEP)}
+                  disabled={pxPerMin <= fitPxPerMin}
+                  aria-label="Zoom out"
+                  className={iconButton}
+                >
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoom(pxPerMin * ZOOM_STEP)}
+                  disabled={pxPerMin >= zoomMaxPxPerMin}
+                  aria-label="Zoom in"
+                  className={iconButton}
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManualPxPerMin(fitPxPerMin)}
+                  className="rounded-md px-1.5 py-1 text-xs font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                >
+                  Fit
+                </button>
+              </div>
+            )}
+            {(view === 'day' || view === 'week') && (
+              <FilterTabs
+                aria-label="Grid or agenda view"
+                size="compact"
+                value={gridMode}
+                onChange={setGridMode}
+                options={GRID_MODE_OPTIONS}
+              />
+            )}
             <FilterTabs
               aria-label="Calendar view"
               size="compact"
@@ -295,33 +379,6 @@ export default function CalendarPageView() {
               onChange={setView}
               options={VIEW_OPTIONS}
             />
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={goPrev}
-                aria-label="Previous"
-                className="rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={goToday}
-                aria-label="Jump to today"
-                title="Jump to today"
-                className="rounded-md px-2 py-1 text-xs font-semibold tabular-nums text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-              >
-                {formatSelectedDayLabel(selectedDateKey, todayKey)}
-              </button>
-              <button
-                type="button"
-                onClick={goNext}
-                aria-label="Next"
-                className="rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
             {/* Always available, not just on a 409 — lets you re-consent
                 for a newly added scope (e.g. calendar write) even while
                 the old token still works fine for reads. */}
@@ -330,7 +387,7 @@ export default function CalendarPageView() {
               onClick={() => connectGoogleCalendar('/calendar')}
               aria-label="Reconnect Google Calendar"
               title="Reconnect Google Calendar"
-              className="rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+              className={iconButton}
             >
               <RefreshCw className="h-4 w-4" />
             </button>
@@ -351,67 +408,12 @@ export default function CalendarPageView() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="font-display text-sm font-semibold text-on-surface">
-              {formatTitle(view, selectedDateKey)}
-            </h3>
-            {(view === 'day' || view === 'week') && (
-              <div className="flex items-center gap-3">
-                {gridMode === 'grid' && (
-                  <div
-                    className="flex items-center gap-1.5"
-                    title="Zoom the hour grid — Fit day shrinks it to the whole day with no scrolling"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setZoom(pxPerMin / ZOOM_STEP)}
-                      disabled={pxPerMin <= fitPxPerMin}
-                      aria-label="Zoom out"
-                      className="rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
-                    >
-                      <ZoomOut className="h-3.5 w-3.5" />
-                    </button>
-                    <input
-                      type="range"
-                      min={fitPxPerMin}
-                      max={zoomMaxPxPerMin}
-                      step={0.05}
-                      value={pxPerMin}
-                      onChange={(e) => setZoom(Number(e.target.value))}
-                      aria-label="Hour grid zoom"
-                      className="h-1 w-24 accent-on-surface-variant"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setZoom(pxPerMin * ZOOM_STEP)}
-                      disabled={pxPerMin >= zoomMaxPxPerMin}
-                      aria-label="Zoom in"
-                      className="rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40"
-                    >
-                      <ZoomIn className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setManualPxPerMin(fitPxPerMin)}
-                      className="rounded-md px-1.5 py-1 text-xs font-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                    >
-                      Fit day
-                    </button>
-                  </div>
-                )}
-                <FilterTabs
-                  aria-label="Grid or agenda view"
-                  size="compact"
-                  value={gridMode}
-                  onChange={setGridMode}
-                  options={GRID_MODE_OPTIONS}
-                />
-              </div>
-            )}
-          </div>
-
-          {loading ? (
+        <div
+          ref={bodyRef}
+          className="flex min-h-0 flex-col"
+          style={fillsBody && bodyHeight !== null ? { height: bodyHeight } : undefined}
+        >
+          {!fetched ? (
             <p>Loading...</p>
           ) : view === 'month' ? (
             <MonthView
@@ -437,7 +439,7 @@ export default function CalendarPageView() {
               spans={spans}
               todayKey={todayKey}
               pxPerMin={pxPerMin}
-              maxContainerHeightPx={maxContainerHeightPx}
+              onGridViewportHeight={setGridViewportPx}
               onSelectDate={(dateKey) => {
                 setSelectedDateKey(dateKey)
                 setView('day')
@@ -454,18 +456,9 @@ export default function CalendarPageView() {
               onSelectTask={setSelectedTask}
             />
           ) : (
-            <div className="flex flex-col gap-3">
-              {selectedDateKey === todayKey && (
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setTimeBlockOpen(true)}
-                    className="flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-1.5 text-xs font-semibold text-on-surface hover:bg-surface-container-high"
-                  >
-                    <Wand2 className="h-3.5 w-3.5" />
-                    Auto time-block today
-                  </button>
-                </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-3">
+              {gridMode === 'agenda' && selectedDateKey === todayKey && (
+                <div className="flex justify-end">{timeBlockButton}</div>
               )}
               {gridMode === 'agenda' ? (
                 <AgendaView
@@ -481,9 +474,12 @@ export default function CalendarPageView() {
                   items={itemsByDate.get(selectedDateKey) ?? []}
                   isToday={selectedDateKey === todayKey}
                   pxPerMin={pxPerMin}
-                  maxContainerHeightPx={maxContainerHeightPx}
+                  onGridViewportHeight={setGridViewportPx}
                   onSelectTask={setSelectedTask}
                   onSelectRoutineInstance={setSelectedRoutineInstance}
+                  headerAction={
+                    selectedDateKey === todayKey && timeBlockButton
+                  }
                 />
               )}
             </div>

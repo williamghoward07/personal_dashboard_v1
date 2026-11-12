@@ -4,6 +4,10 @@ import { layoutBarsForWeek, laneCountForWeek } from './weekBarLayout'
 import PrepLight from '../lectures/PrepLight'
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const NUMBER_ROW_PX = 26
+const BAR_LANE_PX = 20
+const LIST_PADDING_PX = 6
+const ITEM_LINE_PX = 16
 
 // One CSS grid per week: a full-height "cell" button per day (rows 1..N,
 // stretched), then day-number / spanning-bar / compact-list rows placed
@@ -19,6 +23,8 @@ export default function WeekRow({
   onSelectDate,
   minHeightClass,
   maxCompactItems,
+  rowHeightPx,
+  isDimmed,
   showWeekdayLabel,
 }: {
   weekCells: (string | null)[]
@@ -28,17 +34,34 @@ export default function WeekRow({
   onSelectDate: (dateKey: string) => void
   minHeightClass: string
   maxCompactItems: number
+  /** When the row's height is fixed (month view filling the window), list as many items as fit in it. */
+  rowHeightPx?: number
+  /** A day outside the month being shown: its date is greyed out. */
+  isDimmed?: (dateKey: string) => boolean
   showWeekdayLabel: boolean
 }) {
   const placedBars = layoutBarsForWeek(weekCells, spans)
   const laneCount = laneCountForWeek(placedBars)
-  const numberRow = showWeekdayLabel ? 2 : 1
+  const numberRow = 1
   const firstBarRow = numberRow + 1
+  // Day number row + its padding, bar lanes (20px each), list padding; 16px per item line.
+  const lineBudget = rowHeightPx
+    ? Math.max(1, Math.floor((rowHeightPx - NUMBER_ROW_PX - laneCount * BAR_LANE_PX - LIST_PADDING_PX) / ITEM_LINE_PX))
+    : null
+  // How many items a day lists before "+N more". With a line budget the
+  // "+N more" line itself takes one of the lines.
+  const shownCount = (total: number) =>
+    lineBudget === null ? maxCompactItems : total > lineBudget ? Math.max(0, lineBudget - 1) : lineBudget
   const listRow = firstBarRow + laneCount
   const totalRows = listRow
 
   return (
-    <div className="grid grid-cols-7 gap-1">
+    <div
+      className={`grid grid-cols-7 gap-x-1 ${rowHeightPx ? 'h-full overflow-hidden' : ''}`}
+      // Date and bar rows hug their content; the item list takes the rest,
+      // so a row stretched to fill the month grows its list, not its date.
+      style={{ gridTemplateRows: `repeat(${listRow - 1}, auto) minmax(0, 1fr)` }}
+    >
       {weekCells.map((dateKey, col) => {
         if (!dateKey) {
           return (
@@ -66,20 +89,6 @@ export default function WeekRow({
         )
       })}
 
-      {showWeekdayLabel &&
-        weekCells.map((dateKey, col) => {
-          if (!dateKey) return null
-          return (
-            <span
-              key={`label-${dateKey}`}
-              style={{ gridColumn: col + 1, gridRow: 1 }}
-              className="pointer-events-none px-1.5 pt-1.5 text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant"
-            >
-              {WEEKDAY_LABELS[col]}
-            </span>
-          )
-        })}
-
       {weekCells.map((dateKey, col) => {
         if (!dateKey) return null
         const isToday = dateKey === todayKey
@@ -87,11 +96,27 @@ export default function WeekRow({
           <span
             key={`num-${dateKey}`}
             style={{ gridColumn: col + 1, gridRow: numberRow }}
-            className={`pointer-events-none px-1.5 ${showWeekdayLabel ? 'pt-0.5' : 'pt-1.5'} text-xs font-semibold tabular-nums ${
-              isToday ? 'text-secondary-container' : showWeekdayLabel ? 'text-on-surface' : 'text-on-surface-variant'
-            }`}
+            className="pointer-events-none flex items-center gap-1 px-1.5 pt-1.5"
           >
-            {Number(dateKey.slice(-2))}
+            {/* The weekday sits to the left of the date, on one line. */}
+            {showWeekdayLabel && (
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
+                {WEEKDAY_LABELS[col]}
+              </span>
+            )}
+            <span
+              className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums ${
+                isToday
+                  ? 'bg-secondary-container text-on-secondary'
+                  : isDimmed?.(dateKey)
+                    ? 'text-on-surface-variant/50'
+                    : showWeekdayLabel
+                      ? 'text-on-surface'
+                      : 'text-on-surface-variant'
+              }`}
+            >
+              {Number(dateKey.slice(-2))}
+            </span>
           </span>
         )
       })}
@@ -118,10 +143,10 @@ export default function WeekRow({
           <ul
             key={`list-${dateKey}`}
             style={{ gridColumn: col + 1, gridRow: listRow }}
-            className="pointer-events-none flex flex-col gap-0.5 px-1.5 pb-1.5 pt-1"
+            className="pointer-events-none flex min-h-0 flex-col px-1.5 pb-1 pt-0.5"
           >
-            {items.slice(0, maxCompactItems).map((item) => (
-              <li key={`${item.kind}-${item.id}`} className="flex items-center gap-1 truncate text-[11px] text-on-surface">
+            {items.slice(0, shownCount(items.length)).map((item) => (
+              <li key={`${item.kind}-${item.id}`} className="flex items-center gap-1 truncate text-[11px] leading-4 text-on-surface">
                 {item.kind === 'session' ? (
                   <PrepLight status={item.session.status} postStatus={item.session.postStatus} size="sm" />
                 ) : (
@@ -136,8 +161,8 @@ export default function WeekRow({
                 <span className="truncate">{item.title}</span>
               </li>
             ))}
-            {items.length > maxCompactItems && (
-              <li className="text-[11px] text-on-surface-variant">+{items.length - maxCompactItems} more</li>
+            {items.length > shownCount(items.length) && (
+              <li className="text-[11px] leading-4 text-on-surface-variant">+{items.length - shownCount(items.length)} more</li>
             )}
           </ul>
         )

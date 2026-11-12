@@ -9,7 +9,7 @@ export default function WeekView({
   spans,
   todayKey,
   pxPerMin,
-  maxContainerHeightPx,
+  onGridViewportHeight,
   onSelectDate,
   onSelectTask,
   onSelectRoutineInstance,
@@ -19,7 +19,7 @@ export default function WeekView({
   spans: EventSpan[]
   todayKey: string
   pxPerMin: number
-  maxContainerHeightPx: number
+  onGridViewportHeight: (px: number) => void
   onSelectDate: (dateKey: string) => void
   onSelectTask: (task: Task) => void
   onSelectRoutineInstance: (instance: RoutineInstance) => void
@@ -33,7 +33,7 @@ export default function WeekView({
       spans={spans}
       todayKey={todayKey}
       pxPerMin={pxPerMin}
-      maxContainerHeightPx={maxContainerHeightPx}
+      onGridViewportHeight={onGridViewportHeight}
       onSelectDate={onSelectDate}
       onSelectTask={onSelectTask}
       onSelectRoutineInstance={onSelectRoutineInstance}

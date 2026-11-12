@@ -84,6 +84,11 @@ export async function getAllPages<T>(fetchFn: BbFetch, path: string, maxPages = 
   return out
 }
 
+/** The Ultra page for a course (its internal id, e.g. `_123456_1`). */
+export function courseOutlineUrl(bbId: string): string {
+  return `${BB_ORIGIN}/ultra/courses/${encodeURIComponent(bbId)}/outline`
+}
+
 /** `GEOG1241_2026` → GEOG1241 / 2026. Org courses (`X_SCI_2026`) have no module code. */
 export function parseCourseCode(courseId: string): { moduleCode: string | null; year: number | null } {
   const year = /_(\d{4})$/.exec(courseId)

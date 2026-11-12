@@ -15,8 +15,21 @@ export const browserFetch: BbFetch = async (url) => {
  */
 export type SyncVia = 'worker' | 'tab'
 
+/**
+ * Where synced snapshots go. Entered once in the side panel. `url` is the
+ * dashboard's origin; Chrome grants the extension that one origin
+ * (optional_host_permissions) when it's saved.
+ */
+export interface DashboardConfig {
+  url: string
+  token: string
+}
+
+/** The dashboard's reply to POST /api/blackboard/sync. Absent = no dashboard set up. */
+export type UploadResult = { ok: true; counts: Record<string, unknown> } | { ok: false; error: string }
+
 export type LastRun =
-  | { at: string; ok: true; via: SyncVia; summary: SnapshotSummary; workerError?: string }
+  | { at: string; ok: true; via: SyncVia; summary: SnapshotSummary; workerError?: string; upload?: UploadResult }
   | { at: string; ok: false; loginRequired: boolean; error: string; stage?: SyncState['stage'] }
 
 /**
@@ -68,7 +81,25 @@ export const STORAGE = {
   lastSummary: 'lastSummary',
   syncState: 'syncState',
   session: 'sessionCheck',
+  dashboard: 'dashboard',
 } as const
+
+export const SYNC_PATH = '/api/blackboard/sync'
+
+/**
+ * The origin to send syncs to, from what was typed. HTTPS only, except
+ * localhost for development. Null when it isn't a usable URL.
+ */
+export function dashboardOrigin(input: string): string | null {
+  let url: URL
+  try {
+    url = new URL(input.trim())
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === 'localhost')) return null
+  return url.origin
+}
 
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)

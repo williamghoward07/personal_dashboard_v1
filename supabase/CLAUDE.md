@@ -9,3 +9,4 @@
 - Not yet applied to the live DB:
   - `20260826000000_notes_documents.sql`
   - `20261009010000_todos_mstodo_steps.sql`
+  - `20261109000000_blackboard_sync.sql`

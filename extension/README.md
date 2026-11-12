@@ -26,4 +26,6 @@ The sync runs in the service worker, not the panel. Closing the panel or switchi
 
 Badge: `!` = log in to Blackboard, `?` = another error, `…` = syncing.
 
-Nothing is sent to the dashboard yet (phase 2). **Download JSON** saves the raw snapshot.
+**Dashboard:** after a successful snapshot the worker POSTs it to `<dashboard>/api/blackboard/sync` with `Authorization: Bearer <token>`. A snapshot that failed part-way is never sent. Set it up once in the Dashboard card: the address (e.g. your Vercel URL, or `http://localhost:3000`) and the value of `BLACKBOARD_SYNC_TOKEN`. Saving asks Chrome for permission to that one origin (`optional_host_permissions`). The overview's **Dashboard** row says whether the last sync was saved; a failure also sets the `?` badge.
+
+**Download JSON** saves the raw snapshot.

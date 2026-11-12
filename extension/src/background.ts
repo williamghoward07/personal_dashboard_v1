@@ -1,6 +1,7 @@
-// Service worker. Phase 1: Sync takes a raw snapshot, stores it locally and
-// reports progress for the side panel. Nothing is sent to the dashboard yet
-// (phase 2).
+// Service worker. Sync takes a raw snapshot, stores it locally, reports
+// progress for the side panel, and POSTs the finished snapshot to the
+// dashboard (/api/blackboard/sync) when one is set up. A snapshot that
+// failed part-way is never sent.
 import {
   BB_ORIGIN,
   BbLoginRequiredError,
@@ -12,15 +13,18 @@ import {
 } from '@/lib/blackboard/client'
 import {
   STORAGE,
+  SYNC_PATH,
   browserFetch,
   errorMessage,
   type ContentCheckReply,
   type ContentMessage,
   type ContentReply,
+  type DashboardConfig,
   type LastRun,
   type SessionCheck,
   type SyncState,
   type SyncVia,
+  type UploadResult,
   type WorkerMessage,
 } from './shared'
 
@@ -129,11 +133,35 @@ async function runSync(): Promise<LastRun> {
 
 async function finish(snap: BbSnapshot, via: SyncVia, workerError?: string): Promise<LastRun> {
   await writeState(via, 'saving')
-  const run: LastRun = { at: new Date().toISOString(), ok: true, via, summary: summariseSnapshot(snap), workerError }
-  await chrome.storage.local.set({ [STORAGE.lastRun]: run, [STORAGE.lastSnapshot]: snap, [STORAGE.lastSummary]: run.summary })
+  await chrome.storage.local.set({ [STORAGE.lastSnapshot]: snap })
+  const upload = await sendToDashboard(snap)
+  const run: LastRun = { at: new Date().toISOString(), ok: true, via, summary: summariseSnapshot(snap), workerError, upload }
+  await chrome.storage.local.set({ [STORAGE.lastRun]: run, [STORAGE.lastSummary]: run.summary })
   await chrome.storage.session.remove(STORAGE.syncState)
   await saveSession({ status: 'connected', via, userName: snap.user.userName })
+  if (upload && !upload.ok) await setBadge('?', '#6B6A66')
   return run
+}
+
+/** POSTs the snapshot to the dashboard. Undefined when no dashboard is set up. */
+async function sendToDashboard(snap: BbSnapshot): Promise<UploadResult | undefined> {
+  const stored = await chrome.storage.local.get(STORAGE.dashboard)
+  const dashboard = stored[STORAGE.dashboard] as DashboardConfig | undefined
+  if (!dashboard?.url || !dashboard.token) return undefined
+  let res: Response
+  try {
+    res = await fetch(`${dashboard.url}${SYNC_PATH}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${dashboard.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trigger: 'manual', snapshot: snap }),
+    })
+  } catch (err) {
+    return { ok: false, error: `Couldn't reach the dashboard (${errorMessage(err)}).` }
+  }
+  const body = (await res.json().catch(() => null)) as { counts?: Record<string, unknown>; detail?: string } | null
+  if (res.ok && body?.counts) return { ok: true, counts: body.counts }
+  if (res.status === 401) return { ok: false, error: 'The dashboard rejected the sync token.' }
+  return { ok: false, error: `The dashboard returned ${res.status}${body?.detail ? `: ${body.detail}` : ''}.` }
 }
 
 async function fail(err: unknown, loginRequired: boolean): Promise<LastRun> {

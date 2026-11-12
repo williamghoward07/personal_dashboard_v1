@@ -6,7 +6,9 @@ import { type NextRequest, NextResponse } from 'next/server'
 // /api/timer is also called by the Mac/Shortcuts with a bearer token and no
 // session; every route checks the caller itself (lib/timer/auth.ts).
 // /api/cron is called by Vercel with CRON_SECRET; each route checks it.
-const PUBLIC_PATHS = ['/login', '/auth', '/api/alexa', '/api/timer', '/api/cron']
+// /api/blackboard is called by the Chrome extension with its own bearer
+// token and no session (lib/blackboard/auth.ts).
+const PUBLIC_PATHS = ['/login', '/auth', '/api/alexa', '/api/timer', '/api/cron', '/api/blackboard']
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))

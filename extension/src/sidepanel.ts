@@ -2,9 +2,18 @@
 // chrome.storage whenever it opens, so a sync already running in the worker
 // shows up as running. Each function appears once: one Sync button, one
 // progress bar, one course list.
-import { BB_ORIGIN, type SnapshotSummary } from '@/lib/blackboard/client'
+import { BB_ORIGIN, courseOutlineUrl, type SnapshotSummary } from '@/lib/blackboard/client'
 import { icon } from './icons'
-import { STORAGE, SYNC_STALE_MS, type LastRun, type SessionCheck, type SyncState, type WorkerMessage } from './shared'
+import {
+  STORAGE,
+  SYNC_STALE_MS,
+  dashboardOrigin,
+  type DashboardConfig,
+  type LastRun,
+  type SessionCheck,
+  type SyncState,
+  type WorkerMessage,
+} from './shared'
 
 type Tab = 'overview' | 'courses'
 type CourseRow = SnapshotSummary['courses'][number]
@@ -16,7 +25,12 @@ const state: {
   lastSummary?: SnapshotSummary
   sync?: SyncState
   session?: SessionCheck
-} = { tab: 'overview' }
+  dashboard?: DashboardConfig
+  /** The dashboard form: open when nothing is set up yet, or after Change. */
+  editingDashboard: boolean
+  draft: { url: string; token: string }
+  dashboardError?: string
+} = { tab: 'overview', editingDashboard: false, draft: { url: '', token: '' } }
 
 // ---------- tiny DOM helper ----------
 
@@ -78,10 +92,6 @@ function courseLabel(c: CourseRow): string {
   return c.moduleCode ?? shortCode(c.courseCode)
 }
 
-function courseUrl(c: CourseRow): string {
-  return `${BB_ORIGIN}/ultra/courses/${encodeURIComponent(c.bbId)}/outline`
-}
-
 function relativeTime(iso: string): string {
   const date = new Date(iso)
   const today = new Date()
@@ -110,6 +120,28 @@ function startSync() {
 
 function openUrl(url: string) {
   void chrome.tabs.create({ url })
+}
+
+function saveDashboard() {
+  const origin = dashboardOrigin(state.draft.url)
+  // Blank while changing an existing setup keeps the saved token.
+  const token = state.draft.token.trim() || state.dashboard?.token || ''
+  state.dashboardError = !origin
+    ? 'Enter the dashboard address, starting https://'
+    : !token
+      ? 'Paste the sync token (BLACKBOARD_SYNC_TOKEN).'
+      : undefined
+  if (!origin || !token) return render()
+  // Must run straight from the click: Chrome only asks inside a user gesture.
+  void chrome.permissions.request({ origins: [`${origin}/*`] }).then(async (granted) => {
+    if (!granted) {
+      state.dashboardError = `Chrome needs permission to send syncs to ${new URL(origin).host}.`
+      return render()
+    }
+    state.editingDashboard = false
+    state.dashboardError = undefined
+    await chrome.storage.local.set({ [STORAGE.dashboard]: { url: origin, token } satisfies DashboardConfig })
+  })
 }
 
 async function downloadSnapshot() {
@@ -217,7 +249,9 @@ function overview(): HTMLElement[] {
         { class: 'rows' },
         row('Last sync', run ? `${relativeTime(run.at)}${run.ok ? '' : ', failed'}` : 'Never'),
         s ? row('Found', `${plural(s.courses.length, 'course')} · ${s.todoItems} due · ${s.courses.reduce((n, c) => n + c.contents, 0)} items`) : null,
+        row('Dashboard', uploadText()),
       ),
+      run?.ok && run.upload && !run.upload.ok ? h('div', { class: 'step-text error-text' }, run.upload.error) : null,
       h('button', { class: 'primary', disabled: !!sync, onclick: startSync }, sync ? 'Syncing…' : 'Sync now'),
       s || via
         ? h(
@@ -229,7 +263,83 @@ function overview(): HTMLElement[] {
           )
         : null,
     ),
+    dashboardCard(),
   ]
+}
+
+function uploadText(): string {
+  if (!state.dashboard) return 'Not set up'
+  const run = state.lastRun
+  if (!run?.ok || !run.upload) return 'Not sent yet'
+  return run.upload.ok ? 'Saved' : 'Not saved'
+}
+
+/** Where syncs are sent: the URL and token, entered once. */
+function dashboardCard(): HTMLElement {
+  const dashboard = state.dashboard
+  if (dashboard && !state.editingDashboard) {
+    return h(
+      'section',
+      { class: 'card' },
+      h('h2', {}, 'Dashboard'),
+      h(
+        'div',
+        { class: 'course-meta' },
+        h('span', {}, `Syncs go to ${new URL(dashboard.url).host}`),
+        h(
+          'button',
+          {
+            class: 'text-button',
+            onclick: () => {
+              state.editingDashboard = true
+              state.draft = { url: dashboard.url, token: '' }
+              render()
+            },
+          },
+          'Change',
+        ),
+      ),
+    )
+  }
+  const field = (label: string, key: 'url' | 'token', props: Record<string, string>) =>
+    h(
+      'label',
+      { class: 'field' },
+      h('span', { class: 'row-label' }, label),
+      h('input', {
+        ...props,
+        value: state.draft[key],
+        spellcheck: 'false',
+        autocomplete: 'off',
+        oninput: (event: Event) => {
+          state.draft[key] = (event.target as HTMLInputElement).value
+        },
+      }),
+    )
+  return h(
+    'section',
+    { class: 'card' },
+    h('h2', {}, 'Dashboard'),
+    h('p', {}, 'Each sync is sent to Study Copilot. Enter its address and the sync token once.'),
+    field('Address', 'url', { type: 'url', placeholder: 'https://…' }),
+    field('Sync token', 'token', { type: 'password', placeholder: dashboard ? 'Unchanged' : '' }),
+    state.dashboardError ? h('div', { class: 'step-text error-text' }, state.dashboardError) : null,
+    h('button', { class: 'secondary', onclick: saveDashboard }, 'Save'),
+    dashboard
+      ? h(
+          'button',
+          {
+            class: 'link cancel',
+            onclick: () => {
+              state.editingDashboard = false
+              state.dashboardError = undefined
+              render()
+            },
+          },
+          'Cancel',
+        )
+      : null,
+  )
 }
 
 function courses(): HTMLElement[] {
@@ -248,7 +358,7 @@ function courses(): HTMLElement[] {
         'div',
         { class: 'course-meta' },
         c.errors ? h('span', { class: 'error-text' }, plural(c.errors, 'problem')) : h('span', {}, `${plural(c.grades, 'grade')} released`),
-        h('button', { class: 'text-button', onclick: () => openUrl(courseUrl(c)) }, 'Open'),
+        h('button', { class: 'text-button', onclick: () => openUrl(courseOutlineUrl(c.bbId)) }, 'Open'),
       ),
     )
   const other = list.filter((c) => !c.moduleCode)
@@ -271,6 +381,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session' && STORAGE.syncState in changes) state.sync = changes[STORAGE.syncState].newValue as SyncState | undefined
   if (area === 'session' && STORAGE.session in changes) state.session = changes[STORAGE.session].newValue as SessionCheck | undefined
   if (area === 'local' && STORAGE.lastRun in changes) state.lastRun = changes[STORAGE.lastRun].newValue as LastRun | undefined
+  if (area === 'local' && STORAGE.dashboard in changes)
+    state.dashboard = changes[STORAGE.dashboard].newValue as DashboardConfig | undefined
   if (area === 'local' && STORAGE.lastSummary in changes)
     state.lastSummary = changes[STORAGE.lastSummary].newValue as SnapshotSummary | undefined
   render()
@@ -278,13 +390,14 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 async function init() {
   const [local, session] = await Promise.all([
-    chrome.storage.local.get([STORAGE.lastRun, STORAGE.lastSummary]),
+    chrome.storage.local.get([STORAGE.lastRun, STORAGE.lastSummary, STORAGE.dashboard]),
     chrome.storage.session.get([STORAGE.syncState, STORAGE.session]),
   ])
   state.lastRun = local[STORAGE.lastRun] as LastRun | undefined
   // Installs from before lastSummary existed still have it inside lastRun.
   const last = state.lastRun
   state.lastSummary = (local[STORAGE.lastSummary] as SnapshotSummary | undefined) ?? (last?.ok ? last.summary : undefined)
+  state.dashboard = local[STORAGE.dashboard] as DashboardConfig | undefined
   state.sync = session[STORAGE.syncState] as SyncState | undefined
   state.session = session[STORAGE.session] as SessionCheck | undefined
   render()

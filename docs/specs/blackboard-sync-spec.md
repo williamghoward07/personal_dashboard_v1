@@ -66,13 +66,13 @@ Gotchas found:
 
 `extension/` folder, plain TypeScript built with a tiny esbuild script (no framework).
 
-- **`manifest.json`**: MV3; `host_permissions`: `https://blackboard.durham.ac.uk/*` and the dashboard origin; `permissions`: `alarms`, `storage`. No `tabs`/`cookies`/`webRequest` permissions are needed.
+- **`manifest.json`**: MV3; `host_permissions`: `https://blackboard.durham.ac.uk/*`. The dashboard origin is granted at runtime: `optional_host_permissions` covers `https://*/*` and `http://localhost/*`, and saving the dashboard URL in the side panel asks Chrome for exactly that one origin. `permissions`: `alarms`, `storage`. No `tabs`/`cookies`/`webRequest` permissions are needed.
 - **Service worker**
   - `sync()` runs: `users/me` → memberships (current term only) → per course: gradebook columns, my grades, announcements, content tree (depth-limited, e.g. 4 levels) → To Do feed in 14-day windows from −14 to +84 days. Courses are fetched sequentially with a small delay. It's one user, so there's no reason to hammer the API.
-  - Builds one normalised payload (`BbSyncPayload`, shared type in `lib/blackboard/types.ts`) and `POST`s it to `/api/blackboard/sync`.
+  - `POST`s the raw snapshot (`BbSnapshot` in `lib/blackboard/client.ts`) to `/api/blackboard/sync` as `{ trigger, snapshot }`. The server normalises it (`lib/blackboard/normalise.ts`), so mapping fixes never need an extension reload.
   - **Auth check:** a 401/403, or a redirect to the SSO host from `users/me`, means the session has expired. It sets badge `!` (red), stores `needsLogin = true`, and stops.
   - Triggers: popup button; `chrome.alarms` daily (e.g. 08:00 local); `tabs.onUpdated` for Blackboard URLs (needs no extra permission with host access), throttled to once per 30 min. When `needsLogin` is set, the next successful Blackboard page load clears it and syncs.
-- **Popup**: last synced time, counts, **Sync now**, and an options field for the dashboard URL + sync token (`chrome.storage.local`).
+- **Side panel** (replaced the popup): last synced time, counts, **Sync now**, whether the dashboard saved it, and a Dashboard card for the URL + sync token (`chrome.storage.local`), entered once.
 - **Verify in phase 1:** whether service-worker fetches carry the Blackboard cookie (they should with host permissions; SameSite rules for extension requests). Fallback: run the fetch from a content script inside an open Blackboard tab.
 - **Expect frequent badge prompts:** Durham sessions expire after hours of idling, so the daily background pull will often find the session gone. The on-visit sync is what will usually keep data fresh.
 
@@ -86,7 +86,7 @@ All tables: `user_id default auth.uid()`, four own-row RLS policies, `revoke …
 |---|---|
 | `bb_courses` | `bb_id`, `course_code` (`GEOG1241_2026`), `module_code` (`GEOG1241`), `name`, `term`, `workspace_id` (nullable, auto-matched on `workspaces.module_code`, manual override), `week_offset int default 0`, `url` |
 | `bb_assignments` | `bb_id` (To Do item / column id), `course_id`, `title`, `due_at timestamptz`, `bb_content_id`, `status` (`not_submitted` / `submitted` / `graded`, from Blackboard), `url` |
-| `bb_grades` | `bb_column_id`, `course_id`, `assignment_id` nullable, `score`, `possible`, `display_grade`, `feedback` (plain text), `released_at` |
+| `bb_grades` | `bb_id` (the gradebook column id), `course_id`, `assignment_id` nullable, `score`, `possible`, `display_grade`, `feedback` (plain text), `released_at` |
 | `bb_announcements` | `bb_id`, `course_id`, `title`, `body_text` (HTML stripped server-side), `posted_at`, `url`, `read_at` (dashboard-side only) |
 | `bb_content` | `bb_id`, `course_id`, `parent_bb_id`, `title`, `kind` (`folder` / `document` / `link` / `file` / `assignment` / …), `available_from`, `path` (breadcrumb of folder titles), `week_label int` (parsed from the title, e.g. "Week 5"), `url` |
 | `bb_sync_runs` | `started_at`, `finished_at`, `trigger` (`manual` / `visit` / `daily`), `ok`, `counts jsonb`, `error`. Append-only, used for "last synced" |
@@ -105,9 +105,9 @@ Dates are stored as UTC and shown as Europe/London days (`lib/google/london-day.
 
 | route | |
 |---|---|
-| `POST /api/blackboard/sync` | Body `BbSyncPayload`. Validates (zod), upserts everything in one RPC/transaction, marks missing rows `removed_at` **only for courses included in this payload**, writes a `bb_sync_runs` row. Returns counts |
+| `POST /api/blackboard/sync` | Body `{ trigger?, snapshot: BbSnapshot }`. Validates the structure (`parseSyncBody`, hand-written like `lib/timer/validate.ts`; no new dependency), normalises, upserts everything in one RPC/transaction (`bb_sync_apply`), marks missing rows `removed_at` **only for courses included in this payload**, writes a `bb_sync_runs` row. Returns counts |
 
-**Auth:** `lib/blackboard/auth.ts`, the same shape as `lib/timer/auth.ts`. The extension sends `Authorization: Bearer $BLACKBOARD_SYNC_TOKEN`, acts as the owner user id, and uses the service-role client. The token is accepted only on `/api/blackboard/*` and `/api/mcp`. Add `/api/blackboard` to `PUBLIC_PATHS` in `proxy.ts`. Add the env var names to `.env.example`. A separate token from `TIMER_API_TOKEN`, so leaking one doesn't open the other.
+**Auth:** `lib/blackboard/auth.ts`, the same shape as `lib/timer/auth.ts`. The extension sends `Authorization: Bearer $BLACKBOARD_SYNC_TOKEN`, acts as `BLACKBOARD_OWNER_USER_ID`, and uses the service-role client. Token only: there's no cookie fallback, since only the extension calls it. The token is accepted only on `/api/blackboard/*` and `/api/mcp`. Add `/api/blackboard` to `PUBLIC_PATHS` in `proxy.ts`. Add the env var names to `.env.example`. A separate token from `TIMER_API_TOKEN`, so leaking one doesn't open the other.
 
 No AI in the sync path.
 
@@ -153,6 +153,18 @@ The data comes only from Supabase, never live from Blackboard. Nothing in the MC
 
 `lib/blackboard/client.ts` ran live in a logged-in tab: **all 10 current courses, 551 content items (max folder depth 3, none skipped), 20 announcements, 12 gradebook columns, 8 released grades, 2 To Do items, 0 errors, 318 requests in 106 s.** Five courses are org courses (`X_*`) with no module code. Still to confirm once the extension is loaded unpacked: whether the **service worker's** own fetches carry the cookie (the popup reports `via the background worker` or `via the open Blackboard tab`).
 
+### Phase 2 result (9 Nov 2026)
+
+Built: `supabase/migrations/20261109000000_blackboard_sync.sql` (**not applied yet**), `lib/blackboard/normalise.ts` + tests, `lib/blackboard/auth.ts`, `POST /api/blackboard/sync`, and the extension's upload plus Dashboard card. The migration and `bb_sync_apply` were checked in PGlite (Postgres in WASM): the migration re-runs cleanly; re-posting a snapshot changes nothing but `last_seen_at`; RLS hides other users' rows; anon is denied.
+
+How removal is scoped (never from a partial read):
+- **Courses**: missing from memberships → `removed_at` (memberships never come back partial: a lost session aborts the snapshot). Their child rows are left as they were.
+- **Grades, announcements, content**: only in courses whose section came back without errors. Content also needs `skippedFolders = 0`.
+- **Assignments** merge To Do items (primary for due dates; the only source for Turnitin) and the gradebook's coursework columns (tied to content or due; not calculated). Both are keyed by `todoItemKey`. A missing assignment is removed only if its course's columns were read cleanly, every To Do window came back, and it's undated or due inside the To Do range. Older coursework that has scrolled out of the window is kept.
+- `bb_sync_runs.counts` holds row counts, removals, `due_changed` (`{ bb_id, title, from, to }`), items skipped because their course wasn't in the snapshot, and the snapshot's errors.
+
+Still to confirm against live data: the To Do item's `column.courseId` (internal id or course code; both are matched), and whether gradebook `status` (`Graded` / `NeedsGrading`) is a good enough submission status.
+
 ---
 
 ## 10. Phases
@@ -160,7 +172,7 @@ The data comes only from Supabase, never live from Blackboard. Nothing in the MC
 | phase | scope | done when |
 |---|---|---|
 | **1. Extension spike** ✅ built | Bare extension: Sync button → fetch every endpoint in §3 → store + summarise the payload (Download JSON). Worker fetch with open-tab fallback; badge on login loss | a full payload for all 10 current courses from one click; 401 handling sets the badge |
-| **2. Schema + sync API** | migration (not applied), `lib/blackboard/*` normalisers + tests, `/api/blackboard/sync`, token auth, proxy entry | the extension's payload lands in Supabase; re-sync is idempotent; vanished items get `removed_at` |
+| **2. Schema + sync API** ✅ built | migration (not applied), `lib/blackboard/*` normalisers + tests, `/api/blackboard/sync`, token auth, proxy entry | the extension's payload lands in Supabase; re-sync is idempotent; vanished items get `removed_at` |
 | **3. Assignments tab** | real Assignments tab | coursework shows with correct London due dates and tabs |
 | **4. Content + announcements** | module Blackboard section, week offset setting, prep suggestions | a week's readings appear as suggestions on the right sessions |
 | **5. MCP** | `/api/mcp` tools in §8 | Claude can answer "what's due this week?" from the synced data |

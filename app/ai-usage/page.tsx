@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { londonDayBoundsUTC } from '@/lib/google/london-day'
-import { DAILY_CALL_CAP } from '@/lib/ai/constants'
+import { DAILY_CALL_CAP, isBlackboardFeature } from '@/lib/ai/constants'
 import {
   DataTable,
   DataTableBody,
@@ -74,7 +74,8 @@ export default function AiUsagePage() {
   }, [])
 
   const todayKey = londonDayBoundsUTC().startDateKey
-  const todayCount = rows.filter((r) => r.day === todayKey).length
+  // Blackboard processing (bb_*) has its own budget, so it isn't part of "N of 200".
+  const todayCount = rows.filter((r) => r.day === todayKey && !isBlackboardFeature(r.feature)).length
   const monthCostUsd = rows.reduce((sum, r) => sum + Number(r.est_cost_usd), 0)
   const ringPercent = Math.min(100, Math.round((todayCount / DAILY_CALL_CAP) * 100))
 

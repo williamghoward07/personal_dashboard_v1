@@ -61,6 +61,14 @@ describe('parseWeekLabel', () => {
     expect(parseWeekLabel('Lecture slides (week 3)')).toBe(3)
     expect(parseWeekLabel('Weeks 3 & 4')).toBe(3)
   })
+  it('takes the first university week of Durham ranges, without converting it', () => {
+    expect(parseWeekLabel('Week 12: Introduction Lecture')).toBe(12)
+    expect(parseWeekLabel('Weeks 13-15: Geographic Research (Methods)')).toBe(13)
+    expect(parseWeekLabel('Weeks 18–19 Introduction to GIS')).toBe(18)
+    expect(parseWeekLabel('Wk 7')).toBe(7)
+    expect(parseWeekLabel('Wks 8-9')).toBe(8)
+    expect(parseWeekLabel('Block 1: Climate')).toBeNull()
+  })
   it('ignores titles without a week', () => {
     expect(parseWeekLabel('Weekly reading')).toBeNull()
     expect(parseWeekLabel('Assessment 2026')).toBeNull()
@@ -83,6 +91,19 @@ describe('contentKind', () => {
     expect(contentKind({ contentHandler: { id: 'resource/x-bb-asmt-test-link' } })).toBe('assignment')
     expect(contentKind({ contentHandler: { id: 'resource/x-something-new' } })).toBe('other')
     expect(contentKind({})).toBe('other')
+  })
+  it('maps the handlers seen on Durham Blackboard', () => {
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-lesson', forcedSequence: false } })).toBe('lesson')
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-file', file: { fileName: 'a.pptx' } } })).toBe('file')
+    // LTI: a gradable link (e.g. Turnitin) is a submission point, else a tool.
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-blti-link', url: 'https://x.example/lti', grading: { due: '2027-02-16T14:00:00Z' } } })).toBe('assignment')
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-blti-link', url: 'https://api.turnitinuk.com/lti/1p3/launch' } })).toBe('assignment')
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-blti-link', url: 'https://x.example/lti' } })).toBe('tool')
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-bltiplacement-lti-talis-cnt-01', placementHandle: 'talis' } })).toBe('tool')
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-bltiplacement-PanoptoApplication-1', placementHandle: 'p' } })).toBe('tool')
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-courselink', targetId: '_1_1', targetType: 'Discussion' } })).toBe('discussion')
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-courselink', targetId: '_1_1', targetType: 'Assessment' } })).toBe('assignment')
+    expect(contentKind({ contentHandler: { id: 'resource/x-bb-courselink', targetId: '_1_1' } })).toBe('link')
   })
 })
 
@@ -144,10 +165,139 @@ describe('normaliseSnapshot', () => {
         path: ['Week 5'],
         week_label: 5,
         url: `${BB_ORIGIN}/ultra/courses/_100_1/outline/file/_2_1`,
+        body_text: null,
+        // An x-bb-file item links to itself, labelled by its title when it has no file name.
+        links: [{ href: `${BB_ORIGIN}/ultra/courses/_100_1/outline/file/_2_1`, label: 'Lecture slides', kind: 'file' }],
       },
       // The nearest folder wins, and off-Blackboard links fall back to the course page.
       expect.objectContaining({ bb_id: '_3_1', week_label: 6, kind: 'other', url: `${BB_ORIGIN}/ultra/courses/_100_1/outline` }),
     ])
+  })
+
+  it('keeps item text and embedded links, never the raw item API links', () => {
+    const itemUrl = `${BB_ORIGIN}/ultra/courses/_100_1/outline/edit/document/_d_1`
+    const docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    const bbfile = JSON.stringify({
+      fileName: 'Essay brief.docx',
+      linkName: 'Essay brief',
+      mimeType: docx,
+      resourceUrl: `${BB_ORIGIN}/sessions/1/2/Essay%20brief.docx?X-Blackboard-Signature=abc`,
+    }).replace(/"/g, '&quot;')
+    const rows = normaliseSnapshot(
+      snap({
+        courses: [
+          course({
+            contents: [
+              {
+                id: '_d_1',
+                depth: 0,
+                path: [],
+                title: 'Week 12: Introduction',
+                contentHandler: { id: 'resource/x-bb-document' },
+                description: '<p>Read before Monday.</p>',
+                body:
+                  '<p>Read before Monday.</p><p>See the <a href="https://rl.talis.com/3/durham/lists/AB12.html">Talis Aspire reading list</a>.</p>' +
+                  `<p><a href="${BB_ORIGIN}/sessions/1/2/x" data-bbfile="${bbfile}">Essay brief</a></p>`,
+                links: [{ href: '/ultra/courses/_100_1/outline/edit/document/_d_1', rel: 'alternate', type: 'text/html' }],
+              },
+            ],
+          }),
+        ],
+      }),
+    )
+    expect(rows.content[0]).toMatchObject({
+      body_text: 'Read before Monday.\n\nRead before Monday.\nSee the Talis Aspire reading list.\nEssay brief',
+      links: [
+        { href: 'https://rl.talis.com/3/durham/lists/AB12.html', label: 'Talis Aspire reading list', kind: 'talis' },
+        { href: itemUrl, label: 'Essay brief.docx', kind: 'file', mime: docx },
+      ],
+    })
+    expect(JSON.stringify(rows.content[0].links)).not.toMatch(/sessions|Signature|rel/)
+  })
+
+  it('drops a description that repeats the body, and caps body text', () => {
+    const rows = normaliseSnapshot(
+      snap({
+        courses: [
+          course({
+            contents: [
+              { id: '_e_1', depth: 0, path: [], title: 'A', description: 'Same', body: '<p>Same</p>' },
+              { id: '_e_2', depth: 0, path: [], title: 'B', body: 'x'.repeat(30_000) },
+              { id: '_e_3', depth: 0, path: [], title: 'C', body: '<p> </p>', description: { displayText: '<b>Rich</b>' } },
+            ],
+          }),
+        ],
+      }),
+    )
+    expect(rows.content.map((r) => r.body_text?.length ?? null)).toEqual([4, 20_000, 4])
+    expect(rows.content[2].body_text).toBe('Rich')
+  })
+
+  it('never puts NUL or half a surrogate pair into the payload', () => {
+    // The 20,000th UTF-16 unit (index 19,999) is a high surrogate: a plain cut would end on it.
+    const body = 'x'.repeat(19_999) + '\ud83d\ude00'
+    expect(body).toHaveLength(20_001)
+    const rows = normaliseSnapshot(
+      snap({
+        courses: [
+          course({
+            name: 'Rivers\u0000 & Floods',
+            contents: [
+              { id: '_z_1', depth: 1, path: ['Week\u0000 5', 'Bad &#xD800; folder'], title: 'Hand\u0000book', body },
+              { id: '_z_2', depth: 0, path: [], title: 'File', contentHandler: { id: 'resource/x-bb-file', file: { fileName: 'Brief\u0000.pdf', mimeType: 'application/pdf\u0000' } } },
+            ],
+            announcements: [{ id: '_a_9', title: '\u0000', body: `<p>${'y'.repeat(19_999)}\ud83d\ude00</p>` }],
+            grades: [{ columnId: '_c_9', displayGrade: { text: 'A\u0000' }, feedback: 'Well\u0000 done \udc00' }],
+          }),
+        ],
+      }),
+    )
+    const [item, file] = rows.content
+    expect(item.title).toBe('Handbook')
+    expect(item.path).toEqual(['Week 5', 'Bad \ufffd folder'])
+    expect(item.week_label).toBe(5)
+    expect(item.body_text).toBe('x'.repeat(19_999))
+    expect(file.links[0]).toMatchObject({ label: 'Brief.pdf', mime: 'application/pdf' })
+    expect(rows.courses[0].name).toBe('Rivers & Floods')
+    expect(rows.announcements[0]).toMatchObject({ title: 'Announcement', body_text: 'y'.repeat(19_999) })
+    expect(rows.grades[0]).toMatchObject({ display_grade: 'A', feedback: 'Well done \ufffd' })
+    // Well-formed throughout: no NUL and no lone surrogate anywhere.
+    const json = JSON.stringify(rows)
+    expect(JSON.parse(json)).toEqual(JSON.parse(JSON.stringify(rows)))
+    const strings: string[] = []
+    JSON.parse(json, (_k, v) => (typeof v === 'string' && strings.push(v), v))
+    for (const str of strings) expect(str).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]|\u0000/)
+    expect(rows.content[0].body_text!.length).toBeLessThanOrEqual(20_000)
+    expect(json).not.toMatch(/\\u0000|\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f])|(?<!\\ud[89ab][0-9a-f]{2})\\ud[c-f][0-9a-f]{2}/i)
+  })
+
+  it('adds the item\'s own target from its content handler', () => {
+    const pptx = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    const outline = (id: string) => ({ links: [{ href: `/ultra/courses/_100_1/outline/file/${id}`, type: 'text/html' }] })
+    const rows = normaliseSnapshot(
+      snap({
+        courses: [
+          course({
+            contents: [
+              { id: '_s_1', depth: 1, path: ['Week 12'], title: 'Lecture 1 slides', contentHandler: { id: 'resource/x-bb-file', file: { fileName: 'L1 Intro.pptx', mimeType: pptx }, fileAssociationMode: 'Embed' }, ...outline('_s_1') },
+              { id: '_s_2', depth: 0, path: [], title: 'Module handbook', contentHandler: { id: 'resource/x-bb-file', file: { fileName: 'Handbook.pdf', mimeType: 'application/pdf' } }, ...outline('_s_2') },
+              { id: '_s_3', depth: 0, path: [], title: 'Data portal', contentHandler: { id: 'resource/x-bb-externallink', url: 'https://data.example.org/portal' } },
+              { id: '_s_4', depth: 0, path: [], title: 'Link to Reading List in Talis Aspire', contentHandler: { id: 'resource/x-bb-bltiplacement-lti-talis-cnt-01', placementHandle: 'talis' }, ...outline('_s_4') },
+              { id: '_s_5', depth: 0, path: [], title: 'Encore - Recordings Folder', contentHandler: { id: 'resource/x-bb-bltiplacement-PanoptoApplication-1', placementHandle: 'p' }, ...outline('_s_5') },
+              { id: '_s_6', depth: 0, path: [], title: 'Summative Essay due 16th February 2027 by 2pm', contentHandler: { id: 'resource/x-bb-blti-link', url: 'https://lti.example/launch?token=1' } },
+            ],
+          }),
+        ],
+      }),
+    )
+    const links = Object.fromEntries(rows.content.map((r) => [r.bb_id, r.links]))
+    expect(links._s_1).toEqual([{ href: `${BB_ORIGIN}/ultra/courses/_100_1/outline/file/_s_1`, label: 'L1 Intro.pptx', kind: 'slides', mime: pptx }])
+    expect(links._s_2).toEqual([{ href: `${BB_ORIGIN}/ultra/courses/_100_1/outline/file/_s_2`, label: 'Handbook.pdf', kind: 'file', mime: 'application/pdf' }])
+    expect(links._s_3).toEqual([{ href: 'https://data.example.org/portal', label: 'Data portal', kind: 'other' }])
+    expect(links._s_4).toEqual([{ href: `${BB_ORIGIN}/ultra/courses/_100_1/outline/file/_s_4`, label: 'Link to Reading List in Talis Aspire', kind: 'talis' }])
+    expect(links._s_5).toEqual([{ href: `${BB_ORIGIN}/ultra/courses/_100_1/outline/file/_s_5`, label: 'Encore - Recordings Folder', kind: 'panopto' }])
+    // An LTI launch URL is never stored.
+    expect(links._s_6).toEqual([])
   })
 
   it('strips HTML from announcement bodies', () => {
@@ -260,12 +410,40 @@ describe('normaliseSnapshot', () => {
         due_at: '2026-11-21T12:00:00.000Z', // To Do wins for due dates
         bb_content_id: '_x_1',
         status: 'submitted',
+        is_formative: null,
         url: `${BB_ORIGIN}/ultra/courses/_100_1/outline/assessment/_x_1/overview`,
       },
       expect.objectContaining({ bb_id: 'column:_c_2', title: 'Old quiz', status: 'graded', due_at: '2026-09-01T12:00:00.000Z' }),
       expect.objectContaining({ bb_id: 'content:_t_1', title: 'Turnitin report', status: 'not_submitted', url: `${BB_ORIGIN}/ultra/courses/_100_1/outline` }),
     ])
     expect(rows.skipped.assignments).toBe(1)
+  })
+
+  it('reads is_formative from the To Do item\'s column only when it is a boolean', () => {
+    const item = (contentId: string, isFormative: unknown) => ({
+      title: contentId,
+      dueDate: '2026-11-13T12:00:00Z',
+      column: { contentId, courseId: '_100_1', ...(isFormative === undefined ? {} : { isFormative }) },
+    })
+    const rows = normaliseSnapshot(
+      snap({
+        courses: [course({ columns: [{ id: '_c_9', name: 'Column only', contentId: '_k_9', grading: { due: '2026-12-01T12:00:00Z' } }] })],
+        todo: [
+          {
+            since: '2026-11-09T10:00:00.000Z',
+            until: '2026-11-23T10:00:00.000Z',
+            body: { futureDueItems: [item('_k_1', true), item('_k_2', false), item('_k_3', undefined), item('_k_4', 'yes')] },
+          },
+        ],
+      }),
+    )
+    expect(Object.fromEntries(rows.assignments.map((a) => [a.title, a.is_formative]))).toEqual({
+      'Column only': null,
+      _k_1: true,
+      _k_2: false,
+      _k_3: null,
+      _k_4: null,
+    })
   })
 
   it('scopes removal to sections that were read cleanly', () => {
@@ -299,7 +477,14 @@ describe('normaliseSnapshot', () => {
   })
 
   it('is deterministic, so a re-sync sends identical rows', () => {
-    const s = snap({ courses: [course({ announcements: [{ id: '_a_1', title: 'Hi', body: '<p>x</p>' }] })] })
+    const s = snap({
+      courses: [
+        course({
+          announcements: [{ id: '_a_1', title: 'Hi', body: '<p>x</p>' }],
+          contents: [{ id: '_d_1', depth: 0, path: [], title: 'Doc', body: '<a href="https://rl.talis.com/3/durham/lists/X.html">List</a>' }],
+        }),
+      ],
+    })
     expect(normaliseSnapshot(s)).toEqual(normaliseSnapshot(s))
   })
 })

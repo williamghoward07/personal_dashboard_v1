@@ -18,6 +18,14 @@ for (const [index, name] of entries.entries()) {
     resolve: { alias: { '@': root } },
     define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     build: {
+      rollupOptions: {
+        // unpdf's Node-only branches use import.meta, which an IIFE can't
+        // have; it becomes {} and those branches never run in the extension.
+        onwarn(warning, warn) {
+          if (warning.code === 'EMPTY_IMPORT_META') return
+          warn(warning)
+        },
+      },
       outDir: path.join(here, 'dist'),
       emptyOutDir: index === 0,
       minify: false,

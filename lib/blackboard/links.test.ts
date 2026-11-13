@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BB_ORIGIN } from './client'
-import { MAX_LINKS_PER_ITEM, classifyLink, cleanText, extractLinks, safeHref } from './links'
+import { MAX_LINKS_PER_ITEM, classifyLink, cleanText, embeddedFiles, extractLinks, safeHref } from './links'
 
 const ITEM = `${BB_ORIGIN}/ultra/courses/_100_1/outline/edit/document/_5_1`
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -171,5 +171,53 @@ describe('extractLinks', () => {
     expect(extractLinks('<a href="https://x.example/" data-bbfile="&quot;just a string&quot;">x</a>', ITEM)).toEqual([])
     expect(extractLinks(undefined as unknown as string, ITEM)).toEqual([])
     expect(extractLinks('<a "'.repeat(5000), ITEM)).toEqual([])
+  })
+})
+
+describe('embeddedFiles', () => {
+  const PDF = 'application/pdf'
+  const signed = (rid: number) => `${BB_ORIGIN}/bbcswebdav/pid-3502719-dt-content-rid-${rid}_1/xid-${rid}_1?Kq3=a&Vx5=b`
+  const anchor = (data: Record<string, unknown>) => `<a data-bbid="bbml-editor-id_1" data-bbfile="${bbFile(data)}" href="x">file</a>`
+
+  it("reads an Ultra Document's embedded files with their signed URL and a stable id", () => {
+    // What Ultra really writes: no fileName, the file name in linkName, a caption in displayName.
+    const handbook = { linkName: 'GEOG1222_IGR_Term1_Handbook_26-27.pdf', displayName: 'Term 1 Handbook 26/27', mimeType: PDF, render: 'inline', resourceUrl: signed(41), viewerUrl: signed(41) }
+    const slides = { fileName: 'Lecture 2.pptx', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', resourceUrl: signed(42) }
+    expect(embeddedFiles(`<div>${anchor(handbook)}${anchor(slides)}${anchor(handbook)}</div>`)).toEqual([
+      { id: 'xid-41_1', fileName: 'GEOG1222_IGR_Term1_Handbook_26-27.pdf', displayName: 'Term 1 Handbook 26/27', mimeType: PDF, url: signed(41) },
+      { id: 'xid-42_1', fileName: 'Lecture 2.pptx', displayName: '', mimeType: slides.mimeType, url: signed(42) },
+    ])
+  })
+
+  it('skips images, HTML blocks, files without a URL and URLs off Blackboard', () => {
+    const html = [
+      anchor({ fileName: 'map.png', mimeType: 'image/png', resourceUrl: signed(1) }),
+      anchor({ fileName: 'banner.pdf', mimeType: PDF, isDecorative: true, resourceUrl: signed(2) }),
+      anchor({ fileName: 'UNSAFE_HTML_20260806152339.html', resourceUrl: signed(3) }),
+      anchor({ fileName: 'No url.pdf', mimeType: PDF }),
+      anchor({ fileName: 'Elsewhere.pdf', mimeType: PDF, resourceUrl: 'https://evil.example/bbcswebdav/xid-9_1' }),
+      anchor({ fileName: 'Plain.pdf', mimeType: PDF, resourceUrl: 'http://blackboard.durham.ac.uk/bbcswebdav/xid-9_1' }),
+      anchor({ linkType: 'external', url: 'https://durham.cloud.panopto.eu/x', title: 'Recording' }),
+      '<a data-bbfile="{not json">y</a>',
+    ].join('')
+    expect(embeddedFiles(html)).toEqual([])
+    expect(embeddedFiles(undefined as unknown as string)).toEqual([])
+  })
+
+  it('falls back to the file name when the URL has no xid', () => {
+    const url = `${BB_ORIGIN}/sessions/7/8/Brief.docx?sig=1`
+    expect(embeddedFiles(anchor({ fileName: 'Brief.docx', mimeType: DOCX, resourceUrl: url }))).toEqual([
+      { id: 'Brief.docx', fileName: 'Brief.docx', displayName: '', mimeType: DOCX, url },
+    ])
+  })
+})
+
+describe('extractLinks and Ultra HTML blocks', () => {
+  it("leaves out an Ultra Document's own HTML blocks", () => {
+    const block = bbFile({ fileName: 'UNSAFE_HTML_20260806152339.html', render: 'inline', resourceUrl: '/bbcswebdav/xid-1_1' })
+    const real = bbFile({ linkName: 'Start_Durham Dictionary.docx', mimeType: DOCX, resourceUrl: '/bbcswebdav/xid-2_1' })
+    expect(extractLinks(`<div data-bbfile="${block}"></div><a data-bbfile="${real}">x</a>`, ITEM)).toEqual([
+      { href: ITEM, label: 'Start_Durham Dictionary.docx', kind: 'file', mime: DOCX },
+    ])
   })
 })

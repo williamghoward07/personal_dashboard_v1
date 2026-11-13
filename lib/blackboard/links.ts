@@ -7,7 +7,9 @@
 //
 // Blackboard's embedded-file URLs (`resourceUrl`, `viewerUrl`, anything under
 // `/sessions/`) are session-scoped and expire, so they are never stored: a
-// file is stored as a link to the content item that holds it.
+// file is stored as a link to the content item that holds it. The one place
+// they are handed out is `embeddedFiles`, for the extension's immediate
+// handbook download.
 
 import { BB_ORIGIN, absoluteUrl } from './client'
 import { cleanText } from './text'
@@ -181,6 +183,14 @@ function s(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+/**
+ * An HTML block typed into an Ultra Document is stored as a file named
+ * `UNSAFE_HTML_<timestamp>.html`. It's part of the page, not a file to open.
+ */
+function isEditorHtmlBlock(fileName: string): boolean {
+  return /^UNSAFE_HTML_\d+\.html?$/i.test(fileName)
+}
+
 function label(text: string): string {
   return cleanText(text.replace(/\s+/g, ' ').trim(), MAX_LABEL)
 }
@@ -196,6 +206,7 @@ function fromBbFile(data: Record<string, unknown>, itemUrl: string): BbContentLi
   }
   if (data.isDecorative === true || /^image\//i.test(mime)) return null
   const fileName = s(data.fileName)
+  if (isEditorHtmlBlock(fileName || s(data.linkName))) return null
   const name = label(fileName || s(data.linkName) || s(data.displayName)) || 'File'
   // Never resourceUrl / viewerUrl: they are session-signed and expire.
   const kind = classifyLink(itemUrl, fileName || name, mime || undefined)
@@ -241,6 +252,48 @@ export function extractLinks(html: string, itemUrl: string): BbContentLink[] {
     if (link) found.push(link)
   }
   return dedupeLinks(found)
+}
+
+/** A file embedded in an item's body (an Ultra Document keeps its files there, not under `/attachments`). */
+export interface BbEmbeddedFile {
+  /** Stable within its item: the file's `xid-…` from its URL, else its name. */
+  id: string
+  fileName: string
+  /** The caption shown on the page; often says more than the file name. */
+  displayName: string
+  mimeType: string
+  /** Session-signed and short-lived. For an immediate GET only: never store or upload it. */
+  url: string
+}
+
+/**
+ * The files embedded in an item's HTML (`data-bbfile` with a `resourceUrl` on
+ * a Blackboard host), for the extension to download straight away. Images and
+ * Ultra's own HTML blocks are skipped. One entry per id.
+ */
+export function embeddedFiles(html: string): BbEmbeddedFile[] {
+  if (typeof html !== 'string' || html === '') return []
+  const found = new Map<string, BbEmbeddedFile>()
+  for (const m of html.slice(0, MAX_HTML).matchAll(OPEN_TAG)) {
+    const bbFile = parseAttrs(m[2]).get('data-bbfile')
+    const data = bbFile === undefined ? null : parseBbFile(bbFile)
+    if (!data) continue
+    const mimeType = s(data.mimeType)
+    if (data.isDecorative === true || /^image\//i.test(mimeType)) continue
+    const fileName = label(s(data.fileName) || s(data.linkName) || s(data.displayName))
+    if (!fileName || isEditorHtmlBlock(fileName)) continue
+    let url: URL
+    try {
+      url = new URL(absoluteUrl(s(data.resourceUrl)))
+    } catch {
+      continue
+    }
+    if (!s(data.resourceUrl) || url.protocol !== 'https:' || !isBlackboardHost(url.hostname)) continue
+    const id = /\/(xid-[\w-]+)(?:\/|$)/.exec(url.pathname)?.[1] ?? fileName
+    if (found.has(id) || found.size >= MAX_LINKS_PER_ITEM) continue
+    found.set(id, { id, fileName, displayName: label(s(data.displayName)), mimeType: cleanText(mimeType, MAX_LABEL), url: url.toString() })
+  }
+  return [...found.values()]
 }
 
 /** One entry per href + label (first wins), capped at MAX_LINKS_PER_ITEM. */

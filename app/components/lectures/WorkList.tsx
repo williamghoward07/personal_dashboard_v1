@@ -59,7 +59,8 @@ function SetWorkChip({ setWork }: { setWork: NonNullable<WorkItem['setWork']> })
       icon={suggested ? <Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden /> : undefined}
       className="shrink-0"
     >
-      {setWork.length > 1 ? `Work set (${setWork.length})` : 'Work set'}
+      {setWork.every((w) => w.from === 'announcement') ? 'Announcement' : 'Work set'}
+      {setWork.length > 1 ? ` (${setWork.length})` : ''}
     </MetadataChip>
   )
 }

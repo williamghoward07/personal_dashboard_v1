@@ -212,7 +212,7 @@ export default function WorkRow({
               className="rounded-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-outline"
             >
               <MetadataChip accent="blue" icon={<Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden />}>
-                AI-found
+                {item.ai?.from === 'announcement' ? 'From an announcement' : 'AI-found'}
               </MetadataChip>
             </button>
           )}
@@ -236,6 +236,44 @@ export default function WorkRow({
               </a>
             )}
           </div>
+        </Popover>
+      )}
+      {!!item.notes?.length && (
+        <Popover
+          label="Announcements about this"
+          panelClassName="w-[min(24rem,calc(100vw-2rem))]"
+          trigger={(props) => (
+            <button
+              type="button"
+              {...props}
+              className="rounded-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-outline"
+            >
+              <MetadataChip accent="neutral">
+                {item.notes && item.notes.length > 1 ? `Announcement (${item.notes.length})` : 'Announcement'}
+              </MetadataChip>
+            </button>
+          )}
+        >
+          <ul className="flex flex-col gap-3 text-sm">
+            {item.notes?.map((note) => (
+              <li key={note.keyDateId} className="flex flex-col gap-1">
+                <blockquote className={cn('border-l-2 pl-3 text-on-surface', ACCENT_BORDER.blue)}>
+                  &ldquo;{note.quote}&rdquo;
+                </blockquote>
+                {note.sourceUrl && (
+                  <a
+                    href={note.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn('inline-flex items-center gap-1 self-start text-xs font-semibold hover:underline', ACCENT_TEXT.blue)}
+                  >
+                    Open source
+                    <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
         </Popover>
       )}
       {item.dueFromKeyDateId && (

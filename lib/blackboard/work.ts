@@ -51,7 +51,7 @@ export interface WorkItem {
   done: boolean
   doneVia: 'blackboard' | 'dashboard' | 'session' | null
   /** Set on AI-found key dates only. */
-  ai: { status: 'suggested' | 'confirmed'; quote: string; sourceUrl: string | null } | null
+  ai: { status: 'suggested' | 'confirmed'; from: WorkSourceKind; quote: string; sourceUrl: string | null } | null
   url: string | null
   bbStatus?: 'not_submitted' | 'submitted' | 'graded'
   /** Prep and test items keep their session so the UI can reuse SessionRow. */
@@ -66,13 +66,36 @@ export interface WorkItem {
    * only; it never changes the session's prep status.
    */
   setWork?: SessionSetWork[]
+  /** Announcements about this item: they annotate it, they never compete with it. */
+  notes?: WorkNote[]
 }
+
+/** Where an AI key date was found. Content and documents are primary; an announcement only annotates. */
+export type WorkSourceKind = 'announcement' | 'content' | 'document'
+
+export interface WorkNote {
+  keyDateId: string
+  from: 'announcement'
+  title: string
+  quote: string
+  sourceUrl: string | null
+  status: 'suggested' | 'confirmed'
+}
+
+function sourceKind(kd: Pick<BbKeyDate, 'announcement_id' | 'document_id'>): WorkSourceKind {
+  if (kd.announcement_id) return 'announcement'
+  return kd.document_id ? 'document' : 'content'
+}
+
+/** Same category, or either side is the catch-all. */
+const compatibleCategory = (a: WorkCategory, b: WorkCategory) => a === b || a === 'other' || b === 'other'
 
 export interface SessionSetWork {
   keyDateId: string
   title: string
   category: WorkCategory
   status: 'suggested' | 'confirmed'
+  from: WorkSourceKind
   quote: string
   sourceUrl: string | null
   done: boolean
@@ -174,13 +197,15 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
   }
 
   const items: WorkItem[] = []
+  const courseIdOf = new Map<WorkItem, string>()
+  const assignmentItem = new Map<string, WorkItem>()
 
   for (const a of input.assignments) {
     if (a.removed_at) continue
     const course = courseById.get(a.course_id)
     const bbDone = a.status === 'submitted' || a.status === 'graded'
     const fold = a.due_at ? null : foldedKeyDate(byAssignment.get(a.id))
-    items.push({
+    const assignmentRow: WorkItem = {
       key: `bba:${a.id}`,
       source: 'assignment',
       category: workCategory(a),
@@ -196,7 +221,10 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
       bbStatus: a.status,
       assignmentId: a.id,
       ...(fold ? { dueFromKeyDateId: fold.id } : {}),
-    })
+    }
+    items.push(assignmentRow)
+    courseIdOf.set(assignmentRow, a.course_id)
+    assignmentItem.set(a.id, assignmentRow)
   }
 
   const sourceUrl = (kd: KeyDateLite): string | null => {
@@ -251,8 +279,27 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
     return (type && sameDay.find((i) => normaliseSessionType(i.session?.type) === type)) || sameDay[0] || null
   }
 
+  const noteOf = (kd: KeyDateLite): WorkNote => ({
+    keyDateId: kd.id,
+    from: 'announcement',
+    title: kd.title,
+    quote: kd.quote,
+    sourceUrl: sourceUrl(kd),
+    status: kd.status as 'suggested' | 'confirmed',
+  })
+  const addNote = (item: WorkItem, kd: KeyDateLite) => {
+    item.notes = [...(item.notes ?? []), noteOf(kd)]
+  }
+  // Announcement dates that are standalone deadlines: resolved once every primary row exists.
+  const announcementRows: { kd: KeyDateLite; item: WorkItem }[] = []
+
   for (const kd of live) {
-    if (folds(kd)) continue // the official row wins
+    if (folds(kd)) {
+      // The official row wins; an announcement's wording stays reachable from it.
+      const official = assignmentItem.get(kd.assignment_id as string)
+      if (official && kd.announcement_id) addNote(official, kd)
+      continue
+    }
     const course = courseById.get(kd.course_id)
     const url = sourceUrl(kd)
     const target = setWorkTarget(kd, course?.module_code ?? null)
@@ -264,6 +311,7 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
           title: kd.title,
           category: kd.category,
           status: kd.status as 'suggested' | 'confirmed',
+          from: sourceKind(kd),
           quote: kd.quote,
           sourceUrl: url,
           done: !!kd.done_at,
@@ -271,7 +319,7 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
       ]
       continue
     }
-    items.push({
+    const row: WorkItem = {
       key: `kd:${kd.id}`,
       source: 'key_date',
       category: kd.category,
@@ -282,10 +330,25 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
       dueAt: consistentDueAt(kd.due_on, kd.due_at),
       done: !!kd.done_at,
       doneVia: kd.done_at ? 'dashboard' : null,
-      ai: { status: kd.status as 'suggested' | 'confirmed', quote: kd.quote, sourceUrl: url },
+      ai: { status: kd.status as 'suggested' | 'confirmed', from: sourceKind(kd), quote: kd.quote, sourceUrl: url },
       url: url ?? course?.url ?? null,
       keyDateId: kd.id,
-    })
+    }
+    courseIdOf.set(row, kd.course_id)
+    if (kd.announcement_id) announcementRows.push({ kd, item: row })
+    else items.push(row)
+  }
+
+  // An announcement never competes with a primary item for the same thing:
+  // same course, same London day, compatible category. It annotates it.
+  const primaries = items.filter((i) => i.source === 'assignment' || i.source === 'key_date')
+  for (const { kd, item } of announcementRows) {
+    const primary = primaries.find(
+      (p) =>
+        courseIdOf.get(p) === kd.course_id && p.dueOn === item.dueOn && compatibleCategory(p.category, item.category)
+    )
+    if (primary) addNote(primary, kd)
+    else items.push(item)
   }
 
   return [...items, ...sessionItems]

@@ -396,6 +396,7 @@ describe('toWorkItems: work set for a session', () => {
         title: 'Read essential readings for lecture',
         category: 'session_task',
         status: 'suggested',
+        from: 'content',
         quote: readings.quote,
         sourceUrl: null,
         done: false,
@@ -449,6 +450,83 @@ describe('toWorkItems: work set for a session', () => {
     ])
     expect(applyWorkFilter(items, { categories: ['tutorial'], modules: 'all' })).toEqual([])
     expect(itemCategories(one(items, `prep:${lecture.uid}`))).toEqual(['lecture_prep', 'session_task'])
+  })
+})
+
+describe('toWorkItems: announcements annotate, they do not compete', () => {
+  const ann = (over: Partial<BbKeyDate> & Pick<BbKeyDate, 'id' | 'due_on'>) =>
+    keyDate({ announcement_id: `an-${over.id}`, content_id: null, quote: 'Reminder: due Friday', ...over })
+
+  it('folds into the content key date for the same module, day and category', () => {
+    const items = build({
+      keyDates: [ann({ id: 'a1', due_on: '2026-11-13' }), keyDate({ id: 'k1', due_on: '2026-11-13' })],
+      announcementUrlById: new Map([['an-a1', 'https://bb/an']]),
+    })
+    expect(keys(items)).toEqual(['kd:k1'])
+    const row = one(items, 'kd:k1')
+    expect(row.ai?.from).toBe('content')
+    expect(row.notes).toEqual([
+      { keyDateId: 'a1', from: 'announcement', title: 'Formative Discussion Post I', quote: 'Reminder: due Friday', sourceUrl: 'https://bb/an', status: 'suggested' },
+    ])
+  })
+
+  it('attaches to an official assignment due the same day', () => {
+    const items = build({
+      assignments: [assignment({ id: 'a', title: 'Formative Essay', due_at: '2026-11-13T12:00:00Z', is_formative: true })],
+      keyDates: [ann({ id: 'a1', due_on: '2026-11-13' })],
+    })
+    expect(keys(items)).toEqual(['bba:a'])
+    expect(one(items, 'bba:a').notes?.map((n) => n.keyDateId)).toEqual(['a1'])
+  })
+
+  it('records an announcement folded by assignment_id as a note too', () => {
+    const items = build({
+      assignments: [assignment({ id: 'a', title: 'Essay' })],
+      keyDates: [ann({ id: 'a1', due_on: '2026-11-20', assignment_id: 'a' })],
+    })
+    expect(keys(items)).toEqual(['bba:a'])
+    expect(one(items, 'bba:a').notes?.map((n) => n.keyDateId)).toEqual(['a1'])
+  })
+
+  it('stays a row when nothing primary matches', () => {
+    const items = build({ keyDates: [ann({ id: 'a1', due_on: '2026-11-13' })] })
+    expect(keys(items)).toEqual(['kd:a1'])
+    expect(one(items, 'kd:a1').ai?.from).toBe('announcement')
+    expect(one(items, 'kd:a1').notes).toBeUndefined()
+  })
+
+  it('stays a row on a different day, an incompatible category or another course', () => {
+    const items = build({
+      keyDates: [
+        keyDate({ id: 'k1', due_on: '2026-11-13' }),
+        ann({ id: 'a1', due_on: '2026-11-14' }),
+        ann({ id: 'a2', due_on: '2026-11-13', category: 'summative' }),
+        ann({ id: 'a3', due_on: '2026-11-13', course_id: 'c1061' }),
+      ],
+    })
+    expect(keys(items).sort()).toEqual(['kd:a1', 'kd:a2', 'kd:a3', 'kd:k1'])
+  })
+
+  it('treats other as compatible with any category', () => {
+    const items = build({
+      keyDates: [keyDate({ id: 'k1', due_on: '2026-11-13' }), ann({ id: 'a1', due_on: '2026-11-13', category: 'other' })],
+    })
+    expect(keys(items)).toEqual(['kd:k1'])
+  })
+
+  it('leaves no note for a dismissed announcement', () => {
+    const items = build({
+      keyDates: [keyDate({ id: 'k1', due_on: '2026-11-13' }), ann({ id: 'a1', due_on: '2026-11-13', status: 'dismissed' })],
+    })
+    expect(one(items, 'kd:k1').notes).toBeUndefined()
+  })
+
+  it('keeps announcement session work on the session with from set', () => {
+    const items = build({
+      sessions: [session({ start: '2026-11-13T10:00:00Z' })],
+      keyDates: [ann({ id: 'a1', due_on: '2026-11-13', category: 'session_task' })],
+    })
+    expect(one(items, items.find((i) => i.source === 'prep')!.key).setWork?.[0].from).toBe('announcement')
   })
 })
 

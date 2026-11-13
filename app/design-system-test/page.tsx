@@ -43,6 +43,7 @@ import { ProgressRing } from '@/components/ui/progress-ring'
 import { StatTile } from '@/components/ui/stat-tile'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { Timeline, TimelineEntry } from '@/components/ui/timeline'
+import { ToggleChips } from '@/components/ui/toggle-chips'
 import WidgetCard from '@/app/components/WidgetCard'
 import { ACCENTS, ACCENT_VAR, type UiAccent } from '@/lib/theme'
 
@@ -109,6 +110,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export default function DesignSystemTestPage() {
   const [tab, setTab] = useState<'all' | 'linked' | 'unlinked'>('all')
   const [compactTab, setCompactTab] = useState<'day' | 'week' | 'month'>('week')
+  const [toggled, setToggled] = useState<string[]>(['summative', 'lecture_prep'])
   const [chips, setChips] = useState(['Ada Lovelace', 'Coastal Erosion Essay', 'GEOG2041'])
   const [activeTag, setActiveTag] = useState<string | null>('method')
 
@@ -429,6 +431,42 @@ export default function DesignSystemTestPage() {
                 accent={accent}
                 aria-label={`${accent} example`}
                 value="on"
+                onChange={() => {}}
+                options={[
+                  { value: 'on', label: accent },
+                  { value: 'off', label: 'Off' },
+                ]}
+              />
+            </div>
+          ))}
+        </Row>
+      </Section>
+
+      {/* ---------------------------------------------------------------- */}
+      <Section title="Toggle chips (multi-select)">
+        <Row label="default (mint)">
+          <ToggleChips
+            aria-label="Filter by type"
+            value={toggled}
+            onChange={setToggled}
+            options={[
+              { value: 'summative', label: 'Summative', count: 3 },
+              { value: 'formative', label: 'Formative', count: 5 },
+              { value: 'test', label: 'Tests', count: 0 },
+              { value: 'lecture_prep', label: 'Lecture prep', count: 12 },
+            ]}
+          />
+        </Row>
+        <Row label="accents (all on)">
+          {UI_ACCENTS.map((accent) => (
+            <div
+              key={accent}
+              style={accent === 'ws' ? ({ ['--ws-accent' as string]: ACCENT_VAR.pink } as React.CSSProperties) : undefined}
+            >
+              <ToggleChips
+                accent={accent}
+                aria-label={`${accent} example`}
+                value={['on']}
                 onChange={() => {}}
                 options={[
                   { value: 'on', label: accent },

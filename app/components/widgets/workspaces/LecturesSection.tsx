@@ -7,6 +7,7 @@ import { ACCENT_BAR } from '@/lib/theme'
 import { cn } from '@/lib/utils/cn'
 import type { WorkspaceLink } from '@/lib/types'
 import type { WorkspaceLinkPatch } from '@/lib/workspaces/use-workspace-links'
+import { useWorkItems } from '@/lib/blackboard/use-work-items'
 import { useTimetable } from '@/lib/lectures/use-timetable'
 import { notifyLecturesChanged } from '@/lib/lectures/events'
 import { PREP_ACCENT, formatSessionDay, formatSessionTime } from '@/lib/timetable/format'
@@ -20,7 +21,7 @@ import {
   type PrepStatus,
   type SessionWithPrep,
 } from '@/lib/timetable/session'
-import SessionAssignmentsList from '../../lectures/SessionAssignmentsList'
+import WorkList from '../../lectures/WorkList'
 import { inputClass, microLabelClass, wsAccentStyle } from './shared'
 
 function StatusCounts({ counts }: { counts: Record<PrepStatus, number> }) {
@@ -37,9 +38,9 @@ function StatusCounts({ counts }: { counts: Record<PrepStatus, number> }) {
   )
 }
 
-// A module workspace's timetable: every session for its module code, in the
-// same Upcoming / Past due / Completed / History view as /lectures, each
-// opening its assignment view. Reading counts come from this page's own
+// A module workspace's key dates: every piece of work for its module code
+// (lecture prep, assignments, AI-found dates), in the same Upcoming / Past
+// due / Completed list as /lectures, with the module locked. Reading counts come from this page's own
 // link state, so Sources, stats and this section always agree; task counts
 // and hand-in state come from the timetable fetch.
 export default function LecturesSection({
@@ -52,6 +53,7 @@ export default function LecturesSection({
   updateLink: (id: string, patch: WorkspaceLinkPatch) => Promise<void>
 }) {
   const { sessions: all, loading, error, setupNeeded } = useTimetable()
+  const work = useWorkItems()
   const [now] = useState(() => new Date())
 
   const sessions = useMemo(() => all.filter((s) => s.moduleCode === moduleCode), [all, moduleCode])
@@ -92,6 +94,14 @@ export default function LecturesSection({
   )
   const { upcoming, past } = splitByTime(live, now)
 
+  // Prep and test rows take this page's own reading counts (`live`), so
+  // Sources, stats and this list agree between refetches.
+  const liveByUid = useMemo(() => new Map(live.map((s) => [s.uid, s])), [live])
+  const items = useMemo(
+    () => work.items.map((item) => (item.session ? { ...item, session: liveByUid.get(item.session.uid) ?? item.session } : item)),
+    [work.items, liveByUid]
+  )
+
   const afterWrite = <T,>(promise: Promise<T>) =>
     promise.then((result) => {
       notifyLecturesChanged()
@@ -100,18 +110,8 @@ export default function LecturesSection({
 
   const upcomingCounts = countByStatus(upcoming)
 
-  // Without a list to sit in, the title stands alone.
-  const bareTitle = !!error || (!loading && sessions.length === 0)
-
   return (
     <ModuleGlassCard style={wsAccentStyle} size="sm" className="flex flex-col gap-3">
-      {bareTitle && (
-        <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
-          <Presentation className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
-          Lectures
-          <span className="font-mono text-[11px] font-normal text-on-surface-variant">{moduleCode}</span>
-        </h2>
-      )}
       {error === 'not_configured' && (
         <p className="text-sm text-on-surface-variant">
           The timetable isn&apos;t connected — set <code>TIMETABLE_ICS_URL</code> (see the Lectures tab).
@@ -184,27 +184,22 @@ export default function LecturesSection({
         </div>
       )}
 
-      {!loading && !error && sessions.length === 0 ? (
-        <p className="text-sm text-on-surface-variant">No sessions for {moduleCode} on the timetable.</p>
-      ) : (
-        !error && (
-          <SessionAssignmentsList
-            sessions={live}
-            now={now}
-            accent="ws"
-            loading={loading}
-            showModule={false}
-            title={
-              <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
-                <Presentation className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
-                Lectures
-                <span className="font-mono text-[11px] font-normal text-on-surface-variant">{moduleCode}</span>
-                {upcoming.length > 0 && <StatusCounts counts={upcomingCounts} />}
-              </h2>
-            }
-          />
-        )
-      )}
+      <WorkList
+        items={items}
+        now={now}
+        accent="ws"
+        loading={loading || work.loading}
+        error={work.error}
+        lockedModule={moduleCode}
+        title={
+          <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
+            <Presentation className="h-4 w-4 text-ws-accent" strokeWidth={1.75} />
+            Key dates
+            <span className="font-mono text-[11px] font-normal text-on-surface-variant">{moduleCode}</span>
+            {upcoming.length > 0 && <StatusCounts counts={upcomingCounts} />}
+          </h2>
+        }
+      />
     </ModuleGlassCard>
   )
 }

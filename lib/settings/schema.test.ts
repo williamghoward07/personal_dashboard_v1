@@ -195,12 +195,8 @@ describe('parseUserSettings', () => {
 })
 
 describe('parseWorkFilter', () => {
-  it('defaults to Upcoming, every category except lecture prep, every module', () => {
-    expect(defaultWorkFilter()).toEqual({
-      tab: 'upcoming',
-      categories: ['summative', 'formative', 'test', 'tutorial', 'session_task', 'other'],
-      modules: 'all',
-    })
+  it('defaults to Upcoming, every category (lecture prep included), every module', () => {
+    expect(defaultWorkFilter()).toEqual({ tab: 'upcoming', categories: 'all', modules: 'all' })
     expect(parseWorkFilter(undefined)).toEqual(defaultWorkFilter())
     expect(parseWorkFilter({})).toEqual(defaultWorkFilter()) // the column's '{}' default
     expect(parseWorkFilter([])).toEqual(defaultWorkFilter())

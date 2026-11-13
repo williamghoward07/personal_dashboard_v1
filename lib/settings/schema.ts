@@ -10,7 +10,7 @@
 // lib/settings/use-settings.ts leans on that to fall back to defaults.
 
 import { isDateKey, mondayOf } from '@/lib/blackboard/dates'
-import { WORK_CATEGORIES, WORK_TABS, isWorkCategory, type WorkCategory, type WorkTab } from '@/lib/blackboard/work'
+import { WORK_TABS, isWorkCategory, type WorkCategory, type WorkTab } from '@/lib/blackboard/work'
 
 export type HomeWidgetSpan = 1 | 2 | 3 | 4
 
@@ -66,9 +66,12 @@ export interface WorkFilterSetting {
   modules: string[] | 'all'
 }
 
-/** First visit: Upcoming, every category but lecture prep, every module. */
+/**
+ * First visit: Upcoming, every category, every module. Lecture prep is
+ * included so /lectures keeps listing lectures until it's switched off.
+ */
 export function defaultWorkFilter(): WorkFilterSetting {
-  return { tab: 'upcoming', categories: WORK_CATEGORIES.filter((c) => c !== 'lecture_prep'), modules: 'all' }
+  return { tab: 'upcoming', categories: 'all', modules: 'all' }
 }
 
 /**

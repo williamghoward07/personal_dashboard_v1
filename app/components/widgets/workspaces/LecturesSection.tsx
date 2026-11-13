@@ -21,6 +21,7 @@ import {
   type PrepStatus,
   type SessionWithPrep,
 } from '@/lib/timetable/session'
+import AnnouncementsChip from '../../lectures/AnnouncementsChip'
 import WorkList from '../../lectures/WorkList'
 import { inputClass, microLabelClass, wsAccentStyle } from './shared'
 
@@ -197,6 +198,7 @@ export default function LecturesSection({
             Key dates
             <span className="font-mono text-[11px] font-normal text-on-surface-variant">{moduleCode}</span>
             {upcoming.length > 0 && <StatusCounts counts={upcomingCounts} />}
+            <AnnouncementsChip moduleCode={moduleCode} />
           </h2>
         }
       />

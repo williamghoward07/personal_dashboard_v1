@@ -1,30 +1,26 @@
 'use client'
 
 import { useMemo, useState, type ReactNode } from 'react'
-import { CalendarClock, BookOpen, Check, EyeOff, ExternalLink, FileText, Megaphone, Pin, Presentation, Sparkles, Video, X } from 'lucide-react'
-import ConfirmDialog from '../ConfirmDialog'
-import Popover from '../Popover'
+import { CalendarClock, BookOpen, Check, EyeOff, ExternalLink, FileText, Pin, Presentation, Video, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { MetadataChip } from '@/components/ui/metadata-chip'
 import { useSessionBlackboard } from '@/lib/blackboard/use-session-blackboard'
 import type { MatchedItem, SessionMatch } from '@/lib/blackboard/match'
 import { toWorkItems } from '@/lib/blackboard/work'
-import { clearSessionOverride, dismissKeyDate, hideForSession, type WriteResult } from '@/lib/blackboard/work-writes'
+import { clearSessionOverride, hideForSession, type WriteResult } from '@/lib/blackboard/work-writes'
 import type { WorkspaceLink } from '@/lib/types'
 import type { TimetableSession } from '@/lib/timetable/session'
-import { ACCENT_BORDER, ACCENT_TEXT, type UiAccent } from '@/lib/theme'
-import type { BbKeyDate } from '@/lib/blackboard/types'
-import { cn } from '@/lib/utils/cn'
+import type { UiAccent } from '@/lib/theme'
 import { normalizeUrl } from '@/lib/utils/url'
 import { microLabel } from './SessionPrepPanel'
 import WorkRow from './WorkRow'
 
 type BlackboardSession = Pick<TimetableSession, 'uid' | 'moduleCode' | 'start' | 'type'>
 
-/** Everything Blackboard matched to a session, for the calendar popover's one-line count. Hidden items don't count. */
+/** Everything Blackboard matched to a session, for the calendar popover's one-line count. Hidden items and announcements (the corner chip's job) don't count. */
 export function matchCount(match: SessionMatch | null): number {
   if (!match) return 0
-  return match.slides.length + match.readings.length + match.recordings.length + match.other.length + match.keyDates.length
+  const dated = match.keyDates.filter((kd) => !kd.announcement_id).length
+  return match.slides.length + match.readings.length + match.recordings.length + match.other.length + dated
 }
 
 /** Why an item is here, quietly. A date match needs no explaining. */
@@ -201,81 +197,6 @@ function HiddenItems({ items, accent, sessionUid }: { items: MatchedItem[]; acce
   )
 }
 
-/** One announcement about this session: not a task, so no done toggle, confirm or re-date. Just its words, and Dismiss. */
-function AnnouncementLine({ keyDate, sourceUrl }: { keyDate: BbKeyDate; sourceUrl: string | null }) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [confirming, setConfirming] = useState(false)
-
-  const dismiss = async () => {
-    setBusy(true)
-    setError(null)
-    const result = await dismissKeyDate(keyDate.id)
-    setBusy(false)
-    if (result.error) setError(result.error)
-  }
-
-  return (
-    <li className="flex flex-col">
-      <div className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-surface-container-high/50">
-        <span className="min-w-0 flex-1 truncate text-sm text-on-surface" title={keyDate.title}>
-          {keyDate.title}
-        </span>
-        <Popover
-          label="What the announcement said"
-          panelClassName="w-[min(24rem,calc(100vw-2rem))]"
-          trigger={(props) => (
-            <button
-              type="button"
-              {...props}
-              className="rounded-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-outline"
-            >
-              <MetadataChip accent="blue" icon={<Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden />}>
-                From an announcement
-              </MetadataChip>
-            </button>
-          )}
-        >
-          <div className="flex flex-col gap-2 text-sm">
-            <blockquote className={cn('border-l-2 pl-3 text-on-surface', ACCENT_BORDER.blue)}>
-              &ldquo;{keyDate.quote}&rdquo;
-            </blockquote>
-            {sourceUrl && (
-              <a
-                href={sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn('inline-flex items-center gap-1 self-start text-xs font-semibold hover:underline', ACCENT_TEXT.blue)}
-              >
-                Open source
-                <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />
-              </a>
-            )}
-          </div>
-        </Popover>
-        <Button variant="destructive" size="sm" disabled={busy} onClick={() => setConfirming(true)}>
-          Dismiss
-        </Button>
-      </div>
-      {error && (
-        <p role="alert" className="px-1 text-xs text-error">
-          {error}
-        </p>
-      )}
-      <ConfirmDialog
-        isOpen={confirming}
-        message="Dismiss this date? It won't be suggested again."
-        confirmLabel="Dismiss"
-        onCancel={() => setConfirming(false)}
-        onConfirm={() => {
-          setConfirming(false)
-          void dismiss()
-        }}
-      />
-    </li>
-  )
-}
-
 function Group({ icon, label, children }: { icon?: ReactNode; label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
@@ -318,12 +239,10 @@ export default function SessionBlackboardBlock({
     for (const group of [match.slides, match.readings, match.recordings, match.other]) {
       for (const item of group) contentUrlById.set(item.content.id, item.href)
     }
-    // Announcements only annotate: they get their own group, never a task row.
+    // Announcements only annotate: they live in the corner chip, never a task row.
     const keyDates = match.keyDates.filter((kd) => !kd.announcement_id)
     return toWorkItems({ courses: [course], assignments: [], keyDates, sessions: [], contentUrlById, now })
   }, [match, course, now])
-
-  const announcements = useMemo(() => match?.keyDates.filter((kd) => !!kd.announcement_id) ?? [], [match])
 
   if (loading) return <p className="text-xs text-on-surface-variant">Loading…</p>
   if (error) {
@@ -382,13 +301,6 @@ export default function SessionBlackboardBlock({
         <Group label="Due for this session" icon={<CalendarClock className="h-3 w-3" strokeWidth={1.75} aria-hidden />}>
           {dueItems.map((item) => (
             <WorkRow key={item.key} item={item} now={now} accent={accent} showModule={false} compact />
-          ))}
-        </Group>
-      )}
-      {announcements.length > 0 && (
-        <Group label="Announcements about this session" icon={<Megaphone className="h-3 w-3" strokeWidth={1.75} aria-hidden />}>
-          {announcements.map((kd) => (
-            <AnnouncementLine key={kd.id} keyDate={kd} sourceUrl={null} />
           ))}
         </Group>
       )}

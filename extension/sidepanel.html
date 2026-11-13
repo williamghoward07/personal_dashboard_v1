@@ -94,6 +94,21 @@
       .field input { height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
       .field input:focus { outline: none; border-color: var(--accent); }
       .cancel { margin: 10px auto 0; display: flex; font-size: 13px; }
+
+      /* Live | Test. Test selected fills with the accent so it never looks like Live. */
+      .brand { display: flex; align-items: center; gap: 8px; }
+      .chip { border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 500; letter-spacing: 0; }
+      .segmented { display: flex; gap: 3px; padding: 3px; margin-top: 10px; border: 1px solid var(--border); border-radius: 9px; }
+      .segment { flex: 1; height: 30px; border-radius: 7px; color: var(--muted); }
+      .segment:hover { color: var(--ink); }
+      .segment.on { background: var(--ink); color: var(--surface); font-weight: 500; }
+      .segment.on.test { background: var(--accent); color: var(--on-accent); }
+      .card .form-intro { margin-top: 12px; }
+
+      .dialog { width: calc(100% - 32px); max-width: 340px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--ink); }
+      .dialog::backdrop { background: rgb(0 0 0 / 0.35); }
+      .dialog h2 { font-size: 16px; font-weight: 500; margin: 0 0 4px; letter-spacing: -0.01em; }
+      .dialog p { margin: 0; color: var(--muted); }
     </style>
   </head>
   <body>

@@ -1,6 +1,7 @@
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from './calendarItems'
 import { calendarItemSession, dotClassFor, formatSpanEnd, formatTime } from './calendarItems'
+import { DeadlineButton } from './DeadlinePopover'
 import PrepLight from '../lectures/PrepLight'
 import { useOpenSession } from '../lectures/SessionPopover'
 
@@ -64,6 +65,8 @@ export default function DayItemsList({
               >
                 {item.title}
               </button>
+            ) : item.kind === 'deadline' ? (
+              <DeadlineButton item={item.item} className="text-on-surface hover:underline" />
             ) : item.kind === 'session' ? (
               <button
                 type="button"

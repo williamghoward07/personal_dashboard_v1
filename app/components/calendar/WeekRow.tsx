@@ -1,5 +1,5 @@
 import type { DayItem, EventSpan } from './calendarItems'
-import { dotClassFor, formatTime, isBarRenderedCalendarItem } from './calendarItems'
+import { DEADLINE_DONE_CLASS, deadlineTime, dotClassFor, formatTime, isBarRenderedCalendarItem } from './calendarItems'
 import { layoutBarsForWeek, laneCountForWeek } from './weekBarLayout'
 import PrepLight from '../lectures/PrepLight'
 
@@ -133,7 +133,12 @@ export default function WeekRow({
                 {(item.kind === 'calendar' || item.kind === 'routine' || item.kind === 'session') && item.start && (
                   <span className="shrink-0 tabular-nums text-on-surface-variant">{formatTime(item.start)}</span>
                 )}
-                <span className="truncate">{item.title}</span>
+                {item.kind === 'deadline' && deadlineTime(item.item) && (
+                  <span className="shrink-0 tabular-nums text-on-surface-variant">{deadlineTime(item.item)}</span>
+                )}
+                <span className={item.kind === 'deadline' && item.item.done ? `truncate ${DEADLINE_DONE_CLASS}` : 'truncate'}>
+                  {item.title}
+                </span>
               </li>
             ))}
             {items.length > maxCompactItems && (

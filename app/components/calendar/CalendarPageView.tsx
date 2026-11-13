@@ -6,6 +6,7 @@ import { FilterTabs } from '@/components/ui/filter-tabs'
 import { supabase } from '@/lib/supabase'
 import { useSettings } from '@/lib/settings/use-settings'
 import type { ActivitySession, RoutineInstance, Task } from '@/lib/types'
+import { useWorkItems } from '@/lib/blackboard/use-work-items'
 import { useTimetable } from '@/lib/lectures/use-timetable'
 import { connectGoogleCalendar } from '@/lib/google/connect'
 import { londonDayBoundsUTC, londonWeekBoundsUTC, londonMonthBoundsUTC } from '@/lib/google/london-day'
@@ -247,19 +248,22 @@ export default function CalendarPageView() {
   // reloading — and blanking — the whole calendar.
   const range = useMemo(() => getRangeForView(view, selectedDateKey), [view, selectedDateKey])
   const timetable = useTimetable({ timeMin: range.timeMin, timeMax: range.timeMax })
+  // Blackboard deadlines; they refetch themselves when work changes.
+  const work = useWorkItems()
   const itemsByDate = useMemo<Map<string, DayItem[]>>(
     () =>
       fetched
-        ? groupItemsByDate(
-            fetched.events,
-            fetched.tasks,
-            fetched.sessions,
-            fetched.routineInstances,
-            timetable.sessions,
-            timetable.tracked
-          )
+        ? groupItemsByDate({
+            events: fetched.events,
+            tasks: fetched.tasks,
+            sessions: fetched.sessions,
+            routineInstances: fetched.routineInstances,
+            timetable: timetable.sessions,
+            tracked: timetable.tracked,
+            deadlines: work.items,
+          })
         : new Map(),
-    [fetched, timetable.sessions, timetable.tracked]
+    [fetched, timetable.sessions, timetable.tracked, work.items]
   )
 
   const goPrev = () => {

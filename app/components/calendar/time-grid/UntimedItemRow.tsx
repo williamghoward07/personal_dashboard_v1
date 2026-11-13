@@ -3,6 +3,7 @@
 import type { Task } from '@/lib/types'
 import type { DayItem } from '../calendarItems'
 import { formatSpanEnd } from '../calendarItems'
+import { DeadlineButton } from '../DeadlinePopover'
 
 // A single all-day-strip row — all-day calendar events read as "blocked
 // out" (shaded bar), tasks are clickable (opens TaskDetailModal), activity
@@ -28,6 +29,15 @@ export default function UntimedItemRow({ item, onSelectTask }: { item: DayItem; 
       >
         {item.title}
       </button>
+    )
+  }
+
+  if (item.kind === 'deadline') {
+    return (
+      <DeadlineButton
+        item={item.item}
+        className="block w-full rounded px-1.5 py-1 text-[11px] text-academic-orange hover:bg-surface-container-high"
+      />
     )
   }
 

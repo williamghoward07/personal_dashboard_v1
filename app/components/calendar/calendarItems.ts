@@ -2,7 +2,9 @@ import type { CSSProperties } from 'react'
 import type { Task, ActivitySession, RoutineInstance } from '@/lib/types'
 import { londonDateKey } from '@/lib/google/london-day'
 import { ACCENT_BAR, ACCENT_VAR } from '@/lib/theme'
+import { dueTimeLabel } from '../lectures/work-format'
 import { POST_ACCENT, PREP_ACCENT } from '@/lib/timetable/format'
+import type { WorkItem } from '@/lib/blackboard/work'
 import { calendarEventSession, calendarEventUid, type SessionWithPrep, type TrackedPrep } from '@/lib/timetable/session'
 
 export interface CalendarEvent {
@@ -35,6 +37,14 @@ export type DayItem =
   | { kind: 'task'; id: string; title: string; task: Task }
   | { kind: 'activity'; id: string; title: string }
   | {
+      // A standalone Blackboard deadline (assignment or dated key date),
+      // untimed like a task. Clicking one opens DeadlinePopover.
+      kind: 'deadline'
+      id: string
+      title: string
+      item: WorkItem
+    }
+  | {
       kind: 'routine'
       id: string
       title: string
@@ -56,6 +66,19 @@ export type DayItem =
       session: SessionWithPrep
     }
 
+/** A standalone deadline the calendar shows: an assignment or key date with a day (sessions are already on it). */
+export function isCalendarDeadline(item: WorkItem): item is WorkItem & { dueOn: string } {
+  return (item.source === 'assignment' || item.source === 'key_date') && item.dueOn !== null
+}
+
+/** "14:00" before a deadline's title, when its time is known. */
+export function deadlineTime(item: WorkItem): string | null {
+  return dueTimeLabel(item.dueOn, item.dueAt)
+}
+
+/** Strike-through de-emphasis for a finished deadline. */
+export const DEADLINE_DONE_CLASS = 'line-through opacity-60'
+
 export interface EventSpan {
   id: string
   title: string
@@ -70,6 +93,7 @@ export interface EventSpan {
 export const DOT_CLASS: Record<DayItem['kind'], string> = {
   calendar: 'bg-on-surface-variant',
   task: 'bg-academic-orange',
+  deadline: 'bg-academic-orange',
   activity: 'bg-primary-container',
   routine: 'bg-habit-purple',
   session: 'bg-on-surface-variant',
@@ -187,15 +211,28 @@ function resolveEventSpan(event: CalendarEvent): { startKey: string; endKey: str
 // Calendar event (see app/api/routines/schedule) — Google events whose id
 // matches a routine instance's google_event_id are dropped here so the same
 // block never renders twice (once generic, once routine-specific).
-export function groupItemsByDate(
-  events: CalendarEvent[],
-  tasks: Task[],
-  sessions: ActivitySession[],
-  routineInstances: RoutineInstance[],
-  timetable: SessionWithPrep[] = [],
-  tracked: Map<string, TrackedPrep> = new Map(),
-  now: Date = new Date()
-): Map<string, DayItem[]> {
+export interface GroupItemsOptions {
+  events: CalendarEvent[]
+  tasks: Task[]
+  sessions: ActivitySession[]
+  routineInstances: RoutineInstance[]
+  timetable?: SessionWithPrep[]
+  tracked?: Map<string, TrackedPrep>
+  /** Blackboard work; only standalone deadlines (see isCalendarDeadline) are shown. */
+  deadlines?: WorkItem[]
+  now?: Date
+}
+
+export function groupItemsByDate({
+  events,
+  tasks,
+  sessions,
+  routineInstances,
+  timetable = [],
+  tracked = new Map(),
+  deadlines = [],
+  now = new Date(),
+}: GroupItemsOptions): Map<string, DayItem[]> {
   const byDate = new Map<string, DayItem[]>()
   const routineEventIds = new Set(routineInstances.map((i) => i.google_event_id))
 
@@ -274,6 +311,11 @@ export function groupItemsByDate(
       end: session.end,
       session,
     })
+  }
+
+  for (const work of deadlines) {
+    if (!isCalendarDeadline(work)) continue
+    push(work.dueOn, { kind: 'deadline', id: work.key, title: work.title, item: work })
   }
 
   for (const items of byDate.values()) {

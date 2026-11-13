@@ -1,14 +1,18 @@
 'use client'
 
 import { useMemo, useState, type ReactNode } from 'react'
+import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FilterTabs } from '@/components/ui/filter-tabs'
+import { MetadataChip } from '@/components/ui/metadata-chip'
 import { ToggleChips } from '@/components/ui/toggle-chips'
 import {
   WORK_CATEGORIES,
   WORK_CATEGORY_LABEL,
   WORK_TABS,
   applyWorkFilter,
+  itemCategories,
+  matchesCategories,
   workLists,
   type WorkCategory,
   type WorkItem,
@@ -23,11 +27,12 @@ import { formatSessionDay } from '@/lib/timetable/format'
 import { addCounts, type SessionWithPrep } from '@/lib/timetable/session'
 import { cn } from '@/lib/utils/cn'
 import HandInButton, { CONFIRM_MS } from './HandInButton'
+import { moduleNameMap } from './module-names'
 import SessionRow from './SessionRow'
+import { pageWork, type WorkStage } from './work-paging'
 import WorkRow from './WorkRow'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const LIST_LIMIT = 20
 const ALL_MODULES = 'all'
 
 const TAB_LABEL: Record<WorkTab, string> = {
@@ -43,6 +48,21 @@ const TAB_EMPTY: Record<WorkTab, string> = {
 }
 
 const FIRST_RUN = 'Nothing synced from Blackboard yet. Open Blackboard in Chrome and press Sync now in the extension.'
+
+/** Quiet marker on a session row that has work set for it; the work itself is on the session's page. */
+function SetWorkChip({ setWork }: { setWork: NonNullable<WorkItem['setWork']> }) {
+  const suggested = setWork.some((w) => w.status === 'suggested')
+  return (
+    <MetadataChip
+      accent="blue"
+      title={setWork.map((w) => w.title).join('\n')}
+      icon={suggested ? <Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden /> : undefined}
+      className="shrink-0"
+    >
+      {setWork.length > 1 ? `Work set (${setWork.length})` : 'Work set'}
+    </MetadataChip>
+  )
+}
 
 /** "Due yesterday" / "Due 3 days ago" — from the session's end, as the Teams past-due list does. */
 function overdueLabel(session: SessionWithPrep, now: Date): string {
@@ -97,7 +117,8 @@ export default function WorkList({
   // yet): the stored filter once settings load, defaults until then.
   const [override, setOverride] = useState<WorkFilterSetting | null>(null)
   const filter = override ?? (lockedModule ? LOCKED_DEFAULT : settings.work_filter)
-  const [expandedKey, setExpandedKey] = useState<string | null>(null)
+  // The staged "show more" position, tied to the list it was set on: another tab, type or module starts over.
+  const [paging, setPaging] = useState<{ key: string; stage: WorkStage }>({ key: '', stage: 0 })
   const [completeError, setCompleteError] = useState<string | null>(null)
 
   const setFilter = (patch: Partial<WorkFilterSetting>) => {
@@ -122,16 +143,14 @@ export default function WorkList({
     [base, filter.categories]
   )
 
-  // One chip per module code. A stored module that has gone falls back to All.
-  const modules = useMemo(() => {
-    const byCode = new Map<string, string | null>()
-    for (const item of base) {
-      if (item.moduleCode && !byCode.has(item.moduleCode)) byCode.set(item.moduleCode, item.courseName)
-    }
-    return [...byCode].sort(([a], [b]) => a.localeCompare(b))
-  }, [base])
+  // One chip per module code, named. A stored module that has gone falls back to All.
+  const moduleNames = useMemo(() => moduleNameMap(items), [items])
+  const modules = useMemo(
+    () => [...new Set(base.flatMap((i) => (i.moduleCode ? [i.moduleCode] : [])))].sort((a, b) => a.localeCompare(b)),
+    [base]
+  )
   const storedModule = !lockedModule && filter.modules !== 'all' ? filter.modules[0] : undefined
-  const activeModule = modules.some(([code]) => code === storedModule) ? (storedModule as string) : null
+  const activeModule = modules.includes(storedModule as string) ? (storedModule as string) : null
   const showModuleFilter = !lockedModule && modules.length > 1
 
   // Past-due count per module, for the module chips: where the queue is.
@@ -151,20 +170,21 @@ export default function WorkList({
   )
   const moduleLists = useMemo(() => workLists(moduleItems, now), [moduleItems, now])
   const lists = useMemo(() => {
-    const picked = new Set<WorkCategory>(categories)
     return Object.fromEntries(
-      WORK_TABS.map((tab) => [tab, moduleLists[tab].filter((i) => picked.has(i.category))])
+      WORK_TABS.map((tab) => [tab, moduleLists[tab].filter((i) => matchesCategories(i, categories))])
     ) as Record<WorkTab, WorkItem[]>
   }, [moduleLists, categories])
 
   const tab = filter.tab
   const tabList = lists[tab]
   const listKey = [tab, activeModule ?? ALL_MODULES, categories.join(',')].join('|')
-  const shown = expandedKey === listKey ? tabList : tabList.slice(0, LIST_LIMIT)
+  const { visible: shown, next } = pageWork(tabList, tab, now, paging.key === listKey ? paging.stage : 0)
 
   const chipCounts = useMemo(() => {
     const counts = new Map<WorkCategory, number>()
-    for (const item of moduleLists[tab]) counts.set(item.category, (counts.get(item.category) ?? 0) + 1)
+    for (const item of moduleLists[tab]) {
+      for (const category of itemCategories(item)) counts.set(category, (counts.get(category) ?? 0) + 1)
+    }
     return counts
   }, [moduleLists, tab])
 
@@ -195,6 +215,7 @@ export default function WorkList({
           postStatus={session.postStatus}
           prep={addCounts(session.readings, session.tasks.prep)}
           showModule={showModule}
+          marker={item.setWork?.length ? <SetWorkChip setWork={item.setWork} /> : undefined}
           aside={
             pastDue ? (
               <span className="flex w-44 shrink-0 flex-col items-end text-right leading-tight">
@@ -215,7 +236,14 @@ export default function WorkList({
         />
       )
     }
-    return <WorkRow key={item.key} item={item} now={now} accent={accent} showModule={showModule} />
+    return <WorkRow
+        key={item.key}
+        item={item}
+        now={now}
+        accent={accent}
+        showModule={showModule}
+        moduleName={item.moduleCode ? moduleNames.get(item.moduleCode) : null}
+      />
   }
 
   const emptyText = !hasBlackboard ? FIRST_RUN : categories.length === 0 ? 'Pick a type above to see work.' : TAB_EMPTY[tab]
@@ -247,9 +275,14 @@ export default function WorkList({
           onChange={(value) => setFilter({ modules: value === ALL_MODULES ? 'all' : [value] })}
           options={[
             { value: ALL_MODULES, label: 'All', count: totalPastDue || undefined },
-            ...modules.map(([code, name]) => ({
+            ...modules.map((code) => ({
               value: code,
-              label: <span title={name ?? code}>{code}</span>,
+              label: (
+                <span title={moduleNames.get(code) ? `${code} ${moduleNames.get(code)}` : code}>
+                  <span className="font-mono">{code}</span>
+                  {moduleNames.get(code) && <span className="ml-1.5">{moduleNames.get(code)}</span>}
+                </span>
+              ),
               count: pastDueByCode.get(code) || undefined,
             })),
           ]}
@@ -286,9 +319,15 @@ export default function WorkList({
           )}
         </>
       )}
-      {tabList.length > shown.length && (
-        <Button variant="ghost" size="sm" accent={accent} className="self-start" onClick={() => setExpandedKey(listKey)}>
-          Show all {tabList.length}
+      {next && (
+        <Button
+          variant="ghost"
+          size="sm"
+          accent={accent}
+          className="self-start"
+          onClick={() => setPaging({ key: listKey, stage: next.stage })}
+        >
+          {next.label} ({next.count})
         </Button>
       )}
     </div>

@@ -963,10 +963,9 @@ export interface SessionMatch {
   /**
    * Items that would have matched this session but carry a `hide` override,
    * with their original confidence, so they can be restored. In no other
-   * group and not counted as matches. `matchSession` always sets it
-   * (optional only so hand-built fixtures without it still type-check).
+   * group and not counted as matches.
    */
-  hidden?: MatchedItem[]
+  hidden: MatchedItem[]
   /** Non-dismissed AI key dates for this session (its day, or its week/type). */
   keyDates: BbKeyDate[]
   /** The course's top-level Talis reading list. */

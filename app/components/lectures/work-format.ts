@@ -76,15 +76,20 @@ export function syncLabel(state: SyncState, lastOkAt: string | null, now: Date):
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
 
-/** The AI-reading line, or null when there's nothing to say (idle, disabled, an error shown separately). */
-export function processingLabel(p: Pick<BbProcessing, 'state' | 'totals' | 'remaining'>): string | null {
+/**
+ * The AI-reading line, or null when there's nothing to say (idle, disabled,
+ * an error shown separately, or a finished run that read nothing). A
+ * finished run reads "Read 3 new or changed items of 320, 2 dated tasks found".
+ */
+export function processingLabel(p: Pick<BbProcessing, 'state' | 'totals' | 'scope' | 'remaining'>): string | null {
   switch (p.state) {
     case 'running':
       return `Reading new items (${p.remaining} left)`
-    case 'done':
-      return p.totals.processed > 0
-        ? `${plural(p.totals.processed, 'new item', 'new items')} read, ${p.totals.unchanged} unchanged`
-        : null
+    case 'done': {
+      if (p.scope.read <= 0) return null
+      const read = `Read ${plural(p.scope.read, 'new or changed item', 'new or changed items')} of ${Math.max(p.scope.total, p.scope.read)}`
+      return p.totals.added > 0 ? `${read}, ${plural(p.totals.added, 'dated task', 'dated tasks')} found` : read
+    }
     case 'budget':
       return 'AI limit reached for today. It continues tomorrow.'
     default:

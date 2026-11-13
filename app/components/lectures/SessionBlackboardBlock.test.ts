@@ -13,6 +13,7 @@ const match = (over: Partial<SessionMatch>): SessionMatch => ({
   readings: [],
   recordings: [],
   other: [],
+  hidden: [],
   keyDates: [],
   moduleReadingList: null,
   uniWeek: 1,
@@ -30,6 +31,10 @@ describe('matchCount', () => {
     expect(
       matchCount(match({ slides: items(1), readings: items(2), recordings: items(1), other: items(3), keyDates: [{}, {}] as BbKeyDate[] }))
     ).toBe(9)
+  })
+
+  it('does not count hidden items', () => {
+    expect(matchCount(match({ slides: items(1), hidden: items(3) }))).toBe(1)
   })
 
   it('does not count the module reading list', () => {

@@ -42,7 +42,7 @@ async function selectByIds<T>(table: string, columns: string, ids: string[]): Pr
 const COURSE_COLUMNS = 'id, module_code, name, url'
 const ASSIGNMENT_COLUMNS = 'id, course_id, title, due_at, status, is_formative, url, done_at, removed_at'
 const KEY_DATE_COLUMNS =
-  'id, course_id, announcement_id, content_id, document_id, title, category, due_on, due_at, quote, status, assignment_id, done_at'
+  'id, course_id, announcement_id, content_id, document_id, title, category, for_session_type, due_on, due_at, quote, status, assignment_id, done_at'
 
 interface BbData {
   courses: WorkInput['courses']

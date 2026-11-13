@@ -3,18 +3,11 @@
 import { useState } from 'react'
 import InfoPopover from '../InfoPopover'
 import { Button } from '@/components/ui/button'
-import { useBbProcessing, type BbProcessing } from '@/lib/blackboard/use-bb-processing'
+import { useBbProcessing } from '@/lib/blackboard/use-bb-processing'
 import { useSyncStatus } from '@/lib/blackboard/use-sync-status'
 import { ACCENT_BAR, ACCENT_TEXT, type Accent } from '@/lib/theme'
 import { cn } from '@/lib/utils/cn'
 import { failedLabel, processingLabel, syncLabel, type SyncTone } from './work-format'
-
-/** "Read 3 new or changed items of 320, 2 dated tasks found" once a run that read something finishes. */
-function finishedLabel({ scope, totals }: Pick<BbProcessing, 'scope' | 'totals'>): string | null {
-  if (scope.read <= 0) return null
-  const read = `Read ${scope.read} new or changed ${scope.read === 1 ? 'item' : 'items'} of ${Math.max(scope.total, scope.read)}`
-  return totals.added > 0 ? `${read}, ${totals.added} dated ${totals.added === 1 ? 'task' : 'tasks'} found` : read
-}
 
 const TONE_ACCENT: Record<SyncTone, Accent> = { ok: 'mint', warn: 'amber', bad: 'crimson' }
 
@@ -30,7 +23,7 @@ export default function SyncStatusChip() {
   const [now] = useState(() => new Date())
 
   const syncLine = sync.loading ? null : syncLabel(sync.state, sync.lastOkAt, now)
-  const readLine = processing.state === 'done' ? finishedLabel(processing) : processingLabel(processing)
+  const readLine = processingLabel(processing)
 
   return (
     <div aria-live="polite" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-on-surface-variant">

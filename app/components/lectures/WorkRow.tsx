@@ -96,6 +96,7 @@ export default function WorkRow({
   now,
   accent,
   showModule = true,
+  moduleName,
   compact = false,
 }: {
   item: WorkItem
@@ -103,6 +104,8 @@ export default function WorkRow({
   accent: UiAccent
   /** Show the module chip (off inside a module's own list). */
   showModule?: boolean
+  /** The module's name, shown after its code on the module chip. */
+  moduleName?: string | null
   /**
    * For a narrow column (one session's block): no day, time or module chip;
    * the title takes the full width and the chips and actions sit on a second line.
@@ -133,7 +136,7 @@ export default function WorkRow({
   const when = item.dueOn && !item.done ? relativeDueLabel(item.dueOn, londonToday(now)) : null
   const overdue = when?.endsWith('overdue') ?? false
   const suggested = item.ai?.status === 'suggested'
-  const moduleLabel = item.moduleCode ?? item.courseName
+  const moduleText = item.moduleCode ? (moduleName ? `${item.moduleCode} ${moduleName}` : item.moduleCode) : item.courseName
 
   const checkbox = canToggle ? (
     <button
@@ -183,9 +186,16 @@ export default function WorkRow({
 
   const chips = (
     <span className={cn('flex items-center gap-1.5', compact ? 'flex-wrap' : 'shrink-0')}>
-      {showModule && !compact && moduleLabel && (
-        <MetadataChip accent={item.moduleCode ? accent : 'neutral'} className="max-w-40">
-          <span className="truncate">{moduleLabel}</span>
+      {showModule && !compact && moduleText && (
+        <MetadataChip accent={item.moduleCode ? accent : 'neutral'} title={moduleText} className="max-w-64">
+          {item.moduleCode ? (
+            <>
+              <span className="shrink-0 font-mono">{item.moduleCode}</span>
+              {moduleName && <span className="truncate">{moduleName}</span>}
+            </>
+          ) : (
+            <span className="truncate">{moduleText}</span>
+          )}
         </MetadataChip>
       )}
       <span className="text-[11px] text-on-surface-variant">{WORK_CATEGORY_LABEL[item.category]}</span>

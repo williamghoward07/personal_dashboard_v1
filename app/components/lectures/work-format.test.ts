@@ -65,20 +65,28 @@ describe('syncLabel', () => {
 
 describe('processingLabel', () => {
   const totals = { processed: 4, unchanged: 30, added: 2 }
-  it('describes a running pass, a finished one and the budget', () => {
-    expect(processingLabel({ state: 'running', totals, remaining: 7 })).toBe('Reading new items (7 left)')
-    expect(processingLabel({ state: 'done', totals, remaining: 0 })).toBe('4 new items read, 30 unchanged')
-    expect(processingLabel({ state: 'done', totals: { ...totals, processed: 1 }, remaining: 0 })).toBe(
-      '1 new item read, 30 unchanged'
-    )
-    expect(processingLabel({ state: 'budget', totals, remaining: 3 })).toBe(
+  const scope = { read: 3, total: 320 }
+  it('describes a running pass and the budget', () => {
+    expect(processingLabel({ state: 'running', totals, scope, remaining: 7 })).toBe('Reading new items (7 left)')
+    expect(processingLabel({ state: 'budget', totals, scope, remaining: 3 })).toBe(
       'AI limit reached for today. It continues tomorrow.'
     )
   })
+  it('summarises a finished run, with dated tasks only when some were found', () => {
+    expect(processingLabel({ state: 'done', totals, scope, remaining: 0 })).toBe(
+      'Read 3 new or changed items of 320, 2 dated tasks found'
+    )
+    expect(processingLabel({ state: 'done', totals: { ...totals, added: 1 }, scope: { read: 1, total: 1 }, remaining: 0 })).toBe(
+      'Read 1 new or changed item of 1, 1 dated task found'
+    )
+    expect(processingLabel({ state: 'done', totals: { ...totals, added: 0 }, scope, remaining: 0 })).toBe(
+      'Read 3 new or changed items of 320'
+    )
+  })
   it('says nothing when idle, disabled or nothing was read', () => {
-    expect(processingLabel({ state: 'idle', totals, remaining: 0 })).toBeNull()
-    expect(processingLabel({ state: 'disabled', totals, remaining: 0 })).toBeNull()
-    expect(processingLabel({ state: 'done', totals: { ...totals, processed: 0 }, remaining: 0 })).toBeNull()
+    expect(processingLabel({ state: 'idle', totals, scope, remaining: 0 })).toBeNull()
+    expect(processingLabel({ state: 'disabled', totals, scope, remaining: 0 })).toBeNull()
+    expect(processingLabel({ state: 'done', totals, scope: { read: 0, total: 320 }, remaining: 0 })).toBeNull()
   })
   it('counts failed rows', () => {
     expect(failedLabel(1)).toBe('1 item could not be read')

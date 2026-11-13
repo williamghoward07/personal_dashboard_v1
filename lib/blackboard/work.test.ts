@@ -7,6 +7,7 @@ import {
   applyWorkFilter,
   dueWithin,
   isWorkPastDue,
+  itemCategories,
   syncStatus,
   workDueInstant,
   toWorkItems,
@@ -370,6 +371,84 @@ describe('toWorkItems: timetable sessions', () => {
     const after = build({ sessions: [test], now: new Date('2026-12-02T11:00:01Z') })
     expect(after[0]).toMatchObject({ done: true, doneVia: 'session' })
     expect(workLists(after, new Date('2026-12-02T11:00:01Z')).completed).toHaveLength(1)
+  })
+})
+
+describe('toWorkItems: work set for a session', () => {
+  // Mon 16 Nov 2026: a lecture and a tutorial, both GEOG1081; another lecture on the 23rd.
+  const lecture = session({ start: '2026-11-16T10:00:00Z' })
+  const tutorial = session({ start: '2026-11-16T14:00:00Z', type: 'Tutorial', title: 'GEOG1081: Physical Geography - Tutorial' })
+  const nextLecture = session({ start: '2026-11-23T10:00:00Z' })
+  const readings = keyDate({
+    id: 'read',
+    due_on: '2026-11-16',
+    title: 'Read essential readings for lecture',
+    category: 'session_task',
+    for_session_type: 'lecture',
+  })
+
+  it('folds session work into the lecture that day and leaves no standalone row', () => {
+    const items = build({ keyDates: [readings], sessions: [lecture, nextLecture] })
+    expect(keys(items).filter((k) => k.startsWith('kd:'))).toEqual([])
+    expect(one(items, `prep:${lecture.uid}`).setWork).toEqual([
+      {
+        keyDateId: 'read',
+        title: 'Read essential readings for lecture',
+        category: 'session_task',
+        status: 'suggested',
+        quote: readings.quote,
+        sourceUrl: null,
+        done: false,
+      },
+    ])
+    expect(one(items, `prep:${nextLecture.uid}`).setWork).toBeUndefined()
+  })
+
+  it('picks the session of the named type when a day has two', () => {
+    const task = keyDate({ id: 'tut', due_on: '2026-11-16', category: 'tutorial', for_session_type: 'Tutorials', status: 'confirmed' })
+    const items = build({ keyDates: [task], sessions: [lecture, tutorial] })
+    expect(one(items, `prep:${tutorial.uid}`).setWork?.map((w) => w.keyDateId)).toEqual(['tut'])
+    expect(one(items, `prep:${lecture.uid}`).setWork).toBeUndefined()
+  })
+
+  it('falls back to the first session that day when no type matches', () => {
+    const task = keyDate({ id: 'w', due_on: '2026-11-16', category: 'session_task', for_session_type: 'workshop' })
+    const items = build({ keyDates: [task], sessions: [tutorial, lecture] })
+    expect(one(items, `prep:${lecture.uid}`).setWork?.map((w) => w.keyDateId)).toEqual(['w'])
+  })
+
+  it('stays a standalone row when there is no session that day', () => {
+    const items = build({ keyDates: [readings], sessions: [nextLecture] })
+    expect(keys(items)).toContain('kd:read')
+    expect(one(items, `prep:${nextLecture.uid}`).setWork).toBeUndefined()
+  })
+
+  it('does not fold a deadline on a lecture day, a dismissed date, or another module', () => {
+    const deadline = keyDate({ id: 'dl', due_on: '2026-11-16', category: 'formative' })
+    const dismissed = keyDate({ id: 'gone', due_on: '2026-11-16', category: 'session_task', status: 'dismissed' })
+    const otherModule = keyDate({ id: 'om', due_on: '2026-11-16', category: 'session_task', course_id: 'c1061' })
+    const items = build({ keyDates: [deadline, dismissed, otherModule], sessions: [lecture] })
+    expect(keys(items).filter((k) => k.startsWith('kd:')).sort()).toEqual(['kd:dl', 'kd:om'])
+    expect(one(items, `prep:${lecture.uid}`).setWork).toBeUndefined()
+  })
+
+  it('never makes a session overdue or changes its tab', () => {
+    const later = new Date('2026-11-17T08:00:00Z') // the lecture has ended, prep not handed in
+    const withWork = workLists(build({ keyDates: [readings], sessions: [lecture] }), later)
+    const without = workLists(build({ sessions: [lecture] }), later)
+    expect(withWork.pastDue.map((i) => i.key)).toEqual(without.pastDue.map((i) => i.key))
+    expect(withWork.upcoming.map((i) => i.key)).toEqual(without.upcoming.map((i) => i.key))
+  })
+
+  it('lists the session under the set-work categories in the filter', () => {
+    const items = build({ keyDates: [readings], sessions: [lecture, nextLecture] })
+    expect(keys(applyWorkFilter(items, { categories: ['session_task'], modules: 'all' }))).toEqual([`prep:${lecture.uid}`])
+    expect(keys(applyWorkFilter(items, { categories: ['lecture_prep'], modules: 'all' }))).toEqual([
+      `prep:${lecture.uid}`,
+      `prep:${nextLecture.uid}`,
+    ])
+    expect(applyWorkFilter(items, { categories: ['tutorial'], modules: 'all' })).toEqual([])
+    expect(itemCategories(one(items, `prep:${lecture.uid}`))).toEqual(['lecture_prep', 'session_task'])
   })
 })
 

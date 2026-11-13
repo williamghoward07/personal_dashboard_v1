@@ -16,7 +16,7 @@ import WorkRow from './WorkRow'
 
 type BlackboardSession = Pick<TimetableSession, 'uid' | 'moduleCode' | 'start' | 'type'>
 
-/** Everything Blackboard matched to a session, for the calendar popover's one-line count. */
+/** Everything Blackboard matched to a session, for the calendar popover's one-line count. Hidden items don't count. */
 export function matchCount(match: SessionMatch | null): number {
   if (!match) return 0
   return match.slides.length + match.readings.length + match.recordings.length + match.other.length + match.keyDates.length
@@ -142,6 +142,60 @@ function ItemLine({
   )
 }
 
+/** "N hidden", quietly; opens in place to the items marked Not relevant, each with Restore. */
+function HiddenItems({ items, accent, sessionUid }: { items: MatchedItem[]; accent: UiAccent; sessionUid: string }) {
+  const [open, setOpen] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  if (items.length === 0) return null
+
+  const restore = async (item: MatchedItem) => {
+    setBusyId(item.content.id)
+    setError(null)
+    const result = await clearSessionOverride(sessionUid, item.content.id)
+    setBusyId(null)
+    if (result.error) setError(result.error)
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="self-start rounded-sm text-[11px] text-on-surface-variant hover:text-on-surface focus:outline-none focus-visible:ring-1 focus-visible:ring-outline"
+      >
+        {items.length} hidden
+      </button>
+      {open && (
+        <ul className="flex flex-col">
+          {items.map((item) => (
+            <li key={item.content.id} className="flex items-center gap-2 rounded-lg px-1 py-1 hover:bg-surface-container-high/50">
+              <span className="min-w-0 flex-1 truncate text-sm text-on-surface-variant">{item.label}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                accent={accent}
+                disabled={busyId === item.content.id}
+                onClick={() => void restore(item)}
+                aria-label={`Restore ${item.label} to this session`}
+              >
+                Restore
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && (
+        <p role="alert" className="px-1 text-xs text-error">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function Group({ icon, label, children }: { icon?: ReactNode; label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
@@ -213,6 +267,7 @@ export default function SessionBlackboardBlock({
     return (
       <>
         <p className="text-xs text-on-surface-variant">Nothing on Blackboard matched this session.</p>
+        {match && <HiddenItems items={match.hidden} accent={accent} sessionUid={session.uid} />}
         {readingListLink}
       </>
     )
@@ -246,6 +301,7 @@ export default function SessionBlackboardBlock({
           ))}
         </Group>
       )}
+      <HiddenItems items={match.hidden} accent={accent} sessionUid={session.uid} />
       {readingListLink}
     </>
   )

@@ -9,6 +9,7 @@
 import { londonDateKey, londonDayBoundsUTC } from '@/lib/google/london-day'
 import { assignmentLists, hasEnded, type SessionWithPrep } from '@/lib/timetable/session'
 import { addDays, londonToday } from './dates'
+import { normaliseSessionType } from './match'
 import type { BbAssignmentRecord, BbCourseRecord, BbKeyDate } from './types'
 
 // --------------------------------------------------------------- categories --
@@ -59,6 +60,22 @@ export interface WorkItem {
   keyDateId?: string
   /** An official assignment with no Blackboard due date, dated by this AI key date. */
   dueFromKeyDateId?: string
+  /**
+   * Work set FOR this session (AI key dates of category session_task /
+   * tutorial, or naming a session type) that fell on its day. Session items
+   * only; it never changes the session's prep status.
+   */
+  setWork?: SessionSetWork[]
+}
+
+export interface SessionSetWork {
+  keyDateId: string
+  title: string
+  category: WorkCategory
+  status: 'suggested' | 'confirmed'
+  quote: string
+  sourceUrl: string | null
+  done: boolean
 }
 
 type CourseLite = Pick<BbCourseRecord, 'id' | 'module_code' | 'name' | 'url'>
@@ -75,6 +92,7 @@ type KeyDateLite = Pick<
   | 'document_id'
   | 'title'
   | 'category'
+  | 'for_session_type'
   | 'due_on'
   | 'due_at'
   | 'quote'
@@ -131,11 +149,18 @@ function consistentDueAt(dueOn: string | null, dueAt: string | null): string | n
   return londonDateKey(dueAt) === dueOn ? dueAt : null
 }
 
+/** Work set for a session: a session task or tutorial task, or any date naming a session type. */
+function isSessionWork(kd: Pick<KeyDateLite, 'category' | 'for_session_type'>): boolean {
+  return kd.category === 'session_task' || kd.category === 'tutorial' || !!kd.for_session_type
+}
+
 /**
  * Builds every work item. Dismissed key dates never appear. A key date
  * linked to an official assignment folds into it only when that assignment
  * is among the live ones loaded; otherwise (removed, or not loaded) it shows
- * as its own item.
+ * as its own item. Session work (see `isSessionWork`) with a timetable
+ * session of the same module that day attaches to that session's item as
+ * `setWork` instead of being a row; with no such session it stays a row.
  */
 export function toWorkItems(input: WorkInput): WorkItem[] {
   const courseById = new Map(input.courses.map((c) => [c.id, c]))
@@ -184,10 +209,68 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
     return null
   }
 
+  const courseByCode = new Map(
+    input.courses.filter((c) => c.module_code).map((c) => [c.module_code as string, c])
+  )
+  const sessionItems: WorkItem[] = []
+  for (const s of input.sessions) {
+    // Same population as assignmentLists: timetable sessions with a module code.
+    if (s.source !== 'timetable' || !s.moduleCode) continue
+    const course = courseByCode.get(s.moduleCode)
+    const base = {
+      moduleCode: s.moduleCode,
+      courseName: course?.name ?? s.moduleName,
+      title: `${s.moduleName} - ${s.type}`,
+      dueOn: londonDateKey(s.start),
+      dueAt: s.start,
+      ai: null,
+      url: null,
+      session: s,
+    }
+    if (isTestSession(s)) {
+      const ended = hasEnded(s, input.now)
+      sessionItems.push({ ...base, key: `test:${s.uid}`, source: 'session', category: 'test', done: ended, doneVia: ended ? 'session' : null })
+    } else {
+      sessionItems.push({
+        ...base,
+        key: `prep:${s.uid}`,
+        source: 'prep',
+        category: 'lecture_prep',
+        done: s.prepDone,
+        doneVia: s.prepDone ? 'dashboard' : null,
+      })
+    }
+  }
+
+  const setWorkTarget = (kd: KeyDateLite, moduleCode: string | null): WorkItem | null => {
+    if (!isSessionWork(kd) || !moduleCode) return null
+    const sameDay = sessionItems
+      .filter((i) => i.moduleCode === moduleCode && i.dueOn === kd.due_on)
+      .sort((a, b) => (a.dueAt ?? '').localeCompare(b.dueAt ?? ''))
+    const type = normaliseSessionType(kd.for_session_type ?? (kd.category === 'tutorial' ? 'tutorial' : null))
+    return (type && sameDay.find((i) => normaliseSessionType(i.session?.type) === type)) || sameDay[0] || null
+  }
+
   for (const kd of live) {
     if (folds(kd)) continue // the official row wins
     const course = courseById.get(kd.course_id)
     const url = sourceUrl(kd)
+    const target = setWorkTarget(kd, course?.module_code ?? null)
+    if (target) {
+      target.setWork = [
+        ...(target.setWork ?? []),
+        {
+          keyDateId: kd.id,
+          title: kd.title,
+          category: kd.category,
+          status: kd.status as 'suggested' | 'confirmed',
+          quote: kd.quote,
+          sourceUrl: url,
+          done: !!kd.done_at,
+        },
+      ]
+      continue
+    }
     items.push({
       key: `kd:${kd.id}`,
       source: 'key_date',
@@ -205,39 +288,7 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
     })
   }
 
-  const courseByCode = new Map(
-    input.courses.filter((c) => c.module_code).map((c) => [c.module_code as string, c])
-  )
-  for (const s of input.sessions) {
-    // Same population as assignmentLists: timetable sessions with a module code.
-    if (s.source !== 'timetable' || !s.moduleCode) continue
-    const course = courseByCode.get(s.moduleCode)
-    const base = {
-      moduleCode: s.moduleCode,
-      courseName: course?.name ?? s.moduleName,
-      title: `${s.moduleName} - ${s.type}`,
-      dueOn: londonDateKey(s.start),
-      dueAt: s.start,
-      ai: null,
-      url: null,
-      session: s,
-    }
-    if (isTestSession(s)) {
-      const ended = hasEnded(s, input.now)
-      items.push({ ...base, key: `test:${s.uid}`, source: 'session', category: 'test', done: ended, doneVia: ended ? 'session' : null })
-    } else {
-      items.push({
-        ...base,
-        key: `prep:${s.uid}`,
-        source: 'prep',
-        category: 'lecture_prep',
-        done: s.prepDone,
-        doneVia: s.prepDone ? 'dashboard' : null,
-      })
-    }
-  }
-
-  return items
+  return [...items, ...sessionItems]
 }
 
 // ------------------------------------------------------------------- lists --
@@ -323,10 +374,19 @@ export interface WorkFilter {
   modules: string[] | 'all'
 }
 
+/** The categories an item is listed under: its own, plus those of the work set for it. */
+export function itemCategories(item: Pick<WorkItem, 'category' | 'setWork'>): WorkCategory[] {
+  return [...new Set([item.category, ...(item.setWork ?? []).map((w) => w.category)])]
+}
+
+export function matchesCategories(item: Pick<WorkItem, 'category' | 'setWork'>, categories: readonly WorkCategory[]): boolean {
+  return itemCategories(item).some((c) => categories.includes(c))
+}
+
 export function applyWorkFilter(items: WorkItem[], filter: WorkFilter): WorkItem[] {
   return items.filter(
     (item) =>
-      (filter.categories === 'all' || filter.categories.includes(item.category)) &&
+      (filter.categories === 'all' || matchesCategories(item, filter.categories)) &&
       (filter.modules === 'all' || (item.moduleCode !== null && filter.modules.includes(item.moduleCode)))
   )
 }

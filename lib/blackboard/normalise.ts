@@ -284,10 +284,16 @@ function handlerLinks(item: BbJson, name: string, itemUrl: string): BbContentLin
   return []
 }
 
+const ULTRA_BODY_TITLE = /^ultraDocumentBody$/i
+
 function contentRows(course: BbCourseSnapshot): BbContentRow[] {
   return course.contents.map((item: BbContentNode) => {
-    const name = title(item.title, 'Untitled')
     const path = item.path.map((p) => cleanText(htmlToText(p), MAX_TITLE))
+    // An Ultra Document is a parent item plus a child called "ultraDocumentBody"
+    // that holds the page. The child is the thing worth showing, under its
+    // parent's name.
+    const own = title(item.title, 'Untitled')
+    const name = ULTRA_BODY_TITLE.test(own) && path.length > 0 ? path[path.length - 1] : own
     let week = parseWeekLabel(name)
     for (let i = path.length - 1; week === null && i >= 0; i--) week = parseWeekLabel(path[i])
     const url = contentUrl(item, course.bbId)

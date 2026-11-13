@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, BookOpen, ListChecks, Lock, NotebookPen, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, GraduationCap, ListChecks, Lock, NotebookPen, Sparkles } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { looksLikeUrl } from '@/lib/utils/url'
@@ -23,6 +23,7 @@ import {
 import { formatSessionDay, sessionMeta } from '@/lib/timetable/format'
 import PrepLight from './PrepLight'
 import HandInButton from './HandInButton'
+import SessionBlackboardBlock from './SessionBlackboardBlock'
 import { AddForm, ItemRow, Tick, microLabel, readingItem, taskItem, type PrepItem } from './SessionPrepPanel'
 
 const ACCENT = 'orange'
@@ -198,6 +199,12 @@ function AssignmentBody({ session }: { session: SessionWithPrep }) {
               className="w-full resize-y rounded-lg border border-outline-variant bg-surface-container-high px-3 py-2 text-sm text-on-surface placeholder:text-outline focus:border-outline focus:outline-none"
             />
           </Section>
+
+          {session.moduleCode && (
+            <Section icon={<GraduationCap className="h-4 w-4 text-academic-orange" strokeWidth={1.75} />} title="From Blackboard">
+              <SessionBlackboardBlock session={session} accent={ACCENT} readings={prep.readings} addReading={prep.addReading} />
+            </Section>
+          )}
 
           <Section
             icon={<BookOpen className="h-4 w-4 text-academic-orange" strokeWidth={1.75} />}

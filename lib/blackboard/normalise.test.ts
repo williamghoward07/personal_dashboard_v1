@@ -489,6 +489,29 @@ describe('normaliseSnapshot', () => {
   })
 })
 
+describe('Ultra Document bodies', () => {
+  it("names an ultraDocumentBody child after its parent, and leaves a top-level one alone", () => {
+    const rows = normaliseSnapshot(
+      snap({
+        courses: [
+          course({
+            contents: [
+              { id: '_p_1', depth: 0, path: [], title: 'Climate Lecture 1: The Climate System', hasChildren: true },
+              { id: '_b_1', depth: 1, path: ['Block 1: Climate', 'Climate Lecture 1: The Climate System'], title: 'ultraDocumentBody', body: '<p>Slides and reading</p>' },
+              { id: '_b_2', depth: 0, path: [], title: 'ultraDocumentBody' },
+            ],
+          }),
+        ],
+      }),
+    )
+    const [, body, orphan] = rows.content
+    expect(body.title).toBe('Climate Lecture 1: The Climate System')
+    expect(body.path).toEqual(['Block 1: Climate', 'Climate Lecture 1: The Climate System'])
+    expect(body.body_text).toBe('Slides and reading')
+    expect(orphan.title).toBe('ultraDocumentBody')
+  })
+})
+
 describe('parseSyncBody', () => {
   it('accepts a snapshot with an optional trigger', () => {
     expect(parseSyncBody({ snapshot: snap() })?.trigger).toBe('manual')

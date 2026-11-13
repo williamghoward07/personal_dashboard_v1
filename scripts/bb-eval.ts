@@ -27,6 +27,9 @@
  *   "assignments": [                                  // the course's official bb_assignments
  *     { "id": "as-1", "title": "Summative Essay", "due_at": "2027-02-16T14:00:00Z" }
  *   ],
+ *   "sessions": [                                     // optional: the module's timetable sessions
+ *     { "date": "2026-11-12", "type": "Tutorial" }    // London day; raw timetable type ("Online Workshop" …)
+ *   ],
  *   "sources": [
  *     {
  *       "id": "ann-1",                                // any unique string
@@ -58,6 +61,12 @@
  * list means "nothing", e.g. a dated lecture title). In `expected_class`,
  * only the keys present are scored.
  *
+ * `sessions` stands in for the module's part of the timetable feed. Types are
+ * normalised as the app does (normaliseSessions), and each extraction call
+ * gets the same per-source window the app sends (contextForBatch), so the
+ * prompt and grounding see exactly what they see in the app. Without it,
+ * extraction runs with no sessions, as the app does when no feed is set.
+ *
  * A key-date hit = same source, same due_on, same category. Exits non-zero
  * below: recall ≥ 0.9 for summative / formative / test, ≥ 0.75 for
  * tutorial / session_task, zero ungrounded items surviving, role accuracy
@@ -79,6 +88,7 @@ import {
   ANNOUNCEMENT_LIMITS,
   chunkDocument,
   CONTENT_LIMITS,
+  contextForBatch,
   MAX_CALL_CHARS,
   planExtractBatches,
   prepareSource,
@@ -88,6 +98,7 @@ import {
 import { academicWindow, mergeKeyDates, type AssignmentLite, type FoundKeyDate } from '@/lib/blackboard/ai/grounding'
 import { runClassifyBatch, runExtractBatch, type AiCall } from '@/lib/blackboard/ai/pipeline'
 import { hasDateSignal } from '@/lib/blackboard/ai/prefilter'
+import { normaliseSessions } from '@/lib/blackboard/ai/sessions'
 
 // ---------------------------------------------------------------- fixtures --
 
@@ -115,6 +126,8 @@ interface Fixture {
   course: { module_code: string; name?: string; term?: string }
   today?: string
   assignments?: { id?: string; title: string; due_at: string | null }[]
+  /** The module's timetable sessions: London day + raw timetable type. */
+  sessions?: { date: string; type: string }[]
   sources: FixtureSource[]
 }
 
@@ -283,13 +296,15 @@ async function main() {
     const assignments: AssignmentLite[] = (fx.assignments ?? [])
       .map((a, i) => ({ id: a.id ?? `as-${i + 1}`, course_id: courseId, title: a.title, due_at: a.due_at }))
       .sort((a, b) => (a.due_at ?? '9999').localeCompare(b.due_at ?? '9999'))
-    const ctx: ExtractContext = {
+    const ctx: Omit<ExtractContext, 'sessions'> = {
       today,
       window,
       moduleCode: fx.course.module_code,
       courseName: fx.course.name ?? null,
       assignments: assignments.map((a) => ({ title: a.title, due_at: a.due_at })),
     }
+    const sessions = normaliseSessions(Array.isArray(fx.sessions) ? fx.sessions : [])
+    if (sessions.length) console.log(`  ${sessions.length} timetable sessions`)
 
     // ---- classification
     const contentRows: ClassifyRow[] = fx.sources
@@ -342,7 +357,7 @@ async function main() {
       groundTexts.set(id, [...(groundTexts.get(id) ?? []), text])
     }
     const run = async (batch: ExtractSource[]) => {
-      const r = await runExtractBatch(batch, ctx, assignments, ai)
+      const r = await runExtractBatch(batch, contextForBatch(ctx, batch, sessions), assignments, ai)
       returned += r.returned
       ungrounded += r.ungrounded
       dateMismatch += r.dateMismatch
@@ -362,7 +377,8 @@ async function main() {
       // As the app does: parts with no date signal cost nothing, and every
       // signal-bearing part is read (the app spreads them over several units).
       for (const c of chunks.filter((c) => hasDateSignal(c.text))) {
-        await run([prepareSource({ ...toSource(doc), text: c.text, path: undefined, pages: { first: c.firstPage, last: c.lastPage } })])
+        // posted: null, as the app reads a document (no anchor; sessions around today).
+        await run([prepareSource({ ...toSource(doc), text: c.text, posted: null, path: undefined, pages: { first: c.firstPage, last: c.lastPage } })])
       }
     }
 

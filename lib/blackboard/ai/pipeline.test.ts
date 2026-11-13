@@ -47,6 +47,25 @@ describe('runExtractBatch', () => {
     expect(r).toMatchObject({ noAnchor: 1, dateMismatch: 0, ungrounded: 0 })
   })
 
+  it("grounds session days against the sessions the prompt listed", async () => {
+    const quote = 'The tutorials take place next week; do the prep work ahead.'
+    const ai: AiCall = async () => ({
+      model: 'm',
+      data: {
+        items: ['2026-11-19', '2026-11-16'].map((due_on) => ({ source: 1, title: 'Prepare for tutorial', category: 'tutorial', due_on, quote })),
+      },
+    })
+    const batch: ExtractSource[] = [{ ...source('announcement', 'a'), text: quote }]
+    // Posted Tue 10 Nov; the tutorial next week is Thu 19 Nov.
+    const sessions = [{ date: '2026-11-19', type: 'tutorial' as const }]
+    const r = await runExtractBatch(batch, { ...ctx, sessions }, [], ai)
+    expect(r.perSource[0].map((k) => k.due_on)).toEqual(['2026-11-19'])
+    expect(r.dateMismatch).toBe(1)
+    // The same reply with no sessions: both kept, as before.
+    const old = await runExtractBatch(batch, ctx, [], ai)
+    expect(old.perSource[0].map((k) => k.due_on)).toEqual(['2026-11-19', '2026-11-16'])
+  })
+
   it('fails on a cut-off or malformed reply instead of reporting nothing found', async () => {
     const cut: AiCall = async () => {
       throw new SyntaxError('Unexpected end of JSON input')

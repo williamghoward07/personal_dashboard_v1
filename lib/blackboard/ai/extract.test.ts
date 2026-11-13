@@ -4,9 +4,12 @@ import {
   buildExtractPrompt,
   chunkDocument,
   CONTENT_LIMITS,
+  contextForBatch,
   NOT_KEY_DATES_RULE,
   parseExtractResult,
   planExtractBatches,
+  SESSION_DAY_RULE,
+  SESSION_PREP_RULE,
   UNTRUSTED_RULE,
   type ExtractContext,
   type ExtractSource,
@@ -106,6 +109,43 @@ describe('buildExtractPrompt', () => {
     expect(NOT_KEY_DATES_RULE).toMatch(/history/)
     expect(prompt).toContain("against the SOURCE's posted date, not today")
     expect(prompt).toContain('VERBATIM')
+  })
+
+  it('says that work set for a session is a key date, but optional reading and the session itself are not', () => {
+    const prompt = buildExtractPrompt([source('a')], ctx)
+    expect(prompt).toContain(SESSION_PREP_RULE)
+    expect(SESSION_PREP_RULE).toMatch(/IS a key date/)
+    expect(SESSION_PREP_RULE).toMatch(/required or essential reading/)
+    expect(SESSION_PREP_RULE).toMatch(/category tutorial/)
+    expect(SESSION_PREP_RULE).toMatch(/session_task/)
+    expect(NOT_KEY_DATES_RULE).toMatch(/optional or "further"/)
+    expect(prompt).toContain('tutorial (preparation for a tutorial or seminar)')
+    expect(prompt).toContain('Always set for_session_type when the work is for a session.')
+  })
+
+  it("lists the module's sessions around each source's posted day, with the session-day rule", () => {
+    const sessions = [
+      { date: '2026-10-01', type: 'lecture' as const },
+      { date: '2026-11-09', type: 'lecture' as const },
+      { date: '2026-11-12', type: 'tutorial' as const },
+      { date: '2027-03-01', type: 'workshop' as const },
+    ]
+    const batch = [source('a', { posted: '2026-11-03T09:00:00Z' }), source('b', { posted: null })]
+    const withSessions = contextForBatch(ctx, batch, sessions)
+    expect(withSessions.sessions).toEqual([sessions[1], sessions[2]])
+    const prompt = buildExtractPrompt(batch, withSessions)
+    expect(prompt).toContain('2026-11-09 Monday Lecture\n2026-11-12 Thursday Tutorial\n' + SESSION_DAY_RULE)
+    expect(prompt).toContain("from 7 days before to 35 days after each source's posted date")
+    expect(prompt).not.toContain('2026-10-01')
+    // The list sits outside every source block.
+    expect(prompt.indexOf('2026-11-12 Thursday Tutorial')).toBeLessThan(prompt.indexOf('<<<SOURCE 1'))
+    expect(SESSION_DAY_RULE).toMatch(/use the Monday of that week/)
+
+    // No sessions: no timetable section at all.
+    const plain = buildExtractPrompt(batch, contextForBatch(ctx, batch, []))
+    expect(plain).not.toContain(SESSION_DAY_RULE)
+    expect(plain).not.toContain("student's timetable")
+    expect(plain).toBe(buildExtractPrompt(batch, ctx))
   })
 
   it('keeps an injected instruction inside its block and neutralises fake delimiters', () => {

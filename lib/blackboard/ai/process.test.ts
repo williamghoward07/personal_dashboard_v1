@@ -10,6 +10,9 @@ const { processNext } = await import('./process')
 type WorkStore = import('./process').WorkStore
 type WorkState = import('./process').WorkState
 type ContentLite = import('./process').ContentLite
+type ProcessDeps = import('./process').ProcessDeps
+type TimetableFeedSession = import('./process').TimetableFeedSession
+const { TimetableNotConfiguredError } = await import('@/lib/timetable/feed')
 
 const NOW = () => new Date('2026-11-12T12:00:00Z')
 const C1 = 'course-1'
@@ -218,10 +221,13 @@ function fakeAi() {
 
 const SUPABASE = {} as SupabaseClient
 
-async function drain(db: Db, ai: AiCall, max = 20) {
+/** Tests never read the real feed. */
+const noTimetable = async () => []
+
+async function drain(db: Db, ai: AiCall, max = 20, deps: Partial<ProcessDeps> = {}) {
   const results = []
   for (let i = 0; i < max; i++) {
-    const r = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const r = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable, ...deps })
     results.push(r)
     if (r.remaining === 0 || r.error || r.budgetHit) break
   }
@@ -276,7 +282,7 @@ describe('processNext', () => {
 
     const calls = requests.length
     const writes = db.writes
-    const second = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const second = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(second).toMatchObject({ unit: 'none', calls: 0, remaining: 0, processed: 0, added: 0, budgetHit: false })
     expect(second.skippedUnchanged).toBe(46 + 46 + 2 + 1)
     expect(requests.length).toBe(calls)
@@ -356,7 +362,7 @@ describe('processNext', () => {
       calls++
       throw new Error('model exploded')
     }
-    const r = await processNext(SUPABASE, { ai: failing, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const r = await processNext(SUPABASE, { ai: failing, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(r).toMatchObject({ unit: 'classify', error: 'model exploded', calls: 3, remaining: 5 })
     expect(calls).toBe(3)
     expect(db.state.contentAi.some((a) => a.classified_hash)).toBe(false)
@@ -368,7 +374,7 @@ describe('processNext', () => {
       if (n++ === 0) throw new Error('blip')
       return ai(req)
     }
-    const ok = await processNext(SUPABASE, { ai: flaky, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const ok = await processNext(SUPABASE, { ai: flaky, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(ok).toMatchObject({ unit: 'classify', calls: 2, processed: 40, remaining: 4 })
     expect(ok.error).toBeUndefined()
   })
@@ -380,7 +386,7 @@ describe('processNext', () => {
       calls++
       return { model: 'x', data: { nope: true } }
     }
-    const r = await processNext(SUPABASE, { ai: junk, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const r = await processNext(SUPABASE, { ai: junk, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     // One retry only (an unusable reply costs tokens), then the 40 rows are split.
     expect(r).toMatchObject({ unit: 'classify', calls: 2, failed: 0, remaining: 4 + 40 })
     expect(r.error).toBeUndefined()
@@ -398,7 +404,7 @@ describe('processNext', () => {
       err.name = 'AiBudgetExceededError'
       throw err
     }
-    const r = await processNext(SUPABASE, { ai: budget, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const r = await processNext(SUPABASE, { ai: budget, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(r).toMatchObject({ unit: 'classify', budgetHit: true, calls: 1, remaining: 5 })
     expect(r.error).toBeUndefined()
     expect(db.state.contentAi.some((a) => a.classified_hash)).toBe(false)
@@ -411,7 +417,7 @@ describe('processNext', () => {
     await drain(db, ai)
     db.state.documents[0].ai_hash = null
     const before = requests.length
-    const r = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), budgetRemaining: async () => 0 })
+    const r = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable, budgetRemaining: async () => 0 })
     expect(r).toMatchObject({ unit: 'document', budgetHit: true, calls: 0, remaining: 1 })
     expect(requests.length).toBe(before)
     expect(db.state.documents[0].ai_hash).toBeNull()
@@ -440,7 +446,7 @@ describe('processNext', () => {
     expect(all.length).toBeGreaterThan(signal + 10)
 
     const before = requests.length
-    const step1 = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const step1 = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(step1).toMatchObject({ unit: 'document', calls: 12, processed: 0, removed: 0, remaining: 1 })
     expect(step1.note).toMatch(new RegExp(`read parts 1-12 of ${signal} with dates .*the rest follows`))
     expect(db.state.documents[0].ai_hash).toBe('partial:12:doc-1-2')
@@ -449,7 +455,7 @@ describe('processNext', () => {
     // An unfinished pass removes nothing, not even the old version's row.
     expect(db.keyDates.some((k) => k.id === oldDocRow.id)).toBe(true)
 
-    const step2 = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const step2 = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     // The old version's 16 Feb row goes, so the item that also states 16 Feb is read again.
     expect(step2).toMatchObject({ unit: 'document', calls: signal - 12, processed: 1, requeued: 1, remaining: 1 })
     expect(step2.note).toMatch(new RegExp(`read parts 13-${signal} of ${signal}.*finished`))
@@ -464,7 +470,7 @@ describe('processNext', () => {
     expect(reread.map((r) => [r.unit, r.calls])).toEqual([['content', 1]])
 
     // Unchanged: zero calls.
-    const again = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const again = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(again).toMatchObject({ unit: 'none', calls: 0, remaining: 0 })
   })
 
@@ -475,10 +481,10 @@ describe('processNext', () => {
     const page = (n: number) => `Page ${n}. Task ${n} is due ${(n % 28) + 1} March 2027. ` + 'filler words here '.repeat(300)
     db.docText['doc-1'] = Array.from({ length: 40 }, (_, i) => page(i + 1)).join('\f')
     db.state.documents[0].text_hash = 'doc-1-2'
-    await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db) })
+    await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(db.state.documents[0].ai_hash).toBe('partial:12:doc-1-2')
     db.state.documents[0].text_hash = 'doc-1-3'
-    const r = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const r = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(r.note).toMatch(/read parts 1-12 of/)
     expect(db.state.documents[0].ai_hash).toBe('partial:12:doc-1-3')
   })
@@ -613,12 +619,12 @@ describe('processNext', () => {
 
     // An unchanged second pass: zero calls, the failure still reported.
     const calls = requests.length
-    const second = await processNext(SUPABASE, { ai: truncating, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const second = await processNext(SUPABASE, { ai: truncating, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(second).toMatchObject({ unit: 'none', calls: 0, remaining: 0, failed: 1 })
     expect(requests.length).toBe(calls)
 
     // A manual retry sends it alone once more.
-    const retried = await processNext(SUPABASE, { ai: healthy, userId: 'u1', now: NOW, store: memoryStore(db), retryFailed: true })
+    const retried = await processNext(SUPABASE, { ai: healthy, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable, retryFailed: true })
     expect(retried).toMatchObject({ unit: 'content', calls: 1, failed: 0, added: 1, remaining: 0 })
     expect(blocks(requests[requests.length - 1].prompt)).toHaveLength(1)
     expect(essayAi.extracted_hash).toBe(db.state.content.find((c) => c.id === 'essay')!.body_hash)
@@ -630,7 +636,7 @@ describe('processNext', () => {
     await drain(db, ai)
     const essay = db.state.content.find((c) => c.id === 'essay')!
     db.state.contentAi.find((a) => a.content_id === 'essay')!.extracted_hash = `fail:${essay.body_hash}`
-    expect((await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db) })).calls).toBe(0)
+    expect((await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })).calls).toBe(0)
     essay.body_hash = 'hash-essay-2'
     const before = requests.length
     await drain(db, ai)
@@ -648,7 +654,7 @@ describe('processNext', () => {
       err.status = 429
       throw err
     }
-    const r = await processNext(SUPABASE, { ai: rateLimited, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const r = await processNext(SUPABASE, { ai: rateLimited, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(r).toMatchObject({ unit: 'content', error: '429 Too Many Requests', calls: 3, remaining: 1, failed: 0 })
     expect(db.state.contentAi.find((a) => a.content_id === 'essay')!.extracted_hash).toBe('hash-essay-1')
   })
@@ -661,8 +667,84 @@ describe('processNext', () => {
     const empty: AiCall = async () => {
       throw new Error('Gemini returned an empty response')
     }
-    const r = await processNext(SUPABASE, { ai: empty, userId: 'u1', now: NOW, store: memoryStore(db) })
+    const r = await processNext(SUPABASE, { ai: empty, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(r).toMatchObject({ unit: 'document', calls: 2, failed: 1, remaining: 0 })
     expect(db.state.documents[0].ai_hash).toBe('fail:doc-1-2')
+  })
+
+  describe('timetable sessions', () => {
+    const FEED: TimetableFeedSession[] = [
+      { moduleCode: 'GEOG1061', type: 'Lecture', start: '2026-11-16T10:00:00Z' },
+      { moduleCode: 'GEOG1061', type: 'Tutorial', start: '2026-11-19T14:00:00Z' },
+      { moduleCode: 'GEOG1061', type: 'Online Workshop', start: '2026-11-20T09:00:00Z' },
+      // Another module's session never reaches this module's prompt.
+      { moduleCode: 'GEOG1081', type: 'Seminar', start: '2026-11-18T10:00:00Z' },
+    ]
+
+    it('lists only this module\'s sessions, only in extraction calls, reading the feed once per call', async () => {
+      const db = seed()
+      const { ai, requests } = fakeAi()
+      const reads: number[] = []
+      const results = []
+      for (let i = 0; i < 10; i++) {
+        let n = 0
+        const loadTimetable = async () => {
+          n++
+          return FEED
+        }
+        const r = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable })
+        reads.push(n)
+        results.push(r)
+        if (r.remaining === 0 || r.error) break
+      }
+      expect(results.map((r) => r.unit)).toEqual(['classify', 'classify', 'announcements', 'content', 'document'])
+      // Never for classification; at most once per call otherwise.
+      expect(reads).toEqual([0, 0, 1, 1, 1])
+      for (const r of requests) {
+        const listed = r.prompt.includes('2026-11-19 Thursday Tutorial')
+        expect(listed).toBe(r.feature !== 'bb_classify')
+        expect(r.prompt).not.toContain('Seminar\n')
+        expect(r.prompt).not.toContain('2026-11-18')
+      }
+      expect(requests[2].prompt).toContain('2026-11-16 Monday Lecture\n2026-11-19 Thursday Tutorial\n2026-11-20 Friday Workshop')
+      expect(results.every((r) => !r.note || !/timetable/i.test(r.note))).toBe(true)
+    })
+
+    it('never reprocesses because the timetable changed', async () => {
+      const db = seed()
+      const { ai, requests } = fakeAi()
+      await drain(db, ai, 20, { loadTimetable: async () => FEED })
+      const calls = requests.length
+      let reads = 0
+      const moved = async () => {
+        reads++
+        return FEED.map((s) => ({ ...s, start: s.start.replace('2026-11-', '2026-12-') }))
+      }
+      const again = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: moved })
+      expect(again).toMatchObject({ unit: 'none', calls: 0, remaining: 0 })
+      expect(requests.length).toBe(calls)
+      expect(reads).toBe(0)
+    })
+
+    it('carries on without sessions, with a note, when the feed is missing or fails', async () => {
+      for (const [err, note] of [
+        [new TimetableNotConfiguredError(), /No timetable feed is configured/],
+        [new Error('Timetable feed error: 503'), /Couldn't read the timetable \(Timetable feed error: 503\)/],
+      ] as const) {
+        const db = seed()
+        const { ai, requests } = fakeAi()
+        const results = await drain(db, ai, 20, {
+          loadTimetable: async () => {
+            throw err
+          },
+        })
+        const extraction = results.filter((r) => r.unit !== 'classify')
+        expect(extraction.map((r) => r.unit)).toEqual(['announcements', 'content', 'document'])
+        for (const r of extraction) expect(r.note).toMatch(note)
+        expect(results.every((r) => !r.error)).toBe(true)
+        expect(requests.some((r) => /student's timetable/.test(r.prompt))).toBe(false)
+        expect(db.keyDates.map((k) => k.due_on).sort()).toEqual(['2026-11-13', '2026-11-17', '2026-11-24', '2027-02-16', '2027-02-16'])
+      }
+    })
   })
 })

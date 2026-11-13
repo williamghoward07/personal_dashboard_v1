@@ -110,11 +110,12 @@ export async function runExtractBatch(
   const parsed = parseExtractResult(batch, data, assignments.length)
   // Only an announcement has a posted day that relative words ("next
   // week") can be resolved against; a content item's availability date
-  // and a document are not anchors.
+  // and a document are not anchors. Session days are checked against the
+  // sessions this prompt listed, never a wider list.
   const grounded = groundItems(
     parsed.items,
     batch.map((s) => ({ title: s.title, text: s.text, anchor: s.kind === 'announcement' ? s.posted : null })),
-    { yearStart: Number(ctx.window.from.slice(0, 4)) }
+    { yearStart: Number(ctx.window.from.slice(0, 4)), sessions: ctx.sessions ?? [] }
   )
   let invalid = parsed.invalid
   const perSource: FoundKeyDate[][] = batch.map(() => [])

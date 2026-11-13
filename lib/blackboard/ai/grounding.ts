@@ -9,7 +9,8 @@ import { createHash } from 'node:crypto'
 import { londonDateKey } from '@/lib/google/london-day'
 import { academicYearStart, isDateKey } from '@/lib/blackboard/dates'
 import type { BbKeyDate, BbKeyDateCategory } from '@/lib/blackboard/types'
-import { anchorDay, checkRelative, dateMatches, datesIn, hasRelativeSignal, timesIn } from './quote-dates'
+import { anchorDay, datesIn, hasRelativeSignal, timesIn } from './quote-dates'
+import { absoluteDateOk, checkRelativeWithSessions, type ModuleSession } from './sessions'
 
 // ------------------------------------------------------------- grounding --
 
@@ -74,8 +75,21 @@ export interface GroundResult<T> {
  *   quote names;
  * - `due_time` survives only when the quote states that time.
  * `yearStart` places dates written without a year (academicWindow's year).
+ *
+ * With the module's `sessions` (the list the prompt showed), work set for a
+ * session must land on that session (sessions.ts): a quote naming a kind of
+ * session ("tutorial", "lecture", "class") with only a relative date or a
+ * week range must give the day of a session of that kind in that period
+ * when the list has one; a relative quote naming no session may also give
+ * the module's next session day after the posted day. A single written date
+ * still wins outright. Without sessions the rules are exactly the above.
  */
-export function groundItems<T extends Groundable>(items: T[], sources: GroundSource[], ctx: { yearStart: number }): GroundResult<T> {
+export function groundItems<T extends Groundable>(
+  items: T[],
+  sources: GroundSource[],
+  ctx: { yearStart: number; sessions?: ModuleSession[] }
+): GroundResult<T> {
+  const sessions = ctx.sessions ?? []
   const prepared = sources.map((s) => ({ lower: normaliseText(`${s.title}\n${s.text}`).toLowerCase(), anchor: anchorDay(s.anchor) }))
   const out: GroundResult<T> = { kept: [], ungrounded: 0, dateMismatch: 0, noAnchor: 0 }
   for (const item of items) {
@@ -88,12 +102,12 @@ export function groundItems<T extends Groundable>(items: T[], sources: GroundSou
     }
     const dates = datesIn(quote, ctx)
     if (dates.length) {
-      if (!dateMatches(item.due_on, dates)) {
+      if (!absoluteDateOk(quote, item.due_on, dates, sessions)) {
         out.dateMismatch++
         continue
       }
     } else if (hasRelativeSignal(quote)) {
-      const verdict = checkRelative(quote, item.due_on, src.anchor)
+      const verdict = checkRelativeWithSessions(quote, item.due_on, src.anchor, sessions)
       if (verdict === 'no_anchor') {
         out.noAnchor++
         continue

@@ -1,11 +1,14 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { londonToday } from '@/lib/blackboard/dates'
+import { fetchTimetable, TimetableNotConfiguredError } from '@/lib/timetable/feed'
+import type { TimetableSession } from '@/lib/timetable/session'
 import { planClassifyBatches, type Classification, type ClassifyRow } from './classify'
 import {
   ANNOUNCEMENT_LIMITS,
   chunkDocument,
   CONTENT_LIMITS,
+  contextForBatch,
   DOCUMENT_CONCURRENCY,
   MAX_CALL_CHARS,
   MAX_DOCUMENT_CHUNKS,
@@ -29,6 +32,7 @@ import { failMarker, hashState, partialMarker, retryMarker, type HashState } fro
 import { runClassifyBatch, runExtractBatch, type AiCall, type ExtractBatchResult } from './pipeline'
 import { hasDateSignal } from './prefilter'
 import { mentionsDate, mentionsRelatively } from './quote-dates'
+import { moduleSessions, type ModuleSession } from './sessions'
 
 // Runs ONE unit of Blackboard AI work per call (POST /api/work/process,
 // looped by useBbProcessing while the dashboard is open).
@@ -60,6 +64,13 @@ import { mentionsDate, mentionsRelatively } from './quote-dates'
 // are processed. Writes go through the caller's session client (RLS) and
 // touch dashboard-owned columns only: bb_content_ai, bb_key_dates,
 // bb_announcements.ai_hash, bb_documents.ai_hash.
+//
+// Extraction also gets the module's timetable sessions (matched on module
+// code), so work set for a session lands on that session's day. The feed is
+// read at most once per call, only when an extraction unit runs, and is
+// never part of any hash: a timetable change reprocesses nothing. Without a
+// feed (not configured, or it fails) extraction runs without sessions and
+// the result carries a note.
 
 // ------------------------------------------------------------------ types --
 
@@ -202,7 +213,11 @@ export interface ProcessDeps {
   retryWindowMs?: number
   /** First turn every `fail:` marker back into `retry:` (the manual "retry failed" action). */
   retryFailed?: boolean
+  /** The parsed timetable feed. Defaults to fetchTimetable (lib/timetable/feed.ts, the ICS /api/timetable reads). */
+  loadTimetable?: () => Promise<TimetableFeedSession[]>
 }
+
+export type TimetableFeedSession = Pick<TimetableSession, 'moduleCode' | 'type' | 'start'>
 
 /** Attempts for a batch whose reply was unusable: one more try, then split / mark. */
 export const OUTPUT_ERROR_ATTEMPTS = 2
@@ -281,6 +296,11 @@ export function isBatchError(err: unknown): boolean {
 
 function message(err: unknown): string {
   return (err instanceof Error ? err.message : String(err)).slice(0, 300)
+}
+
+function joinNotes(...notes: (string | undefined)[]): string | undefined {
+  const text = notes.filter(Boolean).join(' ')
+  return text || undefined
 }
 
 /** Runs `tasks` at most `limit` at a time; rejects with the first failure. */
@@ -448,6 +468,23 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
   const total = unitCount(plan)
   if (total === 0) return { ...result, remaining: result.requeued }
 
+  // The timetable, read once per call and only if an extraction unit runs.
+  let timetable: Promise<{ feed: TimetableFeedSession[]; note?: string }> | null = null
+  const sessionsFor = async (courseId: string): Promise<{ sessions: ModuleSession[]; note?: string }> => {
+    timetable ??= (deps.loadTimetable ?? fetchTimetable)().then(
+      (feed) => ({ feed }),
+      (err: unknown) => ({
+        feed: [],
+        note:
+          err instanceof TimetableNotConfiguredError
+            ? 'No timetable feed is configured, so session days were not used.'
+            : `Couldn't read the timetable (${message(err).slice(0, 120)}), so session days were not used.`,
+      })
+    )
+    const { feed, note } = await timetable
+    return { sessions: moduleSessions(feed, courseById.get(courseId)?.module_code), note }
+  }
+
   const contextFor = (courseId: string) => {
     const course = courseById.get(courseId)
     return {
@@ -552,9 +589,10 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
         ? store.markAnnouncements(rows.map((r) => ({ id: r.id, ai_hash: r.marker })))
         : store.markContentExtracted(rows.map((r) => ({ content_id: r.id, extracted_hash: r.marker })))
 
+    const timetableInfo = await sessionsFor(courseId)
     let extracted: Extracted
     try {
-      extracted = await extractFound(store, [batch], courseId, contextFor(courseId), today, ai, attempt)
+      extracted = await extractFound(store, [batch], courseId, contextFor(courseId), timetableInfo.sessions, today, ai, attempt)
     } catch (err) {
       return batchFailed(extractUnit, err, batch.map((s) => ({ id: s.id, hash: hashById.get(s.id) as string })), markBatch)
     }
@@ -571,7 +609,7 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
         removed: counts.removed,
         requeued,
         ...extracted.dropped,
-        note: batch.some((s) => s.truncated) ? 'A long text was cut to fit one call.' : undefined,
+        note: joinNotes(batch.some((s) => s.truncated) ? 'A long text was cut to fit one call.' : undefined, timetableInfo.note),
       })
     } catch (err) {
       return fail(extractUnit, err)
@@ -634,6 +672,7 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
     }
   }
 
+  const timetableInfo = await sessionsFor(courseId)
   let extracted: Extracted
   try {
     extracted = await extractFound(
@@ -641,6 +680,7 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
       step.map((s) => [s]),
       courseId,
       contextFor(courseId),
+      timetableInfo.sessions,
       today,
       ai,
       attempt
@@ -676,7 +716,7 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
         removed: counts.removed,
         requeued,
         ...extracted.dropped,
-        note,
+        note: joinNotes(note, timetableInfo.note),
       },
       final ? 0 : 1
     )
@@ -697,14 +737,17 @@ interface Extracted {
 /**
  * The model calls for one course's sources: `groups` is one batch of several
  * sources (announcements / content) or one single-source batch per document
- * chunk (run DOCUMENT_CONCURRENCY at a time). Writes nothing; throws when
- * any call fails, so nothing is written unless every call succeeded.
+ * chunk (run DOCUMENT_CONCURRENCY at a time). Each call lists the module's
+ * `sessions` around its own sources' posted days (contextForBatch). Writes
+ * nothing; throws when any call fails, so nothing is written unless every
+ * call succeeded.
  */
 async function extractFound(
   store: WorkStore,
   groups: ExtractSource[][],
   courseId: string,
   course: { moduleCode: string | null; courseName: string | null; window: { from: string; to: string } },
+  sessions: ModuleSession[],
   today: string,
   ai: AiCall,
   attempt: <T>(run: () => Promise<T>) => Promise<T>
@@ -712,7 +755,7 @@ async function extractFound(
   const assignments = (await store.loadAssignments(courseId)).sort((a, b) =>
     (a.due_at ?? '9999').localeCompare(b.due_at ?? '9999')
   )
-  const ctx: ExtractContext = {
+  const base: Omit<ExtractContext, 'sessions'> = {
     today,
     window: course.window,
     moduleCode: course.moduleCode,
@@ -720,7 +763,10 @@ async function extractFound(
     assignments: assignments.map((a) => ({ title: a.title, due_at: a.due_at })),
   }
   const results: ExtractBatchResult[] = await pool(
-    groups.map((group) => () => attempt(() => runExtractBatch(group, ctx, assignments, ai))),
+    groups.map((group) => {
+      const ctx = contextForBatch(base, group, sessions)
+      return () => attempt(() => runExtractBatch(group, ctx, assignments, ai))
+    }),
     DOCUMENT_CONCURRENCY
   )
 

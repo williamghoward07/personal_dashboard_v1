@@ -129,7 +129,8 @@ export function anchorDay(posted: string | null | undefined): string | null {
   return Number.isNaN(t) ? null : londonDateKey(new Date(t).toISOString())
 }
 
-function weekdayOf(day: string): number {
+/** 0 = Sunday. */
+export function weekdayOf(day: string): number {
   const [y, m, d] = day.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay()
 }

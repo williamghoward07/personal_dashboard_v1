@@ -15,6 +15,7 @@ import {
   type ExistingKeyDate,
   type FoundKeyDate,
 } from './grounding'
+import type { ModuleSession } from './sessions'
 
 const C = 'course-1'
 
@@ -159,6 +160,107 @@ describe('groundItems', () => {
       Y
     )
     expect(r.kept.map((k) => k.due_time)).toEqual(['14:00', null, null, '16:00'])
+  })
+})
+
+describe('groundItems with the module timetable', () => {
+  // Tue 3 Nov 2026 posted; "next week" is Mon 9 - Sun 15 Nov.
+  const POSTED = '2026-11-03T10:00:00Z'
+  const sessions: ModuleSession[] = [
+    { date: '2026-11-02', type: 'lecture' },
+    { date: '2026-11-05', type: 'tutorial' },
+    { date: '2026-11-09', type: 'lecture' },
+    { date: '2026-11-12', type: 'tutorial' },
+    { date: '2026-11-16', type: 'lecture' },
+    { date: '2026-11-19', type: 'tutorial' },
+  ]
+  const ground = (text: string, dueOn: string[], opts: { sessions?: ModuleSession[]; anchor?: string | null; quote?: string } = {}) =>
+    groundItems(
+      dueOn.map((due_on) => ({ source: 1, quote: opts.quote ?? text, due_on })),
+      [{ title: 'Announcement', text, anchor: opts.anchor === undefined ? POSTED : opts.anchor }],
+      { ...Y, sessions: opts.sessions ?? sessions }
+    )
+
+  it('puts relative tutorial prep on the tutorial of the week the quote names', () => {
+    const text = 'The tutorials take place next week and you will need to do some prep work ahead.'
+    // Thu 12 Nov is the tutorial next week. Monday 9th, this week's tutorial
+    // (5th) and a day 0-21 days on that is no tutorial are all dropped.
+    const r = ground(text, ['2026-11-12', '2026-11-09', '2026-11-05', '2026-11-13'])
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2026-11-12'])
+    expect(r.dateMismatch).toBe(3)
+  })
+
+  it('needs a session of the named kind inside a written week range when one exists', () => {
+    const text = 'Details of the tutorials in the week beginning 9 November, with reading required in advance, are now posted.'
+    const r = ground(text, ['2026-11-12', '2026-11-09', '2026-11-16'])
+    // The tutorial day; the right week's wrong day and a day outside the range are dropped.
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2026-11-12'])
+    expect(r.dateMismatch).toBe(2)
+    // No tutorial in that week: any day of the range, as before.
+    const none = ground(text, ['2026-11-09', '2026-11-11'], { sessions: sessions.filter((s) => s.date !== '2026-11-12') })
+    expect(none.kept.map((k) => k.due_on)).toEqual(['2026-11-09', '2026-11-11'])
+  })
+
+  it('narrows any written range of up to a week, and leaves a quote naming no session as it was', () => {
+    const days = ground('Tutorials run 2-6 November: bring your annotated map.', ['2026-11-05', '2026-11-03'])
+    expect(days.kept.map((k) => k.due_on)).toEqual(['2026-11-05'])
+    const noKind = ground('Logs are due in the week beginning 9 November.', ['2026-11-09', '2026-11-13'])
+    expect(noKind.kept).toHaveLength(2)
+  })
+
+  it('lets a single written date win over the timetable', () => {
+    const text = 'Please read chapter 3 before the tutorial on 11 November.'
+    const r = ground(text, ['2026-11-11', '2026-11-12'])
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2026-11-11'])
+    expect(r.dateMismatch).toBe(1)
+  })
+
+  it('takes only the next session of the named kind for "the next tutorial"', () => {
+    const text = 'Read the case study before the next tutorial.'
+    const r = ground(text, ['2026-11-05', '2026-11-12'])
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2026-11-05'])
+    // Over a break the next tutorial may be more than 21 days on.
+    const late = [{ date: '2026-12-10', type: 'tutorial' as const }, { date: '2027-01-14', type: 'tutorial' as const }]
+    const r2 = ground(text, ['2027-01-14', '2026-12-28'], { sessions: late, anchor: '2026-12-11' })
+    expect(r2.kept.map((k) => k.due_on)).toEqual(['2027-01-14'])
+    expect(r2.dateMismatch).toBe(1)
+  })
+
+  it('keeps the weekday the quote names', () => {
+    // The student's tutorial is on Thursday; "Tuesday's tutorial" is another group's.
+    const r = ground("Read chapter 2 before Tuesday's tutorial.", ['2026-11-10', '2026-11-12'])
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2026-11-10'])
+  })
+
+  it('falls back to the old rule when the list has no session of the named kind', () => {
+    const r = ground('Prepare a short summary for the seminar next week.', ['2026-11-09', '2026-11-11'])
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2026-11-09', '2026-11-11'])
+  })
+
+  it('also accepts the next session day for a relative quote naming no session', () => {
+    const text = 'Next week there are 3 essential readings, all short.'
+    // Old rule: anything 0-21 days on.
+    expect(ground(text, ['2026-11-09', '2026-11-10']).kept).toHaveLength(2)
+    // The next session after the posted day, even past 21 days (a break).
+    const late = [{ date: '2027-01-11', type: 'lecture' as const }, { date: '2027-01-18', type: 'lecture' as const }]
+    const r = ground(text, ['2027-01-11', '2027-01-18'], { sessions: late, anchor: '2026-12-11' })
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2027-01-11'])
+    // Not when the quote names a weekday.
+    const friday = ground('Read the essential readings by next Friday.', ['2027-01-11'], { sessions: late, anchor: '2026-12-11' })
+    expect(friday.kept).toHaveLength(0)
+  })
+
+  it('still needs a posted day for a relative date', () => {
+    const r = ground('The tutorials take place next week; prep is needed.', ['2026-11-12'], { anchor: null })
+    expect(r).toMatchObject({ kept: [], noAnchor: 1 })
+  })
+
+  it('behaves exactly as before with no sessions known', () => {
+    const text = 'The tutorials take place next week and you will need to do some prep work ahead.'
+    const r = ground(text, ['2026-11-12', '2026-11-09', '2026-11-05', '2026-12-01'], { sessions: [] })
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2026-11-12', '2026-11-09', '2026-11-05'])
+    const range = ground('Details of the tutorials in the week beginning 9 November.', ['2026-11-09', '2026-11-16'], { sessions: [] })
+    expect(range.kept.map((k) => k.due_on)).toEqual(['2026-11-09'])
   })
 })
 

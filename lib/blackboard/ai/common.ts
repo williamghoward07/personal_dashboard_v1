@@ -63,3 +63,15 @@ export function asRecord(value: unknown): Record<string, unknown> | null {
 export function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : []
 }
+
+/**
+ * The model answered, but not with anything usable (wrong shape). Like a
+ * truncated or unparseable reply, it is a failure of this batch, never
+ * "nothing found".
+ */
+export class AiOutputError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AiOutputError'
+  }
+}

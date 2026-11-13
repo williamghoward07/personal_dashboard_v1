@@ -9,7 +9,7 @@ import { isDateKey } from '@/lib/blackboard/dates'
 import { safeClip } from '@/lib/blackboard/text'
 import { PAGE_BREAK } from '@/lib/blackboard/wire'
 import { BB_KEY_DATE_CATEGORIES, type BbKeyDateCategory } from '@/lib/blackboard/types'
-import { asArray, asRecord, clampInt, cleanModelString, cleanSourceText, oneOf, promptLine, SESSION_TYPES, type SessionType } from './common'
+import { AiOutputError, asArray, asRecord, clampInt, cleanModelString, cleanSourceText, oneOf, promptLine, SESSION_TYPES, type SessionType } from './common'
 import type { KeyDateSourceKind } from './grounding'
 
 /** One text the model reads. `title` + `text` is what quotes are checked against. */
@@ -94,7 +94,11 @@ export interface DocumentChunk {
 }
 
 export const CHUNK_OVERLAP = 300
-/** A document is read in at most this many chunks (one call each); the rest is cut. */
+/**
+ * One processing unit reads at most this many chunks of a document (one call
+ * each), counting only chunks with a date signal. A longer document carries
+ * on in the next unit (bb_documents.ai_hash `partial:` marker).
+ */
 export const MAX_DOCUMENT_CHUNKS = 12
 /** Chunk calls of one document run this many at a time. */
 export const DOCUMENT_CONCURRENCY = 4
@@ -287,7 +291,7 @@ export function parseExtractResult(
   assignmentCount: number
 ): { items: ExtractedItem[]; invalid: number } {
   const root = asRecord(json)
-  if (!root || !Array.isArray(root.items)) throw new Error('Extraction reply has no items list')
+  if (!root || !Array.isArray(root.items)) throw new AiOutputError('Extraction reply has no items list')
   const items: ExtractedItem[] = []
   let invalid = 0
   for (const entry of asArray(root.items)) {

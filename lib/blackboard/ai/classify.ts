@@ -7,7 +7,9 @@ import type { AiSchema } from '@/lib/ai/schema'
 import { isDateKey } from '@/lib/blackboard/dates'
 import type { BbContentKind } from '@/lib/blackboard/normalise'
 import { BB_CONTENT_ROLES, type BbContentLink, type BbContentRole } from '@/lib/blackboard/types'
-import { asArray, asRecord, clampInt, oneOf, promptLine, SESSION_TYPES, type SessionType } from './common'
+import { AiOutputError, asArray, asRecord, clampInt, oneOf, promptLine, SESSION_TYPES, type SessionType } from './common'
+
+export { AiOutputError }
 
 /** The bb_content columns classification reads. */
 export interface ClassifyRow {
@@ -141,13 +143,6 @@ function overrideRole(row: ClassifyRow, role: BbContentRole): BbContentRole {
   if (kinds.has('talis')) return 'reading'
   if (kinds.has('panopto')) return 'recording'
   return role
-}
-
-export class AiOutputError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'AiOutputError'
-  }
 }
 
 /**

@@ -7,6 +7,10 @@ import { notifyWorkChanged } from './events'
 // call, 500 ms apart, until nothing is left, the Blackboard AI budget is
 // used up, AI is disabled or a call fails. Pauses while the tab is hidden.
 //
+// Rows the server marked failed (an unusable model reply, twice) are counted
+// in `failed` and never retried automatically: only `retryFailed()` asks the
+// route (?retry=1) to queue them again.
+//
 // The loop lives at module level, not in a component, so React's
 // double-mount (and several components using the hook) can't start two
 // loops. A localStorage lock (refreshed every call, stale after 2 minutes)
@@ -28,7 +32,13 @@ export interface BbProcessing {
   totals: BbProcessingTotals
   remaining: number
   error: string | null
+  /** Rows currently marked failed on the server, as of the latest call. */
+  failed: number
+  /** The server's notes during this run (a document read in parts, a batch split …), oldest first, no repeats. */
+  notes: string[]
   run: () => void
+  /** Queues the failed rows again (one at a time) and runs. Never called automatically. */
+  retryFailed: () => void
 }
 
 /** The JSON the route answers with (lib/blackboard/ai/process.ts ProcessResult, or disabled). */
@@ -42,6 +52,8 @@ interface ProcessResponse {
   remaining?: number
   budgetHit?: boolean
   error?: string
+  failed?: number
+  note?: string
 }
 
 const ENDPOINT = '/api/work/process'
@@ -54,13 +66,24 @@ interface Snapshot {
   totals: BbProcessingTotals
   remaining: number
   error: string | null
+  failed: number
+  notes: string[]
 }
 
-const INITIAL: Snapshot = { state: 'idle', totals: { processed: 0, unchanged: 0, added: 0 }, remaining: 0, error: null }
+const INITIAL: Snapshot = {
+  state: 'idle',
+  totals: { processed: 0, unchanged: 0, added: 0 },
+  remaining: 0,
+  error: null,
+  failed: 0,
+  notes: [],
+}
 
 let snapshot: Snapshot = INITIAL
 let looping = false
 let autoStarted = false
+/** Set by retryFailed(): the next call asks the route to re-queue failed rows. */
+let retryRequested = false
 const listeners = new Set<() => void>()
 const tabId = Math.random().toString(36).slice(2)
 
@@ -124,8 +147,8 @@ function whenVisible(): Promise<void> {
   })
 }
 
-async function callOnce(): Promise<ProcessResponse> {
-  const res = await fetch(ENDPOINT, { method: 'POST' })
+async function callOnce(retry: boolean): Promise<ProcessResponse> {
+  const res = await fetch(retry ? `${ENDPOINT}?retry=1` : ENDPOINT, { method: 'POST' })
   let body: ProcessResponse | null = null
   try {
     body = (await res.json()) as ProcessResponse
@@ -139,19 +162,28 @@ async function callOnce(): Promise<ProcessResponse> {
 }
 
 async function loop() {
+  // A loop already running here picks up a retry request on its next call.
   if (looping) return
-  if (!takeLock()) return
+  if (!takeLock()) {
+    // Another tab is processing: drop the request rather than let a later
+    // automatic run retry failed rows.
+    retryRequested = false
+    return
+  }
   looping = true
-  set({ state: 'running', error: null, totals: { processed: 0, unchanged: 0, added: 0 } })
+  set({ state: 'running', error: null, totals: { processed: 0, unchanged: 0, added: 0 }, notes: [] })
   try {
     for (;;) {
       await whenVisible()
       if (!takeLock()) {
         // Another tab took over after this one was hidden for 2+ minutes.
+        retryRequested = false
         set({ state: 'idle' })
         return
       }
-      const r = await callOnce()
+      const retry = retryRequested
+      retryRequested = false
+      const r = await callOnce(retry)
       if (r.disabled) {
         set({ state: 'disabled', remaining: 0 })
         return
@@ -161,7 +193,13 @@ async function loop() {
         unchanged: r.skippedUnchanged ?? snapshot.totals.unchanged,
         added: snapshot.totals.added + (r.added ?? 0),
       }
-      set({ totals, remaining: r.remaining ?? 0 })
+      const note = r.note?.trim()
+      set({
+        totals,
+        remaining: r.remaining ?? 0,
+        failed: r.failed ?? snapshot.failed,
+        notes: note && !snapshot.notes.includes(note) ? [...snapshot.notes, note] : snapshot.notes,
+      })
       if ((r.added ?? 0) + (r.updated ?? 0) + (r.removed ?? 0) > 0) notifyWorkChanged()
       if (r.error) {
         set({ state: 'error', error: r.error })
@@ -183,6 +221,8 @@ async function loop() {
     looping = false
     releaseLock()
   }
+  // retryFailed() was pressed as this loop was finishing: honour it now.
+  if (retryRequested) start()
 }
 
 function start() {
@@ -210,6 +250,10 @@ export function useBbProcessing({ auto }: { auto: boolean }): BbProcessing {
   }, [auto])
 
   const run = useCallback(() => start(), [])
+  const retryFailed = useCallback(() => {
+    retryRequested = true
+    start()
+  }, [])
 
-  return { ...current, run }
+  return { ...current, run, retryFailed }
 }

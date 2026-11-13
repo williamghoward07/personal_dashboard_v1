@@ -85,4 +85,39 @@ describe('useBbProcessing', () => {
     await waitFor(() => expect(r.result.current.state).toBe('done'))
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
+
+  // Findings 6 and 7: the server's note and failed count reach the UI.
+  it('carries notes and the failed count, without ever retrying failed rows by itself', async () => {
+    const fetchMock = mockResponses([
+      { body: { processed: 0, remaining: 2, note: 'Handbook.pdf: read parts 1-12 of 20 with dates (pages 1-24); the rest follows in the next unit.', failed: 0 } },
+      { body: { processed: 0, remaining: 1, note: 'A batch of 5 got an unusable reply; they will be sent one at a time.', failed: 0 } },
+      { body: { processed: 1, remaining: 0, failed: 1 } },
+    ])
+    const { useBbProcessing } = await load()
+    const { result } = renderHook(() => useBbProcessing({ auto: true }))
+    await waitFor(() => expect(result.current.state).toBe('done'), { timeout: 3000 })
+    expect(result.current.failed).toBe(1)
+    expect(result.current.notes).toEqual([
+      'Handbook.pdf: read parts 1-12 of 20 with dates (pages 1-24); the rest follows in the next unit.',
+      'A batch of 5 got an unusable reply; they will be sent one at a time.',
+    ])
+    expect(fetchMock.mock.calls.every(([url]) => url === '/api/work/process')).toBe(true)
+  })
+
+  it('retryFailed asks the route to re-queue failed rows once, then carries on as usual', async () => {
+    const fetchMock = mockResponses([
+      { body: { processed: 0, remaining: 0, failed: 2 } },
+      { body: { processed: 1, remaining: 1, failed: 0 } },
+      { body: { processed: 1, remaining: 0, failed: 0 } },
+    ])
+    const { useBbProcessing } = await load()
+    const { result } = renderHook(() => useBbProcessing({ auto: true }))
+    await waitFor(() => expect(result.current.state).toBe('done'))
+    expect(result.current.failed).toBe(2)
+    result.current.retryFailed()
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3), { timeout: 3000 })
+    await waitFor(() => expect(result.current.state).toBe('done'))
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/work/process', '/api/work/process?retry=1', '/api/work/process'])
+    expect(result.current.failed).toBe(0)
+  })
 })

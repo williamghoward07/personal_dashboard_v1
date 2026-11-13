@@ -30,6 +30,21 @@ describe('hasDateSignal', () => {
     expect(hasDateSignal(text)).toBe(true)
   })
 
+  // Finding 5: session tasks with only a relative day used to read as "no date".
+  it.each([
+    "Prepare a 5-minute presentation for Tuesday's seminar",
+    'Bring a completed worksheet to Thursday’s practical',
+    'Read the two papers before the next workshop',
+    'Complete the map exercise for the tutorial in week fourteen',
+    'Week Fourteen tutorials: read Chapter 5',
+    'Have the dataset downloaded ahead of the practical',
+    'Bring your laptop to the next session',
+    'Read the case study in preparation for your seminar',
+    'Slides to look at for Friday',
+  ])('positive (session task): %s', (text) => {
+    expect(hasDateSignal(text)).toBe(true)
+  })
+
   it.each([
     'Week 12: Introduction Lecture',
     'Weeks 13-15: Geographic Research (Dr Smith)',
@@ -42,6 +57,9 @@ describe('hasDateSignal', () => {
     'Testing hypotheses with GIS',
     'Lecture 12 handout',
     'We may cover this later',
+    'They sat in on the seminar',
+    'Sunlight and shade practical',
+    'One of the readings for this module',
     '',
   ])('negative: %s', (text) => {
     expect(hasDateSignal(text)).toBe(false)

@@ -80,7 +80,6 @@ import {
   chunkDocument,
   CONTENT_LIMITS,
   MAX_CALL_CHARS,
-  MAX_DOCUMENT_CHUNKS,
   planExtractBatches,
   prepareSource,
   type ExtractContext,
@@ -182,7 +181,7 @@ function makeLedger(): { ledger: AiLedger; logged: boolean } {
           model: e.model,
           input_tokens: e.inputTokens,
           output_tokens: e.outputTokens,
-          est_cost_usd: estimateCostUsd(e.model, e.inputTokens, e.outputTokens),
+          est_cost_usd: estimateCostUsd(e.model, e.inputTokens, e.outputTokens + (e.thoughtTokens ?? 0)),
         })
         if (error) console.error(`  usage logging failed: ${error.message}`)
       },
@@ -268,6 +267,8 @@ async function main() {
   const tallies = new Map<BbKeyDateCategory, Tally>(ALL_CATEGORIES.map((c) => [c, { tp: 0, fp: 0, fn: 0 }]))
   let returned = 0
   let ungrounded = 0
+  let dateMismatch = 0
+  let noAnchor = 0
   let invalid = 0
   let survivingUngrounded = 0
   const cls = { role: [0, 0], week: [0, 0], date: [0, 0], session: [0, 0], ordinal: [0, 0] }
@@ -344,6 +345,8 @@ async function main() {
       const r = await runExtractBatch(batch, ctx, assignments, ai)
       returned += r.returned
       ungrounded += r.ungrounded
+      dateMismatch += r.dateMismatch
+      noAnchor += r.noAnchor
       invalid += r.invalid
       batch.forEach((s, i) => add(s.id, r.perSource[i], `${s.title}\n${s.text}`))
     }
@@ -356,8 +359,9 @@ async function main() {
     }
     for (const doc of fx.sources.filter((s) => s.kind === 'document')) {
       const chunks = chunkDocument(doc.text ?? '', MAX_CALL_CHARS - 400)
-      if (chunks.length > MAX_DOCUMENT_CHUNKS) console.log(`  ${doc.id}: only the first ${MAX_DOCUMENT_CHUNKS} of ${chunks.length} parts are read`)
-      for (const c of chunks.slice(0, MAX_DOCUMENT_CHUNKS).filter((c) => hasDateSignal(c.text))) {
+      // As the app does: parts with no date signal cost nothing, and every
+      // signal-bearing part is read (the app spreads them over several units).
+      for (const c of chunks.filter((c) => hasDateSignal(c.text))) {
         await run([prepareSource({ ...toSource(doc), text: c.text, path: undefined, pages: { first: c.firstPage, last: c.lastPage } })])
       }
     }
@@ -405,6 +409,7 @@ async function main() {
     )
   }
   console.log(`\nModel items returned: ${returned}; dropped ungrounded: ${ungrounded} (${fmt(ratio(ungrounded, returned))}); dropped invalid: ${invalid}`)
+  console.log(`Dropped by the date check: ${dateMismatch} (date not the one in the quote); ${noAnchor} (relative date with no posted day)`)
   console.log(`Ungrounded items surviving: ${survivingUngrounded}${survivingUngrounded ? '  FAIL' : ''}`)
   if (survivingUngrounded) failed = true
 

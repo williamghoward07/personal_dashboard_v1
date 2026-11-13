@@ -43,6 +43,8 @@ export interface AiUsageEntry {
   model: string
   inputTokens: number
   outputTokens: number
+  /** Thinking tokens: billed at the output rate, so they count towards est_cost_usd. */
+  thoughtTokens?: number
 }
 
 /**
@@ -159,12 +161,12 @@ export async function generateStructuredWithUsage<T>({
 
   const inputTokens = response.usageMetadata?.promptTokenCount ?? 0
   const outputTokens = response.usageMetadata?.candidatesTokenCount ?? 0
-  // Not in ai_usage (logged exactly as before), but billed at the output
-  // rate: the eval script adds them to its cost estimate.
+  // Billed at the output rate. The ledger adds them to est_cost_usd; the
+  // input_tokens / output_tokens columns are logged exactly as before.
   const thoughtTokens = response.usageMetadata?.thoughtsTokenCount ?? 0
 
   await usage
-    .record({ feature, tier, model, inputTokens, outputTokens })
+    .record({ feature, tier, model, inputTokens, outputTokens, thoughtTokens })
     .catch((err) => console.error('AI usage recording failed:', err))
 
   const text = response.text

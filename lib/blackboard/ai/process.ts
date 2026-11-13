@@ -17,14 +17,18 @@ import {
 import {
   academicWindow,
   mergeKeyDates,
+  normaliseQuote,
   type AssignmentLite,
   type ExistingKeyDate,
   type FoundKeyDate,
   type KeyDateMerge,
   type KeyDateSourceKind,
+  type MergeOptions,
 } from './grounding'
+import { failMarker, hashState, partialMarker, retryMarker, type HashState } from './markers'
 import { runClassifyBatch, runExtractBatch, type AiCall, type ExtractBatchResult } from './pipeline'
 import { hasDateSignal } from './prefilter'
+import { mentionsDate, mentionsRelatively } from './quote-dates'
 
 // Runs ONE unit of Blackboard AI work per call (POST /api/work/process,
 // looped by useBbProcessing while the dashboard is open).
@@ -36,6 +40,20 @@ import { hasDateSignal } from './prefilter'
 // with no date signal is marked done with zero AI calls, and hashes only
 // advance once the unit's writes succeeded. A second pass over unchanged
 // data makes zero AI calls.
+//
+// Those hash columns also carry markers (./markers.ts): a batch whose reply
+// is unusable (truncated / unparseable / wrong shape) marks its rows
+// `retry:<hash>` and they are then sent one at a time; a row that fails on
+// its own is marked `fail:<hash>` and left alone until a manual retry
+// (`retryFailed`). A long document advances `partial:<chunk>:<hash>` one
+// unit at a time. Errors that aren't about the batch (network, rate limit,
+// budget, server) mark nothing and stop the loop, as before.
+//
+// A deadline found in two sources is stored once, under the first. When a
+// suggested row is removed (or moved to another day), the other sources of
+// the course that mention that day are re-queued (their hash cleared) so
+// the next unit reads them again. A re-queued source (hash null) never
+// re-queues others in turn, so this can't loop.
 //
 // Unit order: classify batch → announcement batch → content batch → one
 // document. Only module courses (module_code set, not removed) and live rows
@@ -58,17 +76,25 @@ export interface ProcessResult {
   added: number
   updated: number
   removed: number
-  /** AI items dropped because their quote isn't in the source. */
+  /** AI items dropped because their quote isn't in their own source or states no date. */
   ungrounded: number
+  /** AI items dropped because their quote states a different date. */
+  dateMismatch: number
+  /** AI items dropped: only a relative date, in a source with no posted day. */
+  noAnchor: number
   /** AI items dropped as malformed or outside the academic year. */
   invalid: number
+  /** Other sources queued to be read again because a deadline they mention lost its row. */
+  requeued: number
+  /** Rows (per job) currently marked `fail:` for their current text; never retried automatically. */
+  failed: number
   /** Model calls made. */
   calls: number
   /** Units still pending after this one. */
   remaining: number
   budgetHit: boolean
   error?: string
-  /** E.g. a document cut at the chunk limit. */
+  /** E.g. a document read in parts, a batch split after an unusable reply. */
   note?: string
 }
 
@@ -130,6 +156,16 @@ export interface KeyDateWriteCounts {
   removed: number
 }
 
+/** A suggested key date that is about to disappear from a day. */
+export interface LostKeyDate {
+  id: string
+  course_id: string
+  due_on: string
+  announcement_id: string | null
+  content_id: string | null
+  document_id: string | null
+}
+
 /** The reads and writes processNext needs. Every method throws on failure. */
 export interface WorkStore {
   loadState(): Promise<WorkState>
@@ -137,10 +173,15 @@ export interface WorkStore {
   loadAssignments(courseId: string): Promise<AssignmentLite[]>
   loadKeyDates(courseId: string): Promise<ExistingKeyDate[]>
   saveClassifications(rows: ClassificationWrite[]): Promise<void>
-  markContentExtracted(rows: { content_id: string; extracted_hash: string }[]): Promise<void>
-  markAnnouncements(rows: { id: string; ai_hash: string }[]): Promise<void>
-  markDocument(id: string, aiHash: string): Promise<void>
+  /** Writes only classified_hash (a retry / fail marker); never the classification itself. */
+  markClassified(rows: { content_id: string; classified_hash: string }[]): Promise<void>
+  /** A hash, a marker, or null (re-queued). */
+  markContentExtracted(rows: { content_id: string; extracted_hash: string | null }[]): Promise<void>
+  markAnnouncements(rows: { id: string; ai_hash: string | null }[]): Promise<void>
+  markDocument(id: string, aiHash: string | null): Promise<void>
   applyKeyDates(merge: KeyDateMerge, model: string | null): Promise<KeyDateWriteCounts>
+  /** The still-suggested key dates of these sources. */
+  loadSuggestedFrom(kind: KeyDateSourceKind, ids: string[]): Promise<LostKeyDate[]>
   /** Deletes the still-suggested key dates of these sources; returns how many. */
   removeSuggestedFrom(kind: KeyDateSourceKind, ids: string[]): Promise<number>
 }
@@ -159,8 +200,12 @@ export interface ProcessDeps {
   maxAttempts?: number
   /** No new attempt starts after this many ms (default 35 s, under the route's 60 s). */
   retryWindowMs?: number
+  /** First turn every `fail:` marker back into `retry:` (the manual "retry failed" action). */
+  retryFailed?: boolean
 }
 
+/** Attempts for a batch whose reply was unusable: one more try, then split / mark. */
+export const OUTPUT_ERROR_ATTEMPTS = 2
 
 // -------------------------------------------------------------- planning --
 
@@ -201,7 +246,11 @@ function emptyResult(unit: ProcessUnit): ProcessResult {
     updated: 0,
     removed: 0,
     ungrounded: 0,
+    dateMismatch: 0,
+    noAnchor: 0,
     invalid: 0,
+    requeued: 0,
+    failed: 0,
     calls: 0,
     remaining: 0,
     budgetHit: false,
@@ -214,6 +263,20 @@ function isBudgetError(err: unknown): boolean {
 
 function isDisabledError(err: unknown): boolean {
   return err instanceof Error && err.name === 'AiDisabledError'
+}
+
+/**
+ * The model answered, but the reply can't be used: JSON cut off at the
+ * token cap or otherwise unparseable (SyntaxError from JSON.parse in
+ * lib/ai/gemini.ts), an empty reply (e.g. blocked), or the wrong shape
+ * (AiOutputError). That is about THIS batch, so it is marked and the queue
+ * moves on. Anything else (network, rate limit, server, budget) would fail
+ * every batch alike, so nothing is marked and the loop stops.
+ */
+export function isBatchError(err: unknown): boolean {
+  if (err instanceof SyntaxError) return true
+  if (!(err instanceof Error)) return false
+  return err.name === 'AiOutputError' || /empty response/i.test(err.message)
 }
 
 function message(err: unknown): string {
@@ -234,6 +297,14 @@ async function pool<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]>
   return out
 }
 
+const sourceIdOf = (r: Pick<LostKeyDate, 'announcement_id' | 'content_id' | 'document_id'>) =>
+  r.announcement_id ?? r.content_id ?? r.document_id ?? ''
+
+/** Lower-cased, whitespace-normalised text that quotes are looked up in. */
+function quoteHaystack(title: string, text: string): string {
+  return normaliseQuote(`${title}\n${text}`)
+}
+
 // ------------------------------------------------------------ processNext --
 
 export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): Promise<ProcessResult> {
@@ -249,11 +320,13 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
     calls++
     return deps.ai(request)
   }
-  // Retries a failing batch within this call; budget / disabled errors never retry.
+  // Retries a failing batch within this call; budget / disabled errors never
+  // retry, and an unusable reply gets one more try only (it costs tokens).
   async function attempt<T>(run: () => Promise<T>): Promise<T> {
     let last: unknown
     for (let i = 0; i < maxAttempts; i++) {
       if (i > 0 && now().getTime() - started > retryWindowMs) break
+      if (i >= OUTPUT_ERROR_ATTEMPTS && isBatchError(last)) break
       try {
         return await run()
       } catch (err) {
@@ -278,30 +351,71 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
   const announcements = state.announcements.filter((a) => courseById.has(a.course_id))
   const documents = state.documents.filter((d) => contentById.has(d.content_id))
 
-  const classifyPending = content.filter((c) => aiByContent.get(c.id)?.classified_hash !== c.body_hash)
-  let extractPending = content.filter((c) => (aiByContent.get(c.id)?.extracted_hash ?? null) !== c.body_hash)
-  let announcementPending = announcements.filter((a) => a.ai_hash !== a.body_hash)
-  const documentPending = documents.filter((d) => d.ai_hash !== d.text_hash)
-
   const result = emptyResult('none')
+
+  // ---- the manual "retry failed rows" action: fail:<hash> → retry:<hash>.
+  if (deps.retryFailed) {
+    try {
+      await clearFailMarkers(store, content, aiByContent, announcements, documents)
+    } catch (err) {
+      return { ...result, remaining: 1, error: `Couldn't reset failed rows: ${message(err)}` }
+    }
+  }
+
+  const classifyState = (c: ContentLite) => hashState(aiByContent.get(c.id)?.classified_hash, c.body_hash)
+  const extractState = (c: ContentLite) => hashState(aiByContent.get(c.id)?.extracted_hash, c.body_hash)
+  const announcementState = (a: AnnouncementLite) => hashState(a.ai_hash, a.body_hash)
+  const documentState = (d: DocumentLite) => hashState(d.ai_hash, d.text_hash)
+  const needsWork = (s: HashState) => s.kind === 'pending' || s.kind === 'retry' || s.kind === 'partial'
+
+  const classifyPending = content.filter((c) => needsWork(classifyState(c)))
+  let extractPending = content.filter((c) => needsWork(extractState(c)))
+  let announcementPending = announcements.filter((a) => needsWork(announcementState(a)))
+  const documentPending = documents.filter((d) => needsWork(documentState(d)))
+
+  const isDoneState = (s: HashState) => s.kind === 'done'
   result.skippedUnchanged =
-    content.length -
-    classifyPending.length +
-    (content.length - extractPending.length) +
-    (announcements.length - announcementPending.length) +
-    (documents.length - documentPending.length)
+    content.filter((c) => isDoneState(classifyState(c))).length +
+    content.filter((c) => isDoneState(extractState(c))).length +
+    announcements.filter((a) => isDoneState(announcementState(a))).length +
+    documents.filter((d) => isDoneState(documentState(d))).length
+  const isFailed = (s: HashState) => s.kind === 'failed'
+  result.failed =
+    content.filter((c) => isFailed(classifyState(c))).length +
+    content.filter((c) => isFailed(extractState(c))).length +
+    announcements.filter((a) => isFailed(announcementState(a))).length +
+    documents.filter((d) => isFailed(documentState(d))).length
+
+  /**
+   * The stored hash value of a source before this unit. A source whose value
+   * was null is new or was re-queued: its removals never re-queue others.
+   */
+  const storedBefore = new Map<string, string | null>()
+  for (const c of content) storedBefore.set(c.id, aiByContent.get(c.id)?.extracted_hash ?? null)
+  for (const a of announcements) storedBefore.set(a.id, a.ai_hash)
+  for (const d of documents) storedBefore.set(d.id, d.ai_hash)
+  const triggers = (lost: LostKeyDate[]) => lost.filter((r) => (storedBefore.get(sourceIdOf(r)) ?? null) !== null)
+
+  const requeue = (lost: LostKeyDate[], exclude: Set<string>) =>
+    requeueMentions(store, triggers(lost), exclude, { content, aiByContent, announcements, documents, contentById })
 
   // Free bookkeeping first: texts with no date signal are done without a call.
   const quietAnnouncements = announcementPending.filter((a) => !hasDateSignal(`${a.title}\n${a.body_text ?? ''}`))
   const quietContent = extractPending.filter((c) => !hasDateSignal(`${c.title}\n${c.body_text ?? ''}`))
   if (quietAnnouncements.length || quietContent.length) {
     try {
+      const exclude = new Set([...quietAnnouncements.map((a) => a.id), ...quietContent.map((c) => c.id)])
       if (quietAnnouncements.length) {
-        result.removed += await store.removeSuggestedFrom('announcement', quietAnnouncements.map((a) => a.id))
+        const ids = quietAnnouncements.map((a) => a.id)
+        // Re-queue first: if anything below fails, this unit runs again.
+        result.requeued += await requeue(await store.loadSuggestedFrom('announcement', ids), exclude)
+        result.removed += await store.removeSuggestedFrom('announcement', ids)
         await store.markAnnouncements(quietAnnouncements.map((a) => ({ id: a.id, ai_hash: a.body_hash })))
       }
       if (quietContent.length) {
-        result.removed += await store.removeSuggestedFrom('content', quietContent.map((c) => c.id))
+        const ids = quietContent.map((c) => c.id)
+        result.requeued += await requeue(await store.loadSuggestedFrom('content', ids), exclude)
+        result.removed += await store.removeSuggestedFrom('content', ids)
         await store.markContentExtracted(quietContent.map((c) => ({ content_id: c.id, extracted_hash: c.body_hash })))
       }
     } catch (err) {
@@ -316,14 +430,23 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
     extractPending = extractPending.filter((c) => !quietC.has(c.id))
   }
 
+  // Rows marked retry: go alone, after the normal batches.
+  const isRetry = (s: HashState) => s.kind === 'retry'
+  const extractPlan = <T>(rows: T[], retry: (r: T) => boolean, toSource: (r: T) => ExtractSource, limits: typeof CONTENT_LIMITS) => [
+    ...planExtractBatches(rows.filter((r) => !retry(r)).map(toSource), limits),
+    ...rows.filter(retry).map((r) => [prepareSource(toSource(r), limits.maxChars)]),
+  ]
   const plan: Plan = {
-    classify: planClassifyBatches(classifyPending),
-    announcements: planExtractBatches(announcementPending.map(announcementSource), ANNOUNCEMENT_LIMITS),
-    content: planExtractBatches(extractPending.map(contentSource), CONTENT_LIMITS),
+    classify: [
+      ...planClassifyBatches(classifyPending.filter((c) => !isRetry(classifyState(c)))),
+      ...classifyPending.filter((c) => isRetry(classifyState(c))).map((c) => [c]),
+    ],
+    announcements: extractPlan(announcementPending, (a) => isRetry(announcementState(a)), announcementSource, ANNOUNCEMENT_LIMITS),
+    content: extractPlan(extractPending, (c) => isRetry(extractState(c)), contentSource, CONTENT_LIMITS),
     documents: documentPending,
   }
   const total = unitCount(plan)
-  if (total === 0) return result
+  if (total === 0) return { ...result, remaining: result.requeued }
 
   const contextFor = (courseId: string) => {
     const course = courseById.get(courseId)
@@ -334,30 +457,80 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
     }
   }
 
-  const finish = (unit: ProcessUnit, extra: Partial<ProcessResult>): ProcessResult => ({
-    ...result,
-    ...extra,
-    processed: result.processed + (extra.processed ?? 0),
-    removed: result.removed + (extra.removed ?? 0),
-    unit,
-    calls,
-    remaining: extra.error || extra.budgetHit ? total : total - 1,
-  })
+  /**
+   * `left`: units this one leaves behind besides the rest of the plan (a
+   * split batch's single retries, an unfinished document).
+   */
+  const finish = (unit: ProcessUnit, extra: Partial<ProcessResult>, left = 0): ProcessResult => {
+    const requeued = result.requeued + (extra.requeued ?? 0)
+    return {
+      ...result,
+      ...extra,
+      processed: result.processed + (extra.processed ?? 0),
+      removed: result.removed + (extra.removed ?? 0),
+      failed: result.failed + (extra.failed ?? 0),
+      requeued,
+      unit,
+      calls,
+      remaining: (extra.error || extra.budgetHit ? total : total - 1 + left) + requeued,
+    }
+  }
 
   const fail = (unit: ProcessUnit, err: unknown): ProcessResult => {
     if (isBudgetError(err)) return finish(unit, { budgetHit: true })
     return finish(unit, { error: message(err) })
   }
 
+  /**
+   * A batch whose reply was unusable: several rows → each marked retry:<hash>
+   * (sent alone next); one row → fail:<hash> (left until a manual retry).
+   * Any other error marks nothing and stops, as before.
+   */
+  const batchFailed = async (
+    unit: ProcessUnit,
+    err: unknown,
+    rows: { id: string; hash: string }[],
+    write: (rows: { id: string; marker: string }[]) => Promise<void>
+  ): Promise<ProcessResult> => {
+    if (!isBatchError(err)) return fail(unit, err)
+    const split = rows.length > 1
+    try {
+      await write(rows.map((r) => ({ id: r.id, marker: split ? retryMarker(r.hash) : failMarker(r.hash) })))
+    } catch (writeErr) {
+      return fail(unit, writeErr)
+    }
+    const why = message(err).slice(0, 120)
+    return finish(
+      unit,
+      {
+        failed: split ? 0 : 1,
+        note: split
+          ? `A batch of ${rows.length} got an unusable reply (${why}); they will be sent one at a time.`
+          : `One item got an unusable reply twice (${why}); it is marked failed until you retry it.`,
+      },
+      split ? rows.length : 0
+    )
+  }
+
   // ---- classify
   if (plan.classify.length) {
     const batch = plan.classify[0]
+    let reply: { rows: Classification[]; model: string }
     try {
       const ctx = contextFor(batch[0].course_id)
-      const { rows, model } = await attempt(() => runClassifyBatch(batch, ctx, ai))
+      reply = await attempt(() => runClassifyBatch(batch, ctx, ai))
+    } catch (err) {
+      return batchFailed(
+        'classify',
+        err,
+        batch.map((c) => ({ id: c.id, hash: c.body_hash })),
+        (rows) => store.markClassified(rows.map((r) => ({ content_id: r.id, classified_hash: r.marker })))
+      )
+    }
+    try {
       const hashById = new Map(batch.map((r) => [r.id, r.body_hash]))
       await store.saveClassifications(
-        rows.map((r) => ({ ...r, classified_hash: hashById.get(r.content_id) as string, model }))
+        reply.rows.map((r) => ({ ...r, classified_hash: hashById.get(r.content_id) as string, model: reply.model }))
       )
       return finish('classify', { processed: batch.length })
     } catch (err) {
@@ -369,23 +542,35 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
   const extractUnit = plan.announcements.length ? 'announcements' : plan.content.length ? 'content' : null
   if (extractUnit) {
     const batch = (extractUnit === 'announcements' ? plan.announcements : plan.content)[0]
+    const courseId = batch[0].course_id
+    const hashById =
+      extractUnit === 'announcements'
+        ? new Map(announcementPending.map((a) => [a.id, a.body_hash]))
+        : new Map(extractPending.map((c) => [c.id, c.body_hash]))
+    const markBatch = (rows: { id: string; marker: string | null }[]) =>
+      extractUnit === 'announcements'
+        ? store.markAnnouncements(rows.map((r) => ({ id: r.id, ai_hash: r.marker })))
+        : store.markContentExtracted(rows.map((r) => ({ content_id: r.id, extracted_hash: r.marker })))
+
+    let extracted: Extracted
     try {
-      const courseId = batch[0].course_id
-      const { counts, extracted } = await extractAndMerge(store, batch, courseId, contextFor(courseId), today, ai, attempt)
-      if (extractUnit === 'announcements') {
-        const hashById = new Map(announcementPending.map((a) => [a.id, a.body_hash]))
-        await store.markAnnouncements(batch.map((s) => ({ id: s.id, ai_hash: hashById.get(s.id) as string })))
-      } else {
-        const hashById = new Map(extractPending.map((c) => [c.id, c.body_hash]))
-        await store.markContentExtracted(batch.map((s) => ({ content_id: s.id, extracted_hash: hashById.get(s.id) as string })))
-      }
+      extracted = await extractFound(store, [batch], courseId, contextFor(courseId), today, ai, attempt)
+    } catch (err) {
+      return batchFailed(extractUnit, err, batch.map((s) => ({ id: s.id, hash: hashById.get(s.id) as string })), markBatch)
+    }
+    try {
+      const existing = await store.loadKeyDates(courseId)
+      const { merge, lost } = mergeSources(existing, extracted.bySource)
+      const requeued = await requeue(lost, new Set(batch.map((s) => s.id)))
+      const counts = await store.applyKeyDates(merge, extracted.model)
+      await markBatch(batch.map((s) => ({ id: s.id, marker: hashById.get(s.id) as string })))
       return finish(extractUnit, {
         processed: batch.length,
         added: counts.added,
         updated: counts.updated,
         removed: counts.removed,
-        ungrounded: extracted.ungrounded,
-        invalid: extracted.invalid,
+        requeued,
+        ...extracted.dropped,
         note: batch.some((s) => s.truncated) ? 'A long text was cut to fit one call.' : undefined,
       })
     } catch (err) {
@@ -393,82 +578,137 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
     }
   }
 
-  // ---- one document
+  // ---- one document (or the next part of one)
   const doc = plan.documents[0]
+  const owner = contentById.get(doc.content_id) as ContentLite
+  const courseId = owner.course_id
+  const docState = documentState(doc)
+  let text: string
   try {
-    const owner = contentById.get(doc.content_id) as ContentLite
-    const courseId = owner.course_id
-    const text = (await store.loadDocumentText(doc.id)) ?? ''
-    const allChunks = chunkDocument(text, MAX_CALL_CHARS - 400)
-    const chunks = allChunks.slice(0, MAX_DOCUMENT_CHUNKS)
-    const note =
-      allChunks.length > MAX_DOCUMENT_CHUNKS
-        ? `${doc.file_name}: read the first ${MAX_DOCUMENT_CHUNKS} of ${allChunks.length} parts (pages 1-${chunks[chunks.length - 1].lastPage}).`
-        : undefined
-    const sources = chunks
-      .filter((c) => hasDateSignal(c.text))
-      .map((c) =>
-        prepareSource({
-          kind: 'document',
-          id: doc.id,
-          course_id: courseId,
-          title: doc.file_name,
-          text: c.text,
-          posted: null,
-          pages: { first: c.firstPage, last: c.lastPage },
-        })
-      )
+    text = (await store.loadDocumentText(doc.id)) ?? ''
+  } catch (err) {
+    return fail('document', err)
+  }
+  // Chunks with no date signal cost nothing and aren't counted.
+  const signal = chunkDocument(text, MAX_CALL_CHARS - 400)
+    .filter((c) => hasDateSignal(c.text))
+    .map((c) =>
+      prepareSource({
+        kind: 'document',
+        id: doc.id,
+        course_id: courseId,
+        title: doc.file_name,
+        text: c.text,
+        posted: null,
+        pages: { first: c.firstPage, last: c.lastPage },
+      })
+    )
 
-    if (sources.length === 0) {
+  if (signal.length === 0) {
+    try {
+      const requeued = await requeue(await store.loadSuggestedFrom('document', [doc.id]), new Set([doc.id]))
       const removed = await store.removeSuggestedFrom('document', [doc.id])
       await store.markDocument(doc.id, doc.text_hash)
-      return finish('document', { processed: 1, skippedNoSignal: result.skippedNoSignal + 1, removed, note })
+      return finish('document', { processed: 1, skippedNoSignal: result.skippedNoSignal + 1, removed, requeued })
+    } catch (err) {
+      return fail('document', err)
     }
-    if (deps.budgetRemaining) {
-      const left = await deps.budgetRemaining()
-      if (left < sources.length) return finish('document', { budgetHit: true, note })
-    }
+  }
 
-    const { counts, extracted } = await extractAndMerge(
+  const resume = docState.kind === 'partial' && docState.next > 0 && docState.next < signal.length ? docState.next : 0
+  const step = signal.slice(resume, resume + MAX_DOCUMENT_CHUNKS)
+  const end = resume + step.length
+  const final = end >= signal.length
+  const pages = (from: number, to: number) => `pages ${signal[from].pages!.first}-${signal[to - 1].pages!.last}`
+  const note =
+    resume === 0 && final
+      ? undefined
+      : `${doc.file_name}: read parts ${resume + 1}-${end} of ${signal.length} with dates (${pages(resume, end)})${final ? '; finished.' : '; the rest follows in the next unit.'}`
+
+  if (deps.budgetRemaining) {
+    try {
+      const left = await deps.budgetRemaining()
+      if (left < step.length) return finish('document', { budgetHit: true, note })
+    } catch (err) {
+      return fail('document', err)
+    }
+  }
+
+  let extracted: Extracted
+  try {
+    extracted = await extractFound(
       store,
-      sources.map((s) => [s]),
+      step.map((s) => [s]),
       courseId,
       contextFor(courseId),
       today,
       ai,
       attempt
     )
-    await store.markDocument(doc.id, doc.text_hash)
-    return finish('document', {
-      processed: 1,
-      added: counts.added,
-      updated: counts.updated,
-      removed: counts.removed,
-      ungrounded: extracted.ungrounded,
-      invalid: extracted.invalid,
-      note,
-    })
+  } catch (err) {
+    return batchFailed('document', err, [{ id: doc.id, hash: doc.text_hash }], (rows) =>
+      store.markDocument(doc.id, rows[0].marker)
+    )
+  }
+
+  // Rows found in parts read by an earlier unit of this pass are not stale:
+  // an unfinished pass removes nothing; the last part removes only rows
+  // whose quote isn't in an earlier part.
+  const earlier = signal.slice(0, resume).map((s) => quoteHaystack(s.title, s.text))
+  const keep: MergeOptions['keep'] = final
+    ? (row) => {
+        const q = normaliseQuote(row.quote)
+        return q.length > 0 && earlier.some((h) => h.includes(q))
+      }
+    : () => true
+  try {
+    const existing = await store.loadKeyDates(courseId)
+    const { merge, lost } = mergeSources(existing, extracted.bySource, keep)
+    const requeued = await requeue(lost, new Set([doc.id]))
+    const counts = await store.applyKeyDates(merge, extracted.model)
+    await store.markDocument(doc.id, final ? doc.text_hash : partialMarker(end, doc.text_hash))
+    return finish(
+      'document',
+      {
+        processed: final ? 1 : 0,
+        added: counts.added,
+        updated: counts.updated,
+        removed: counts.removed,
+        requeued,
+        ...extracted.dropped,
+        note,
+      },
+      final ? 0 : 1
+    )
   } catch (err) {
     return fail('document', err)
   }
 }
 
+// ------------------------------------------------------------ extraction --
+
+interface Extracted {
+  /** Found key dates per source id (document chunks all share their document's id). */
+  bySource: Map<string, { kind: KeyDateSourceKind; found: FoundKeyDate[] }>
+  model: string | null
+  dropped: Pick<ProcessResult, 'ungrounded' | 'dateMismatch' | 'noAnchor' | 'invalid'>
+}
+
 /**
- * Model calls for one course's sources, then one merge per source against
- * the course's key dates, then the writes. `batches` is either one batch of
- * several sources (announcements / content) or one single-source batch per
- * document chunk (run DOCUMENT_CONCURRENCY at a time, merged as one source).
- * Nothing is written unless every call succeeded.
+ * The model calls for one course's sources: `groups` is one batch of several
+ * sources (announcements / content) or one single-source batch per document
+ * chunk (run DOCUMENT_CONCURRENCY at a time). Writes nothing; throws when
+ * any call fails, so nothing is written unless every call succeeded.
  */
-async function extractAndMerge(
+async function extractFound(
   store: WorkStore,
-  batches: ExtractSource[] | ExtractSource[][],
+  groups: ExtractSource[][],
   courseId: string,
   course: { moduleCode: string | null; courseName: string | null; window: { from: string; to: string } },
   today: string,
   ai: AiCall,
   attempt: <T>(run: () => Promise<T>) => Promise<T>
-): Promise<{ counts: KeyDateWriteCounts; extracted: { ungrounded: number; invalid: number } }> {
+): Promise<Extracted> {
   const assignments = (await store.loadAssignments(courseId)).sort((a, b) =>
     (a.due_at ?? '9999').localeCompare(b.due_at ?? '9999')
   )
@@ -479,15 +719,12 @@ async function extractAndMerge(
     courseName: course.courseName,
     assignments: assignments.map((a) => ({ title: a.title, due_at: a.due_at })),
   }
-
-  const groups: ExtractSource[][] = Array.isArray(batches[0]) ? (batches as ExtractSource[][]) : [batches as ExtractSource[]]
   const results: ExtractBatchResult[] = await pool(
     groups.map((group) => () => attempt(() => runExtractBatch(group, ctx, assignments, ai))),
     DOCUMENT_CONCURRENCY
   )
 
-  // Found key dates per source id (document chunks all share their document's id).
-  const bySource = new Map<string, { kind: KeyDateSourceKind; found: FoundKeyDate[] }>()
+  const bySource: Extracted['bySource'] = new Map()
   groups.forEach((group, g) =>
     group.forEach((s, i) => {
       const entry = bySource.get(s.id) ?? { kind: s.kind, found: [] }
@@ -495,34 +732,142 @@ async function extractAndMerge(
       bySource.set(s.id, entry)
     })
   )
+  const sum = (key: 'ungrounded' | 'dateMismatch' | 'noAnchor' | 'invalid') => results.reduce((n, r) => n + r[key], 0)
+  return {
+    bySource,
+    model: results.find((r) => r.model)?.model ?? null,
+    dropped: { ungrounded: sum('ungrounded'), dateMismatch: sum('dateMismatch'), noAnchor: sum('noAnchor'), invalid: sum('invalid') },
+  }
+}
 
-  let working = await store.loadKeyDates(courseId)
-  const combined: KeyDateMerge = { insert: [], update: [], remove: [] }
+/**
+ * One merge per source against the course's key dates, combined, plus the
+ * suggested rows that leave their day (removed or moved).
+ *
+ * Two phases, so the order of sources in a batch can't lose a deadline: each
+ * source's stale rows are worked out first (they depend only on its own rows
+ * and finds), then sources merge in turn against what is left, each seeing
+ * the earlier ones' inserts (a deadline in two announcements of one batch is
+ * inserted once, and never matched against a row another source is about to
+ * remove).
+ */
+function mergeSources(
+  existing: ExistingKeyDate[],
+  bySource: Extracted['bySource'],
+  keep?: MergeOptions['keep']
+): { merge: KeyDateMerge; lost: LostKeyDate[] } {
+  const remove = new Set<string>()
+  for (const [id, { kind, found }] of bySource) {
+    for (const r of mergeKeyDates(existing, found, { kind, id }, { keep }).remove) remove.add(r)
+  }
+
+  let working = existing.filter((r) => !remove.has(r.id))
+  const combined: KeyDateMerge = { insert: [], update: [], remove: [...remove] }
   let pendingId = 0
   for (const [id, { kind, found }] of bySource) {
-    const merge = mergeKeyDates(working, found, { kind, id })
+    const merge = mergeKeyDates(working, found, { kind, id }, { keep })
     combined.insert.push(...merge.insert)
     combined.update.push(...merge.update)
-    combined.remove.push(...merge.remove)
-    // Later sources in this batch see this source's outcome, so a deadline in
-    // two announcements of one batch is inserted once.
-    const removed = new Set(merge.remove)
     const patches = new Map(merge.update.map((u) => [u.id, u.patch]))
     working = working
-      .filter((r) => !removed.has(r.id))
       .map((r) => (patches.has(r.id) ? { ...r, ...patches.get(r.id) } : r))
-      .concat(merge.insert.map((r) => ({ ...r, id: `pending:${pendingId++}`, assignment_id: r.assignment_id })))
+      .concat(merge.insert.map((r) => ({ ...r, id: `pending:${pendingId++}` })))
   }
 
-  const model = results.find((r) => r.model)?.model ?? null
-  const counts = await store.applyKeyDates(combined, model)
-  return {
-    counts,
-    extracted: {
-      ungrounded: results.reduce((n, r) => n + r.ungrounded, 0),
-      invalid: results.reduce((n, r) => n + r.invalid, 0),
-    },
+  const byId = new Map(existing.map((r) => [r.id, r]))
+  const lost: LostKeyDate[] = []
+  const lose = (r: ExistingKeyDate) =>
+    lost.push({
+      id: r.id,
+      course_id: r.course_id,
+      due_on: r.due_on,
+      announcement_id: r.announcement_id,
+      content_id: r.content_id,
+      document_id: r.document_id,
+    })
+  for (const id of remove) lose(byId.get(id) as ExistingKeyDate)
+  for (const u of combined.update) {
+    const row = byId.get(u.id)
+    if (row && u.patch.due_on !== undefined && u.patch.due_on !== row.due_on) lose(row)
   }
+  return { merge: combined, lost }
+}
+
+// --------------------------------------------------------------- requeue --
+
+interface RequeueState {
+  content: ContentLite[]
+  aiByContent: Map<string, ContentAiLite>
+  announcements: AnnouncementLite[]
+  documents: DocumentLite[]
+  contentById: Map<string, ContentLite>
+}
+
+/**
+ * A suggested row is about to leave its day. Another source of the course
+ * may have stated the same deadline and been merged into that row (nothing
+ * of its own inserted): clear the processed hash of every other done source
+ * of the course that mentions the day, so the next unit reads it again.
+ * Returns how many sources were re-queued.
+ */
+async function requeueMentions(store: WorkStore, lost: LostKeyDate[], exclude: Set<string>, s: RequeueState): Promise<number> {
+  if (lost.length === 0) return 0
+  const daysByCourse = new Map<string, Set<string>>()
+  for (const r of lost) daysByCourse.set(r.course_id, (daysByCourse.get(r.course_id) ?? new Set()).add(r.due_on))
+  const daysFor = (courseId: string) => [...(daysByCourse.get(courseId) ?? [])]
+
+  const announcements = s.announcements.filter((a) => {
+    const days = daysFor(a.course_id)
+    if (!days.length || exclude.has(a.id) || hashState(a.ai_hash, a.body_hash).kind !== 'done') return false
+    const text = `${a.title}\n${a.body_text ?? ''}`
+    return days.some((d) => mentionsDate(text, d) || mentionsRelatively(text, d, a.posted_at))
+  })
+  const content = s.content.filter((c) => {
+    const days = daysFor(c.course_id)
+    if (!days.length || exclude.has(c.id) || hashState(s.aiByContent.get(c.id)?.extracted_hash, c.body_hash).kind !== 'done') return false
+    const text = `${c.title}\n${c.body_text ?? ''}`
+    return days.some((d) => mentionsDate(text, d))
+  })
+  const documents: DocumentLite[] = []
+  for (const d of s.documents) {
+    const courseId = s.contentById.get(d.content_id)?.course_id
+    const days = courseId ? daysFor(courseId) : []
+    const kind = hashState(d.ai_hash, d.text_hash).kind
+    if (!days.length || exclude.has(d.id) || (kind !== 'done' && kind !== 'partial')) continue
+    const text = `${d.file_name}\n${(await store.loadDocumentText(d.id)) ?? ''}`
+    if (days.some((day) => mentionsDate(text, day))) documents.push(d)
+  }
+
+  if (announcements.length) await store.markAnnouncements(announcements.map((a) => ({ id: a.id, ai_hash: null })))
+  if (content.length) await store.markContentExtracted(content.map((c) => ({ content_id: c.id, extracted_hash: null })))
+  for (const d of documents) await store.markDocument(d.id, null)
+  return announcements.length + content.length + documents.length
+}
+
+/** The manual retry: every `fail:` marker that still matches its text becomes `retry:`. */
+async function clearFailMarkers(
+  store: WorkStore,
+  content: ContentLite[],
+  aiByContent: Map<string, ContentAiLite>,
+  announcements: AnnouncementLite[],
+  documents: DocumentLite[]
+): Promise<void> {
+  const failed = (stored: string | null | undefined, hash: string) => hashState(stored, hash).kind === 'failed'
+  const classify = content.filter((c) => failed(aiByContent.get(c.id)?.classified_hash, c.body_hash))
+  const extract = content.filter((c) => failed(aiByContent.get(c.id)?.extracted_hash, c.body_hash))
+  const anns = announcements.filter((a) => failed(a.ai_hash, a.body_hash))
+  const docs = documents.filter((d) => failed(d.ai_hash, d.text_hash))
+
+  if (classify.length) await store.markClassified(classify.map((c) => ({ content_id: c.id, classified_hash: retryMarker(c.body_hash) })))
+  if (extract.length) await store.markContentExtracted(extract.map((c) => ({ content_id: c.id, extracted_hash: retryMarker(c.body_hash) })))
+  if (anns.length) await store.markAnnouncements(anns.map((a) => ({ id: a.id, ai_hash: retryMarker(a.body_hash) })))
+  for (const d of docs) await store.markDocument(d.id, retryMarker(d.text_hash))
+
+  // Keep this call's view in step with what was written.
+  for (const c of classify) aiByContent.get(c.id)!.classified_hash = retryMarker(c.body_hash)
+  for (const c of extract) aiByContent.get(c.id)!.extracted_hash = retryMarker(c.body_hash)
+  for (const a of anns) a.ai_hash = retryMarker(a.body_hash)
+  for (const d of docs) d.ai_hash = retryMarker(d.text_hash)
 }
 
 // --------------------------------------------------------- supabase store --
@@ -651,6 +996,18 @@ export function supabaseWorkStore(supabase: SupabaseClient, userId: string): Wor
       check(error)
     },
 
+    async markClassified(rows) {
+      if (!rows.length) return
+      const updated_at = stamp()
+      // Only the hash column: an existing classification is kept, a new row
+      // gets role 'other' by default.
+      const { error } = await supabase.from('bb_content_ai').upsert(
+        rows.map((r) => ({ user_id: userId, content_id: r.content_id, classified_hash: r.classified_hash, updated_at })),
+        { onConflict: 'user_id,content_id' }
+      )
+      check(error)
+    },
+
     async markContentExtracted(rows) {
       if (!rows.length) return
       const updated_at = stamp()
@@ -738,6 +1095,20 @@ export function supabaseWorkStore(supabase: SupabaseClient, userId: string): Wor
         added = data?.length ?? 0
       }
       return { added, updated, removed }
+    },
+
+    async loadSuggestedFrom(kind, ids) {
+      const out: LostKeyDate[] = []
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data, error } = await supabase
+          .from('bb_key_dates')
+          .select('id, course_id, due_on, announcement_id, content_id, document_id')
+          .in(SOURCE_COLUMN[kind], ids.slice(i, i + 200))
+          .eq('status', 'suggested')
+        check(error)
+        out.push(...((data ?? []) as LostKeyDate[]))
+      }
+      return out
     },
 
     async removeSuggestedFrom(kind, ids) {

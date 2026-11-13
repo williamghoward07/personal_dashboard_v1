@@ -42,18 +42,26 @@ export async function assertUnderDailyBudget(feature = ''): Promise<void> {
   if (used >= budgetFor(feature).cap) throw new AiBudgetExceededError()
 }
 
+/**
+ * Appends one ai_usage row. Thinking tokens are billed at the output rate,
+ * so they count in est_cost_usd; the input_tokens / output_tokens columns
+ * stay as the model reported them (output excludes thinking).
+ */
 export async function recordUsage({
   feature,
   tier,
   model,
   inputTokens,
   outputTokens,
+  thoughtTokens = 0,
 }: {
   feature: string
   tier: Tier
   model: string
   inputTokens: number
   outputTokens: number
+  /** Thinking tokens of the call (lib/ai/gemini.ts StructuredResult.thoughtTokens). */
+  thoughtTokens?: number
 }): Promise<void> {
   const supabase = await createClient()
   await supabase.from('ai_usage').insert({
@@ -62,7 +70,7 @@ export async function recordUsage({
     model,
     input_tokens: inputTokens,
     output_tokens: outputTokens,
-    est_cost_usd: estimateCostUsd(model, inputTokens, outputTokens),
+    est_cost_usd: estimateCostUsd(model, inputTokens, outputTokens + Math.max(0, thoughtTokens)),
   })
 }
 

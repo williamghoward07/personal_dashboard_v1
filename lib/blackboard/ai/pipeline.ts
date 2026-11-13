@@ -31,8 +31,22 @@ export interface AiRequest {
 export type AiCall = (request: AiRequest) => Promise<{ data: unknown; model: string }>
 
 export const CLASSIFY_MAX_OUTPUT_TOKENS = 4096
-// Includes the thinking tokens of the smart tier.
-export const EXTRACT_MAX_OUTPUT_TOKENS = 8192
+
+// Extraction runs on the smart tier with thinking on, and lib/ai/gemini.ts
+// sends no thinkingBudget then (the model's dynamic default). Gemini counts
+// thinking tokens against maxOutputTokens, so the cap must hold the largest
+// dynamic thinking budget PLUS the JSON answer, or a full batch can be cut
+// off mid-JSON. Only tokens actually used are billed, so a high cap costs
+// nothing by itself.
+/** The flash models' largest dynamic thinking budget. */
+export const EXTRACT_THINKING_CEILING = 24_576
+/**
+ * Room for the answer: an item is at most ~150 tokens (80-character title,
+ * 300-character quote, the other fields and JSON), so this holds 50+ items,
+ * more than a 12,000-character call can sensibly contain.
+ */
+export const EXTRACT_ANSWER_TOKENS = 8192
+export const EXTRACT_MAX_OUTPUT_TOKENS = EXTRACT_THINKING_CEILING + EXTRACT_ANSWER_TOKENS
 
 export const EXTRACT_FEATURE: Record<KeyDateSourceKind, string> = {
   announcement: BB_FEATURES.extractAnnouncement,
@@ -62,8 +76,12 @@ export interface ExtractBatchResult {
   perSource: FoundKeyDate[][]
   /** Items the model returned. */
   returned: number
-  /** Dropped: quote not in the source, or no date near it. */
+  /** Dropped: quote not in its own source, or no date in the quote. */
   ungrounded: number
+  /** Dropped: the quote states a different date than the item. */
+  dateMismatch: number
+  /** Dropped: only a relative date, in a source with no posted day. */
+  noAnchor: number
   /** Dropped: malformed, impossible date, or outside the academic year. */
   invalid: number
   model: string
@@ -90,7 +108,14 @@ export async function runExtractBatch(
     thinking: true,
   })
   const parsed = parseExtractResult(batch, data, assignments.length)
-  const grounded = groundItems(parsed.items, batch)
+  // Only an announcement has a posted day that relative words ("next
+  // week") can be resolved against; a content item's availability date
+  // and a document are not anchors.
+  const grounded = groundItems(
+    parsed.items,
+    batch.map((s) => ({ title: s.title, text: s.text, anchor: s.kind === 'announcement' ? s.posted : null })),
+    { yearStart: Number(ctx.window.from.slice(0, 4)) }
+  )
   let invalid = parsed.invalid
   const perSource: FoundKeyDate[][] = batch.map(() => [])
   for (const item of grounded.kept) {
@@ -119,6 +144,8 @@ export async function runExtractBatch(
     perSource,
     returned: parsed.items.length + parsed.invalid,
     ungrounded: grounded.ungrounded,
+    dateMismatch: grounded.dateMismatch,
+    noAnchor: grounded.noAnchor,
     invalid,
     model,
   }

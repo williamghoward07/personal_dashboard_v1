@@ -5,6 +5,9 @@ import {
   keyDateFingerprint,
   linkToAssignment,
   mergeKeyDates,
+  numbersDiffer,
+  properNounsDiffer,
+  sameTitle,
   titleSimilarity,
   titleTokens,
   toDueAt,
@@ -14,6 +17,8 @@ import {
 } from './grounding'
 
 const C = 'course-1'
+
+const Y = { yearStart: 2026 }
 
 describe('groundItems', () => {
   const sources = [
@@ -27,10 +32,11 @@ describe('groundItems', () => {
   it('keeps a verbatim quote, even across collapsed whitespace and case', () => {
     const { kept, ungrounded } = groundItems(
       [
-        { source: 1, quote: 'The Formative Essay is due 24th November 2026 by 2pm' },
-        { source: 2, quote: 'Details of Week 6 tutorials' },
+        { source: 1, quote: 'The Formative Essay is due 24th November 2026 by 2pm', due_on: '2026-11-24' },
+        { source: 2, quote: 'Details of Week 6 tutorials', due_on: '2026-11-17' },
       ],
-      sources
+      [sources[0], { ...sources[1], anchor: '2026-11-10' }],
+      Y
     )
     expect(kept).toHaveLength(2)
     expect(ungrounded).toBe(0)
@@ -39,38 +45,120 @@ describe('groundItems', () => {
   it('accepts typographic quote/dash differences but drops paraphrases', () => {
     const { kept, ungrounded } = groundItems(
       [
-        { source: 1, quote: 'Submit the formative essay by 24 November at 2pm' },
-        { source: 1, quote: 'essay due 24th Nov' },
+        { source: 1, quote: 'Submit the formative essay by 24 November at 2pm', due_on: '2026-11-24' },
+        { source: 1, quote: 'essay due 24th Nov', due_on: '2026-11-24' },
       ],
-      sources
+      sources,
+      Y
     )
     expect(kept).toHaveLength(0)
     expect(ungrounded).toBe(2)
-    const curly = groundItems([{ source: 1, quote: 'Turnitin. Thanks for coming' }], [{ title: 'x', text: 'Due 3 Dec via Turnitin. Thanks for coming' }])
+    const curly = groundItems([{ source: 1, quote: 'Due 3 Dec – via Turnitin', due_on: '2026-12-03' }], [{ title: 'x', text: 'Due 3 Dec - via Turnitin. Thanks' }], Y)
     expect(curly.kept).toHaveLength(1)
   })
 
-  it('drops short quotes, quotes from the wrong source and quotes with no date nearby', () => {
-    const far = { title: 'Notes', text: `Due 1 December.${' filler'.repeat(60)} Remember the sticky notes.` }
+  it('drops short quotes, quotes from the wrong source and quotes with no date of their own', () => {
     const { kept, ungrounded } = groundItems(
       [
-        { source: 1, quote: 'is due' },
-        { source: 2, quote: 'The formative essay is due' },
-        { source: 3, quote: 'Remember the sticky notes' },
-        { source: 9, quote: 'anything at all' },
+        { source: 1, quote: 'is due', due_on: '2026-11-24' },
+        { source: 2, quote: 'The formative essay is due 24th November', due_on: '2026-11-24' },
+        { source: 9, quote: 'anything at all', due_on: '2026-11-24' },
+        // A date sitting next to the quote is no longer enough.
+        { source: 1, quote: 'via Turnitin', due_on: '2026-11-24' },
       ],
-      [...sources, far]
+      sources,
+      Y
     )
     expect(kept).toHaveLength(0)
     expect(ungrounded).toBe(4)
   })
 
-  it('keeps a quote without a date of its own when a date sits within 200 characters', () => {
-    const { kept } = groundItems(
-      [{ source: 1, quote: 'via Turnitin' }],
-      [{ title: 'Essay', text: 'The formative essay is due 24th November 2026 by 2pm via Turnitin.' }]
+  // Finding 1: the model's date must be the one its quote states.
+  it('drops an item whose date differs from the date in its quote', () => {
+    const src = [{ title: 'Summative Essay due 16th February 2027 by 2pm', text: 'Submit via Turnitin.' }]
+    const r = groundItems(
+      [
+        { source: 1, quote: 'Summative Essay due 16th February 2027', due_on: '2027-02-15' },
+        { source: 1, quote: 'Submit via Turnitin', due_on: '2026-12-01' },
+        { source: 1, quote: 'Summative Essay due 16th February 2027', due_on: '2027-02-16' },
+      ],
+      src,
+      Y
     )
-    expect(kept).toHaveLength(1)
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2027-02-16'])
+    expect(r.dateMismatch).toBe(1)
+    expect(r.ungrounded).toBe(1)
+  })
+
+  it('accepts any date in a quote with several, and a day inside a written range', () => {
+    const src = [{ title: 'Update', text: 'Posted 10 November: presentations run 2-6 November; logs due in the week beginning 9 November.' }]
+    const r = groundItems(
+      [
+        { source: 1, quote: 'presentations run 2-6 November', due_on: '2026-11-04' },
+        { source: 1, quote: 'presentations run 2-6 November', due_on: '2026-11-07' },
+        { source: 1, quote: 'logs due in the week beginning 9 November', due_on: '2026-11-13' },
+        { source: 1, quote: 'logs due in the week beginning 9 November', due_on: '2026-11-16' },
+      ],
+      src,
+      Y
+    )
+    expect(r.kept.map((k) => k.due_on)).toEqual(['2026-11-04', '2026-11-13'])
+    expect(r.dateMismatch).toBe(2)
+  })
+
+  it("never lets one source's text steer the date of another source's item", () => {
+    const src = [
+      { title: 'Essay', text: 'The essay is due 24 November.' },
+      { title: 'Quiz', text: 'The quiz is on 1 December.' },
+    ]
+    const r = groundItems(
+      [
+        // Source 2's item quoting source 1's sentence: not in its own source.
+        { source: 2, quote: 'The essay is due 24 November', due_on: '2026-11-24' },
+        // Source 1's item carrying source 2's date.
+        { source: 1, quote: 'The essay is due 24 November', due_on: '2026-12-01' },
+      ],
+      src,
+      Y
+    )
+    expect(r.kept).toEqual([])
+    expect(r).toMatchObject({ ungrounded: 1, dateMismatch: 1 })
+  })
+
+  it('accepts a relative-only date only from a source with a posted day, within 21 days, on the named weekday', () => {
+    const text = "Please read chapter 2 before Tuesday's tutorial. Bring notes next week."
+    const ann = { title: 'Reading', text, anchor: '2026-11-10T09:00:00Z' }
+    const r = groundItems(
+      [
+        { source: 1, quote: "read chapter 2 before Tuesday's tutorial", due_on: '2026-11-17' },
+        { source: 1, quote: "read chapter 2 before Tuesday's tutorial", due_on: '2026-11-19' }, // a Thursday
+        { source: 1, quote: 'Bring notes next week', due_on: '2026-12-08' }, // 28 days on
+        { source: 1, quote: 'Bring notes next week', due_on: '2026-11-18' },
+        { source: 2, quote: "read chapter 2 before Tuesday's tutorial", due_on: '2026-11-17' },
+      ],
+      [ann, { title: 'Reading', text }],
+      Y
+    )
+    expect(r.kept.map((k) => [k.source, k.due_on])).toEqual([
+      [1, '2026-11-17'],
+      [1, '2026-11-18'],
+    ])
+    expect(r).toMatchObject({ dateMismatch: 2, noAnchor: 1, ungrounded: 0 })
+  })
+
+  it('keeps due_time only when the quote states that time', () => {
+    const src = [{ title: 'Essay', text: 'The essay is due 24 November 2026 by 2pm. The plan is due 20 November. Logs by 16.00 on 27 November.' }]
+    const r = groundItems(
+      [
+        { source: 1, quote: 'The essay is due 24 November 2026 by 2pm', due_on: '2026-11-24', due_time: '14:00' },
+        { source: 1, quote: 'The essay is due 24 November 2026 by 2pm', due_on: '2026-11-24', due_time: '15:00' },
+        { source: 1, quote: 'The plan is due 20 November', due_on: '2026-11-20', due_time: '23:59' },
+        { source: 1, quote: 'Logs by 16.00 on 27 November', due_on: '2026-11-27', due_time: '16:00' },
+      ],
+      src,
+      Y
+    )
+    expect(r.kept.map((k) => k.due_time)).toEqual(['14:00', null, null, '16:00'])
   })
 })
 
@@ -97,10 +185,23 @@ describe('dates', () => {
     expect(toDueAt('2026-10-05', null)).toBeNull()
     expect(toDueAt('2026-10-05', '25:00')).toBeNull()
   })
+
+  // Finding 8: the offset is read at the target instant, not at midnight.
+  it('is right on both clock-change Sundays', () => {
+    // BST ends 01:00 UTC on 25 Oct 2026: 14:00 that afternoon is GMT.
+    expect(toDueAt('2026-10-25', '14:00')).toBe('2026-10-25T14:00:00.000Z')
+    expect(toDueAt('2026-10-25', '00:30')).toBe('2026-10-24T23:30:00.000Z') // still BST
+    // BST starts 01:00 UTC on 28 Mar 2027: 14:00 that afternoon is BST.
+    expect(toDueAt('2027-03-28', '14:00')).toBe('2027-03-28T13:00:00.000Z')
+    expect(toDueAt('2027-03-28', '00:30')).toBe('2027-03-28T00:30:00.000Z') // still GMT
+    // Ordinary days either side.
+    expect(toDueAt('2026-07-01', '09:00')).toBe('2026-07-01T08:00:00.000Z')
+    expect(toDueAt('2026-12-01', '09:00')).toBe('2026-12-01T09:00:00.000Z')
+  })
 })
 
 describe('title tokens and fingerprints', () => {
-  it('drops dates, times, ordinals and stop-words', () => {
+  it('drops whole date / time phrases and stop-words', () => {
     expect([...titleTokens('Summative Essay due 16th February 2027 by 2pm (CMP002/ESFN41)')].sort()).toEqual([
       'cmp002',
       'esfn41',
@@ -108,6 +209,17 @@ describe('title tokens and fingerprints', () => {
       'summative',
     ])
     expect([...titleTokens('Formative Discussion Posts Due 11 December')].sort()).toEqual(['discussion', 'formative', 'post'])
+  })
+
+  // Finding 3: numbers, roman numerals and years are what tell items apart.
+  it('keeps numbers, years and roman numerals, as digits', () => {
+    expect([...titleTokens('Read Smith (2020) for tutorial')].sort()).toEqual(['2020', 'read', 'smith', 'tutorial'])
+    expect([...titleTokens('Read chapter 3 for tutorial')].sort()).toEqual(['3', 'chapter', 'read', 'tutorial'])
+    expect([...titleTokens('Formative Discussion Post II')].sort()).toEqual(['2', 'discussion', 'formative', 'post'])
+    expect(titleTokens('Formative Discussion Post I')).toEqual(titleTokens('Formative discussion post 1'))
+    expect(keyDateFingerprint({ course_id: C, due_on: '2026-12-11', title: 'Read chapter 3 for tutorial' })).not.toBe(
+      keyDateFingerprint({ course_id: C, due_on: '2026-12-11', title: 'Read chapter 4 for tutorial' })
+    )
   })
 
   it('gives a reworded title on the same day the same fingerprint', () => {
@@ -125,6 +237,15 @@ describe('title tokens and fingerprints', () => {
     expect(titleSimilarity('Submit formative essay', 'Formative essay')).toBeCloseTo(1)
     expect(titleSimilarity('Formative essay', 'Summative essay')).toBeLessThan(0.5)
     expect(titleSimilarity('', 'anything')).toBe(0)
+  })
+
+  it('tells differing numbers and names apart', () => {
+    expect(numbersDiffer('Read chapter 3', 'Read chapter 4')).toBe(true)
+    expect(numbersDiffer('Post I', 'Post 1')).toBe(false)
+    expect(properNounsDiffer('Read Smith for tutorial', 'Read Jones for tutorial')).toBe(true)
+    expect(properNounsDiffer('Submit formative essay', 'Formative essay')).toBe(false)
+    expect(sameTitle('Submit formative discussion posts', 'Formative discussion post')).toBe(true)
+    expect(sameTitle('Submit formative essay', 'Submit formative essay plan')).toBe(false)
   })
 })
 
@@ -211,11 +332,46 @@ describe('mergeKeyDates', () => {
     const reworded = found('Formative essay submission (Turnitin)', '2026-11-24', { quote: 'other quote' })
     expect(reworded.fingerprint).not.toBe(f.fingerprint)
     expect(mergeKeyDates([dismissed], [reworded], ANN)).toEqual({ insert: [], update: [], remove: [] })
-    // Dismissed from another source counts too.
+    // Dismissed from another source counts when it's the same quote or fingerprint.
     const otherSource = existing('k2', f, { content_id: 'ct-1', status: 'dismissed' })
-    expect(mergeKeyDates([otherSource], [reworded], ANN).insert).toEqual([])
+    expect(mergeKeyDates([otherSource], [{ ...reworded, quote: f.quote }], ANN).insert).toEqual([])
+    expect(mergeKeyDates([otherSource], [found('Formative essay due', '2026-11-24', { quote: 'x' })], ANN).insert).toEqual([])
     // And a dismissed row that isn't found again stays (it's the memory).
     expect(mergeKeyDates([dismissed], [], ANN).remove).toEqual([])
+  })
+
+  // Finding 4: a reworded title from the same source is still the dismissed item.
+  it('keeps a dismissed date dismissed when its own source is re-read with a reworded title', () => {
+    const quote = 'The formative essay is due 24 November 2026 by 2pm'
+    const dismissed = existing('k1', found('Submit formative essay', '2026-11-24', { quote }), { content_id: 'ct-1', status: 'dismissed' })
+    const ct = { kind: 'content' as const, id: 'ct-1' }
+    // Same quote, title with nothing in common but "formative".
+    const reworded = found('Hand in formative coursework', '2026-11-24', { quote })
+    expect(titleSimilarity(reworded.title, dismissed.title)).toBeLessThan(0.5)
+    expect(mergeKeyDates([dismissed], [reworded], ct)).toEqual({ insert: [], update: [], remove: [] })
+    // The quote now only contains (or is contained by) the old one.
+    const longer = found('Hand in formative coursework', '2026-11-24', { quote: `Reminder: ${quote} via Turnitin` })
+    expect(mergeKeyDates([dismissed], [longer], ct)).toEqual({ insert: [], update: [], remove: [] })
+    // Different quote, similar title, no differing number.
+    const similar = found('Submit formative essay (Turnitin)', '2026-11-24', { quote: 'Essays are due on 24 November' })
+    expect(mergeKeyDates([dismissed], [similar], ct)).toEqual({ insert: [], update: [], remove: [] })
+    // A suggested row is updated in place instead.
+    const suggested = { ...dismissed, status: 'suggested' as const }
+    const m = mergeKeyDates([suggested], [reworded], ct)
+    expect(m.insert).toEqual([])
+    expect(m.remove).toEqual([])
+    expect(m.update).toEqual([{ id: 'k1', patch: expect.objectContaining({ title: 'Hand in formative coursework' }) }])
+    // A dismissed row on another day doesn't block.
+    expect(mergeKeyDates([dismissed], [{ ...reworded, due_on: '2026-11-25' }], ct).insert).toHaveLength(1)
+  })
+
+  it('blocks a cross-source insert only on the same quote or fingerprint', () => {
+    const f = found('Submit formative essay', '2026-11-24', { quote: 'Formative essay due 24 November' })
+    const confirmed = existing('k1', f, { content_id: 'ct-1', status: 'confirmed' })
+    expect(mergeKeyDates([confirmed], [found('Hand in coursework', '2026-11-24', { quote: f.quote })], ANN).insert).toEqual([])
+    expect(mergeKeyDates([confirmed], [found('Formative essay due', '2026-11-24', { quote: 'other' })], ANN).insert).toEqual([])
+    // A different item on the same day from another source is not blocked.
+    expect(mergeKeyDates([confirmed], [found('Bring fieldwork notebook', '2026-11-24')], ANN).insert).toHaveLength(1)
   })
 
   it('never changes or removes a confirmed row, even one whose date I edited', () => {
@@ -251,17 +407,54 @@ describe('mergeKeyDates', () => {
   })
 
   it('collapses the same deadline from an announcement and an item title into one', () => {
-    const fromAnnouncement = existing('k1', found('Post formative discussion contribution', '2026-11-13'), { announcement_id: 'ann-1' })
-    const fromTitle = found('Formative discussion post', '2026-11-13', { quote: 'Formative Discussion Post I, due 13 November' })
+    const fromAnnouncement = existing('k1', found('Submit formative discussion post', '2026-11-13'), { announcement_id: 'ann-1' })
+    const fromTitle = found('Formative discussion posts', '2026-11-13', { quote: 'Formative Discussion Post I, due 13 November' })
     const m = mergeKeyDates([fromAnnouncement], [fromTitle], { kind: 'content', id: 'ct-1' })
     expect(m).toEqual({ insert: [], update: [], remove: [] })
     // Within one pass too.
     const twice = mergeKeyDates([], [found('Formative discussion post', '2026-11-13'), found('Submit formative discussion posts', '2026-11-13')], ANN)
     expect(twice.insert).toHaveLength(1)
+    // Unsure (only 0.75 similar): kept apart, a duplicate rather than a loss.
+    const looser = existing('k2', found('Post formative discussion contribution', '2026-11-13'), { announcement_id: 'ann-1' })
+    expect(mergeKeyDates([looser], [fromTitle], { kind: 'content', id: 'ct-1' }).insert).toHaveLength(1)
   })
 
   it('keeps different deadlines on the same day apart', () => {
     const m = mergeKeyDates([], [found('Formative essay', '2026-11-24'), found('Summative essay', '2026-11-24')], ANN)
     expect(m.insert).toHaveLength(2)
+  })
+
+  // Finding 3: each confirmed pair used to collapse into one row.
+  it.each([
+    ['Read Smith (2020) for tutorial', 'Read Jones (2019) for tutorial', 'tutorial'],
+    ['GIS practical test', 'Statistics practical test', 'test'],
+    ['Read chapter 3 for tutorial', 'Read chapter 4 for tutorial', 'tutorial'],
+    ['Submit formative essay', 'Submit formative essay plan', 'formative'],
+    ['Formative Discussion Post I', 'Formative Discussion Post II', 'formative'],
+  ] as const)('keeps "%s" and "%s" on the same day as two rows', (a, b, category) => {
+    const day = '2026-11-24'
+    const fa = found(a, day, { category })
+    const fb = found(b, day, { category })
+    // Within one pass.
+    expect(mergeKeyDates([], [fa, fb], ANN).insert).toHaveLength(2)
+    // Against a row from the same source, any status.
+    for (const status of ['suggested', 'confirmed', 'dismissed'] as const) {
+      const m = mergeKeyDates([existing('k1', fa, { announcement_id: 'ann-1', status })], [fa, fb], ANN)
+      expect(m.insert.map((i) => i.title)).toEqual([b])
+      expect(m.remove).toEqual([])
+    }
+    // Against a row from another source.
+    expect(mergeKeyDates([existing('k1', fa, { content_id: 'ct-1' })], [fb], ANN).insert).toHaveLength(1)
+  })
+
+  it('never removes or moves rows that `keep` protects', () => {
+    const doc = { kind: 'document' as const, id: 'doc-1' }
+    const early = existing('k1', found('Submit fieldwork report', '2026-11-20'), { document_id: 'doc-1' })
+    expect(mergeKeyDates([early], [], doc, { keep: () => true }).remove).toEqual([])
+    // Not moved onto a similar item found on another day either.
+    const m = mergeKeyDates([early], [found('Submit fieldwork report draft', '2027-01-20')], doc, { keep: (r) => r.id === 'k1' })
+    expect(m.update).toEqual([])
+    expect(m.insert).toHaveLength(1)
+    expect(mergeKeyDates([early], [], doc).remove).toEqual(['k1'])
   })
 })

@@ -8,11 +8,26 @@
 import { parseTitleDate } from '@/lib/blackboard/dates'
 
 const WEEKDAY = '(?:mon|tues?|wed(?:nes)?|thu(?:rs?)?|fri|sat(?:ur)?|sun)(?:day)?'
+const WEEKDAY_FULL = '(?:mon|tues|wednes|thurs|fri|satur|sun)day'
 const SESSION_WORD = '(?:tutorials?|seminars?|workshops?|practicals?|tests?|exams?|quiz(?:zes)?)'
+// What a task can be "for": a session, or the next class / week.
+const SESSION_NOUN = '(?:lectures?|tutorials?|seminars?|workshops?|practicals?|sessions?|class(?:es)?|labs?)'
+const SPELLED_WEEK =
+  '(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)'
+const WEEK_NUMBER = `weeks?\\s*(?:\\d{1,2}|${SPELLED_WEEK})`
 
 const SIGNALS: RegExp[] = [
-  // "next Friday", "by Monday", "on Tuesday", "this Thursday's", "before Wed"
-  new RegExp(`\\b(?:next|this|by|on|until|before|from|every)\\s+${WEEKDAY}\\b`, 'i'),
+  // "next Friday", "by Monday", "on Tuesday", "for Thursday", "ahead of Wed"
+  new RegExp(`\\b(?:next|this|by|on|until|before|from|every|for|to|ahead\\s+of)\\s+${WEEKDAY}\\b`, 'i'),
+  // "Tuesday's seminar", "Thursday’s practical"
+  new RegExp(`\\b${WEEKDAY_FULL}(?:'|’)s\\b`, 'i'),
+  // "the next workshop", "next session", "next class"
+  new RegExp(`\\bnext\\s+(?:${SESSION_NOUN}|week)\\b`, 'i'),
+  // "before the next workshop", "ahead of the seminar", "in preparation for your tutorial"
+  new RegExp(
+    `\\b(?:before|ahead\\s+of|in\\s+advance\\s+of|in\\s+preparation\\s+for)\\s+(?:the\\s+|your\\s+|our\\s+|this\\s+|next\\s+|each\\s+)?${SESSION_NOUN}\\b`,
+    'i'
+  ),
   /\b(?:due|deadlines?|overdue)\b/i,
   /\bsubmi(?:t|ts|tted|tting|ssions?)\b/i,
   /\bhand(?:ed|ing)?[\s-]+in\b/i,
@@ -20,9 +35,9 @@ const SIGNALS: RegExp[] = [
   /\bby\s+(?:\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)\b|\d{1,2}[:.]\d{2}\b|noon\b|midday\b|midnight\b)/i,
   /\b(?:tomorrow|tonight)\b/i,
   /\b(?:next|this|following|coming)\s+week\b/i,
-  // "Week 6 tutorials", "tutorial in week 3"
-  new RegExp(`\\bweeks?\\s*\\d{1,2}\\b[^\\n]{0,40}?\\b${SESSION_WORD}`, 'i'),
-  new RegExp(`\\b${SESSION_WORD}\\b[^\\n]{0,40}?\\bweeks?\\s*\\d{1,2}\\b`, 'i'),
+  // "Week 6 tutorials", "tutorial in week 3", "tutorial in week fourteen"
+  new RegExp(`\\b${WEEK_NUMBER}\\b[^\\n]{0,40}?\\b${SESSION_WORD}`, 'i'),
+  new RegExp(`\\b${SESSION_WORD}\\b[^\\n]{0,40}?\\b${WEEK_NUMBER}\\b`, 'i'),
   /\b(?:tests?|exams?|examinations?|quiz(?:zes)?|mid-?terms?)\b/i,
   /\b(?:formative|summative)\b/i,
 ]

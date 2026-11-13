@@ -232,6 +232,7 @@ Questions:
 
 - After a successful upload the sync response lists `wanted` content items (`lib/blackboard/documents.ts`): items whose title, folder path or file name looks like a handbook or assessment brief, pdf and docx only, at most 10 per course. Anything I marked "read with AI" is wanted too.
 - The extension lists each item's attachments (GET), skips files whose version the dashboard already has, downloads at most 30 per sync (15 MB cap), extracts text in the service worker and posts only the text to `/api/blackboard/document`. Needs site access to `*.blackboard.com`. Files it could not read are remembered by id + version and not fetched again.
+- An Ultra Document has no attachment list (Blackboard answers 400). Its files are embedded in the body, and the extension reads them from there with the body's short-lived signed URL, used for the download only and never stored. On such a page only the handbook-looking pdf / docx files are read, unless none look like one or the item is marked "read with AI". Every handbook on the five 2026/27 modules is in an Ultra Document.
 - Never uploaded or stored: file bytes. Never downloaded: pptx.
 - Untested in a real browser: the redirect download and PDF extraction in the service worker.
 

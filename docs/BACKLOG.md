@@ -19,7 +19,9 @@ Moved out of `CLAUDE.md` on 2026-10-01.
   the handbook download (now from an Ultra Document's body, 13 Nov 2026)
   and PDF text extraction in the extension's service worker are untested
   in a real browser.
-- **Tooling**: pre-existing eslint errors
+- **Tooling**: the GitHub repo's homepage link points at a deleted Vercel
+  address (`personal-dashboard-v1-beta.vercel.app`, 404);
+  pre-existing eslint errors
   (`react-hooks/set-state-in-effect`) in about 36 older component files.
 - **Money**: shrink "Add account", "Hidden accounts" and "Import PDF
   statement" (too dominant); per-category spending breakdown with

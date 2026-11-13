@@ -350,10 +350,9 @@ describe('matchSession: GEOG1061 (teaching weeks with dates)', () => {
     expect(m.readings[0].href).toBe('https://rl.talis.com/3/durham/lists/ABC.html')
   })
 
-  it('a second session that week gets the same items by week', () => {
+  it('a second session that week gets nothing dated to the first (dated items never spread by week)', () => {
     const m = matchSession(session({ moduleCode: 'GEOG1061', start: '2026-10-14T13:00:00Z' }), ctx({ contents: rows }))
-    expect(titles(m.slides)).toEqual(['Lecture 2 slides'])
-    expect(m.slides[0].confidence).toBe('week')
+    expect(all(m)).toEqual([])
   })
 
   it('nothing from week 2 shows on week 3', () => {
@@ -361,9 +360,13 @@ describe('matchSession: GEOG1061 (teaching weeks with dates)', () => {
     expect(all(m)).toEqual([])
   })
 
-  it('folders themselves are never listed', () => {
-    const m = matchSession(session({ moduleCode: 'GEOG1061', start: '2026-10-05T09:00:00Z' }), ctx({ contents: rows }))
-    expect(all(m)).toEqual([])
+  it('a folder with children is never listed; an empty one stands for itself', () => {
+    const m = matchSession(session({ moduleCode: 'GEOG1061', start: '2026-10-12T09:00:00Z' }), ctx({ contents: rows }))
+    expect(ids(m)).not.toContain('f2')
+    const first = matchSession(session({ moduleCode: 'GEOG1061', start: '2026-10-05T09:00:00Z' }), ctx({ contents: rows }))
+    expect(first.other).toEqual([
+      expect.objectContaining({ content: week1, role: 'other', confidence: 'date', href: week1.url, label: week1.title }),
+    ])
   })
 })
 
@@ -488,10 +491,10 @@ describe('matchSession: roles, links and exclusions', () => {
     expect(titles(all(m))).not.toContain('Room change notice')
   })
 
-  it('ignores removed rows', () => {
+  it('ignores removed rows (a folder whose only child was removed is empty, so it stands for itself)', () => {
     const removed = { ...handout, removed_at: '2026-11-11T00:00:00Z' }
     const r = matchSession(session({ start: '2026-10-05T10:00:00Z' }), ctx({ contents: [week, removed] }))
-    expect(all(r)).toEqual([])
+    expect(titles(all(r))).toEqual(['Week 12: Introduction Lecture'])
   })
 
   it('labels an Ultra document body by its parent title', () => {
@@ -1015,5 +1018,311 @@ describe('calibrateWeekOffset: labels on both scales', () => {
     expect(calibrateWeekOffset(rows([1, 11]), cal(term))).toBe(11)
     expect(calibrateWeekOffset(rows([12, 20]), cal(term))).toBe(0)
     expect(calibrateWeekOffset([...rows([14, 14]), { title: 'Week 2 (12 October)', week_label: 2 }], cal(term))).toBe(11)
+  })
+})
+
+// ------------------------------------------- matcher rules (13 Nov 2026) --
+// Each rule below is built from the user's real Blackboard titles.
+
+describe('rule 1: an item that resolves to a session matches only that session', () => {
+  // GEOG1222: three FM lectures and two dated recordings in one Weeks 13-15 folder.
+  const lectures = timetable('GEOG1222', 'Introduction to Geographical Research', 'Lecture', ['05/10', '12/10', '19/10', '26/10', '02/11'])
+  const week12 = content({
+    id: 'w12',
+    kind: 'folder',
+    title: 'Week 12: Introduction (first week of classes): What is geography and how is it done? (Warwick Murray and Isabella Bovolo)',
+    week_label: 12,
+  })
+  const l1 = child(week12, { id: 'l1', kind: 'folder', title: 'Lecture 1 - Mon 5th Oct 2026, 10am, ER201' })
+  const l1doc = child(l1, { id: 'l1doc', kind: 'document', title: 'ultraDocumentBody' })
+  const fm = content({ id: 'fm', kind: 'folder', title: 'Weeks 13-15: Geographic Research (Francis Masse)', week_label: 13 })
+  const fm1 = child(fm, { id: 'fm1', title: 'FM Lecture 1: What is Research?.pptx' })
+  const fm2 = child(fm, { id: 'fm2', title: 'FM Lecture 2: Designing Research.pptx' })
+  const fm3 = child(fm, { id: 'fm3', title: 'FM Lecture 3: Ethics & Power in Research.pptx' })
+  const rec12 = child(fm, { id: 'rec12', kind: 'tool', title: '12/10/2026 : GEOG1222/LECT/002, GEOG1232/LECT/002' })
+  const rec19 = child(fm, { id: 'rec19', kind: 'tool', title: '19/10/2026 : GEOG1222/LECT/002, GEOG1232/LECT/002' })
+  const video = child(fm, { id: 'video', kind: 'folder', title: 'Video Recording' })
+  const videoDoc = child(video, { id: 'videoDoc', kind: 'document', title: 'ultraDocumentBody' })
+  const rows = [week12, l1, l1doc, fm, fm1, fm2, fm3, rec12, rec19, video, videoDoc]
+  const at = (day: string) => matchIn(lectures, rows, on(lectures, day))
+
+  it('each FM lecture and recording lands on one lecture; only the undated Video Recording spreads over the range', () => {
+    expect(ids(at('05/10'))).toEqual(['l1doc'])
+    expect(ids(at('12/10')).sort()).toEqual(['fm1', 'rec12', 'videoDoc'])
+    expect(ids(at('19/10')).sort()).toEqual(['fm2', 'rec19', 'videoDoc'])
+    expect(ids(at('26/10')).sort()).toEqual(['fm3', 'videoDoc'])
+    expect(ids(at('02/11'))).toEqual([])
+  })
+
+  it('confidences: the recordings by date, the FM decks by number (a best guess), the video by week', () => {
+    const m = at('12/10')
+    const by = Object.fromEntries(all(m).map((i) => [i.content.id, [i.confidence, i.inferred ?? false]]))
+    expect(by).toEqual({ rec12: ['date', false], fm1: ['ordinal', true], videoDoc: ['week', false] })
+  })
+
+  it('"FM" names its own series, so it does not share numbers with "Lecture 1 - Mon 5th Oct"', () => {
+    const index = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: rows, ai: new Map(), overrides: [], weekOneStart: WEEK_ONE, sessions: lectures })
+    expect(index.series.get('lecture|lecture')).toEqual({ offset: 0, source: 'dated' })
+    expect(index.series.get('lecture|fm lecture')).toEqual({ offset: 1, source: 'cumulative' })
+    expect(index.rows.find((r) => r.content.id === 'rec12')).toMatchObject({ pinned: 'date', byWeek: false })
+    expect(index.rows.find((r) => r.content.id === 'fm1')).toMatchObject({ pinned: 'ordinal', byWeek: false })
+    expect(index.rows.find((r) => r.content.id === 'videoDoc')).toMatchObject({ byWeek: true })
+    expect(index.rows.find((r) => r.content.id === 'videoDoc')?.pinned).toBeUndefined()
+  })
+
+  it('a date that names a session wins over a number that points elsewhere', () => {
+    // "Lecture 3" dated 5 Oct (the 1st lecture): 5 Oct only, never the 3rd.
+    const odd = content({ id: 'odd', title: 'Lecture 3 - Mon 5th Oct 2026', links: [slides('L3.pptx')] })
+    expect(ids(matchIn(lectures, [odd], on(lectures, '05/10')))).toEqual(['odd'])
+    expect(ids(matchIn(lectures, [odd], on(lectures, '19/10')))).toEqual([])
+  })
+})
+
+describe('rule 2: coursework never matches a session by number or week', () => {
+  it('GEOG1061: the Summative Essay stays off the tutorial; Tutorial 1 activities (nearer, names a session) stay on it', () => {
+    const tutorials = timetable('GEOG1061', 'Planet Under Pressure', 'Tutorial', ['13/11', '27/11'])
+    const area = content({
+      id: 'area',
+      kind: 'lesson',
+      title: 'Assignments and Feedback (including info about Tutorials 1 & 2 and Summative Essay)',
+    })
+    const essay = child(area, { id: 'essay', kind: 'tool', title: 'Summative Essay due 16th February 2027 by 2pm (CMP002/ESFN41)' })
+    const t1 = child(area, { id: 't1', kind: 'folder', title: 'Tutorial 1 activities' })
+    const t1doc = child(t1, { id: 't1doc', kind: 'document', title: 'ultraDocumentBody' })
+    const reading = child(area, { id: 'rd', kind: 'folder', title: 'Reading for Term 1 Tutorials' })
+    const readingDoc = child(reading, { id: 'rddoc', kind: 'document', title: 'ultraDocumentBody' })
+    const rows = [area, essay, t1, t1doc, reading, readingDoc]
+    const aiRows = new Map([
+      [essay.id, ai(essay.id, { role: 'task', explicit_date: '2027-02-16' })],
+      [t1doc.id, ai(t1doc.id, { role: 'task', session_type: 'tutorial' })],
+      [readingDoc.id, ai(readingDoc.id, { role: 'reading', session_type: 'tutorial' })],
+    ])
+    const first = matchIn(tutorials, rows, on(tutorials, '13/11', 'Tutorial'), { ai: aiRows })
+    expect(ids(first)).toEqual(['t1doc'])
+    expect(first.other[0].confidence).toBe('ordinal')
+    expect(ids(matchIn(tutorials, rows, on(tutorials, '27/11', 'Tutorial'), { ai: aiRows }))).toEqual([])
+    const index = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: rows, ai: aiRows, overrides: [], weekOneStart: WEEK_ONE, sessions: tutorials })
+    expect(index.rows.find((r) => r.content.id === 'essay')?.coursework).toBe(true)
+    expect(index.rows.find((r) => r.content.id === 't1doc')?.coursework).toBe(false)
+    expect(index.rows.find((r) => r.content.id === 'rddoc')?.coursework).toBe(false)
+  })
+
+  it('GEOG1081: "Formative Essay due 24th November 2026 by 2pm" is not on the 23 Nov lecture', () => {
+    const lectures = timetable('GEOG1081', 'Physical Geography', 'Lecture', ['16/11', '18/11', '23/11', '25/11'])
+    const area = content({ id: 'af', kind: 'lesson', title: 'Assignments and Feedback' })
+    const essay = child(area, { id: 'fe', kind: 'tool', title: 'Formative Essay due 24th November 2026 by 2pm' })
+    const aiRows = new Map([[essay.id, ai(essay.id, { role: 'task', explicit_date: '2026-11-24' })]])
+    for (const s of lectures) expect(ids(matchIn(lectures, [area, essay], s, { ai: aiRows }))).toEqual([])
+  })
+
+  it('GEOG1241: formative posts, instructions and submission points stay off the 9 Nov lecture', () => {
+    const lectures = timetable('GEOG1241', 'Geographies of Crisis', 'Lecture', ['02/11', '09/11', '16/11'])
+    const monday = content({ id: 'mon', kind: 'lesson', title: 'Monday, 9 November: Borders and Migration (Prof Lauren Martin)' })
+    const prep = child(monday, { id: 'prep', kind: 'folder', title: 'Preparation Task for Monday' })
+    const prepDoc = child(prep, { id: 'prepDoc', kind: 'document', title: 'ultraDocumentBody' })
+    const post = content({ id: 'post', kind: 'lesson', title: 'Formative Discussion Post I, due 13 November' })
+    const testing = child(post, { id: 'testing', kind: 'folder', title: 'Formative 1: Testing a Response to the Crisis of Democracy' })
+    const testingDoc = child(testing, { id: 'testingDoc', kind: 'document', title: 'ultraDocumentBody' })
+    const point = child(post, { id: 'point', kind: 'other', title: 'Formative Discussion Post I - Submission Point' })
+    const posts10 = content({ id: 'p10', kind: 'lesson', title: 'Formative Discussion Posts Due 10 November' })
+    const instr = child(posts10, { id: 'instr', kind: 'folder', title: 'FORMATIVE 1 INSTRUCTIONS' })
+    const instrDoc = child(instr, { id: 'instrDoc', kind: 'document', title: 'ultraDocumentBody' })
+    const submit = content({ id: 'submit', kind: 'other', title: 'Pollution Crisis Formative Discussion--Submit Group Responses Here' })
+    const rows = [monday, prep, prepDoc, post, testing, testingDoc, point, posts10, instr, instrDoc, submit]
+    const aiRows = new Map(
+      [testingDoc, point, instrDoc].map((r) => [r.id, ai(r.id, { role: 'task', explicit_date: r === instrDoc ? '2026-11-10' : '2026-11-13' })])
+    )
+    expect(ids(matchIn(lectures, rows, on(lectures, '09/11'), { ai: aiRows }))).toEqual(['prepDoc'])
+    for (const s of lectures) {
+      for (const id of ['testingDoc', 'point', 'instrDoc', 'submit']) expect(ids(matchIn(lectures, rows, s, { ai: aiRows }))).not.toContain(id)
+    }
+  })
+
+  it('an assignment or discussion still shows on the day its unit names, never by AI date or week', () => {
+    const workshops = timetable('GEOG1241', 'Geographies of Crisis', 'Workshop', ['02/11', '30/11'])
+    const unit = content({ id: 'ws', kind: 'lesson', title: '2-6 November: Workshop I - Crisis of Democracy' })
+    const task = child(unit, { id: 'task', kind: 'assignment', title: 'Workshop I group task' })
+    const loose = content({ id: 'loose', kind: 'discussion', title: 'Workshop discussion', week_label: 21 })
+    const aiRows = new Map([[loose.id, ai(loose.id, { role: 'task', explicit_date: '2026-11-30' })]])
+    expect(ids(matchIn(workshops, [unit, task, loose], on(workshops, '02/11', 'Workshop'), { ai: aiRows }))).toEqual(['task'])
+    expect(ids(matchIn(workshops, [unit, task, loose], on(workshops, '30/11', 'Workshop'), { ai: aiRows }))).toEqual([])
+  })
+})
+
+describe('rule 3: a series number only comes from a unit heading', () => {
+  const t = { yearStart: 2026, weekOffset: 0 }
+  const target = (title: string, path: string[] = []) => resolveContentTarget({ title, path, week_label: null }, [], null, t)
+
+  it('reads headings: the session word and number open the title, after at most two qualifiers and a numbering prefix', () => {
+    expect(target('Lecture 11: Introducing Landscape')).toMatchObject({ ordinal: 11, ordinalSeries: 'lecture' })
+    expect(target('Climate Lecture 3: Water in the Atmosphere')).toMatchObject({ ordinal: 3, ordinalSeries: 'climate lecture' })
+    expect(target('Tutorial 1: Theory Goes Wild')).toMatchObject({ ordinal: 1, ordinalType: 'tutorial' })
+    expect(target('Tutorial Three: Cinematic Landscapes')).toMatchObject({ ordinal: 3, ordinalType: 'tutorial' })
+    expect(target('Workshop I - Crisis of Democracy')).toMatchObject({ ordinal: 1, ordinalType: 'workshop' })
+    expect(target('FM Lecture 2: Designing Research.pptx')).toMatchObject({ ordinal: 2, ordinalSeries: 'fm lecture' })
+    expect(target('Border Crises Lecture 1 Slides-Updated 9 Nov. 2026')).toMatchObject({ ordinal: 1, ordinalSeries: 'crises lecture' })
+    expect(target('1. Lecture 4: Rivers')).toMatchObject({ ordinal: 4, ordinalSeries: 'lecture' })
+    expect(target('L3 slides')).toMatchObject({ ordinal: 3, ordinalType: 'lecture' })
+  })
+
+  it('a file name with no session word takes the number of the unit around it', () => {
+    expect(target('HG_2_Nature_SLIDES.pptx', ['Block 2: Nature (Dr Ivan Marković)', 'Lecture 2: Nature'])).toMatchObject({
+      ordinal: 2,
+      ordinalType: 'lecture',
+      via: 'ancestor',
+    })
+  })
+
+  it('never from a plural, brackets or mid-sentence text', () => {
+    expect(target('Assignments and Feedback (including info about Tutorials 1 & 2 and Summative Essay)').ordinal).toBeUndefined()
+    expect(target('Reading list (Tutorial 2)').ordinal).toBeUndefined()
+    expect(target('Week 16: Quantitative Methods lecture and Practical 1 (Nick Cox)').ordinal).toBeUndefined()
+    expect(target('Notes we discussed after the lecture 3 weeks ago').ordinal).toBeUndefined()
+    expect(target('Lectures 1-3 readings').ordinal).toBeUndefined()
+    expect(
+      target('ultraDocumentBody', ['Assignments and Feedback (including info about Tutorials 1 & 2 and Summative Essay)', 'Reading for Term 1 Tutorials']).ordinal
+    ).toBeUndefined()
+  })
+
+  it('GEOG1061 "Session 6_…_Student_2627.pptx" lands on the 6th lecture by its own AI lecture_ordinal, and nowhere else', () => {
+    const lectures = timetable('GEOG1061', 'Planet Under Pressure', 'Lecture', ['05/10', '12/10', '19/10', '26/10', '02/11', '09/11', '16/11'])
+    const block2 = content({ id: 'b2', kind: 'lesson', title: 'Block 2 - Biodiversity Under Pressure' })
+    const week6 = child(block2, { id: 'w6', kind: 'folder', title: 'Week 6 (Nov 10) - Biodiversity: Threats & Challenges' })
+    const s6 = child(week6, { id: 's6', title: 'Session 6_Biodiversity Under Pressure_Student_2627.pptx' })
+    const rows = [block2, week6, s6]
+    const aiRows = new Map([[s6.id, ai(s6.id, { role: 'slides', session_type: 'lecture', lecture_ordinal: 6 })]])
+    const m = matchIn(lectures, rows, on(lectures, '09/11'), { ai: aiRows })
+    expect(m.slides).toEqual([expect.objectContaining({ content: s6, confidence: 'ordinal' })])
+    for (const s of lectures.filter((l) => l !== on(lectures, '09/11'))) {
+      expect(ids(matchIn(lectures, rows, s, { ai: aiRows }))).toEqual([])
+    }
+  })
+})
+
+describe('rule 4: an AI admin guess never hides a structural match', () => {
+  it('GEOG1071: the page inside "Lecture 11: Introducing Landscape" shows on the 11th lecture under Other', () => {
+    const lectures = timetable('GEOG1071', 'Human Geography', 'Lecture', [
+      '06/10', '13/10', '15/10', '20/10', '22/10', '27/10', '29/10', '03/11', '05/11', '10/11', '12/11', '17/11',
+    ])
+    const block = content({ id: 'land', kind: 'lesson', title: 'Block 2: Landscape (Dr Marijn Nieuwenhuis)' })
+    const l11 = child(block, { id: 'l11', kind: 'folder', title: 'Lecture 11: Introducing Landscape' })
+    const l11inner = child(l11, { id: 'l11in', kind: 'folder', title: 'Lecture 11: Introducing Landscape' })
+    const l11doc = child(l11inner, { id: 'l11doc', kind: 'document', title: 'ultraDocumentBody' })
+    const qa = child(block, { id: 'qa', kind: 'other', title: 'Landscape Q&A' })
+    const rows = [block, l11, l11inner, l11doc, qa]
+    const aiRows = new Map(
+      rows.map((r) => [r.id, ai(r.id, { role: 'admin', session_type: r.id === 'land' || r.id === 'qa' ? null : 'lecture', lecture_ordinal: r.id.startsWith('l11') ? 11 : null })])
+    )
+    const m = matchIn(lectures, rows, on(lectures, '12/11'), { ai: aiRows })
+    expect(m.other).toEqual([expect.objectContaining({ content: l11doc, role: 'admin', confidence: 'ordinal', label: 'Lecture 11: Introducing Landscape' })])
+    expect(all(m)).toHaveLength(1)
+  })
+
+  it('GEOG1241: "Monday 19 October: Understanding the Crisis of Democracy" (body classed admin) shows on 19 Oct', () => {
+    const lectures = timetable('GEOG1241', 'Geographies of Crisis', 'Lecture', ['12/10', '19/10', '26/10'])
+    const unit = content({ id: 'u19', kind: 'folder', title: 'Monday 19 October: Understanding the Crisis of Democracy (Prof. Noam Leshem)' })
+    const body = child(unit, { id: 'u19doc', kind: 'document', title: 'ultraDocumentBody' })
+    const aiRows = new Map([
+      [unit.id, ai(unit.id, { role: 'admin', explicit_date: '2026-10-19' })],
+      [body.id, ai(body.id, { role: 'admin' })],
+    ])
+    const m = matchIn(lectures, [unit, body], on(lectures, '19/10'), { ai: aiRows })
+    expect(m.other).toEqual([expect.objectContaining({ content: body, confidence: 'date', label: unit.title })])
+    expect(ids(matchIn(lectures, [unit, body], on(lectures, '26/10'), { ai: aiRows }))).toEqual([])
+  })
+
+  it('admin still never matches by week, and Q&A / discussion boards / help / staff pages never match at all', () => {
+    const lectures = timetable('GEOG1071', 'Human Geography', 'Lecture', ['12/10', '13/10'])
+    const unit = content({ id: 'n2', kind: 'folder', title: 'Lecture 2: Nature' })
+    const notice = content({ id: 'notice', kind: 'document', title: 'Room change notice', week_label: 13 })
+    const qa = child(unit, { id: 'nqa', kind: 'other', title: 'Nature Block Q&A' })
+    const board = child(unit, { id: 'board', kind: 'other', title: 'Discussion Board: Assessment Queries' })
+    const help = child(unit, { id: 'help', kind: 'folder', title: 'Help (Default information)' })
+    const helpDoc = child(help, { id: 'helpDoc', kind: 'document', title: 'ultraDocumentBody' })
+    const staff = child(unit, { id: 'staff', kind: 'folder', title: 'Staff contacts' })
+    const staffDoc = child(staff, { id: 'staffDoc', kind: 'document', title: 'ultraDocumentBody' })
+    const deck = child(unit, { id: 'deck', title: 'HG_2_Nature_SLIDES.pptx', links: [slides('HG_2_Nature_SLIDES.pptx')] })
+    const rows = [unit, notice, qa, board, help, helpDoc, staff, staffDoc, deck]
+    const aiRows = new Map([[notice.id, ai(notice.id, { role: 'admin' })]])
+    expect(ids(matchIn(lectures, rows, on(lectures, '13/10'), { ai: aiRows }))).toEqual(['deck'])
+    expect(ids(matchIn(lectures, rows, on(lectures, '12/10'), { ai: aiRows }))).toEqual([])
+  })
+})
+
+describe('rule 5: an empty unit stands for itself', () => {
+  it('GEOG1071 "Lecture 12: Ways of Seeing" (no children yet) is one Other item linking to its page', () => {
+    const lectures = timetable('GEOG1071', 'Human Geography', 'Lecture', [
+      '06/10', '13/10', '15/10', '20/10', '22/10', '27/10', '29/10', '03/11', '05/11', '10/11', '12/11', '17/11',
+    ])
+    const block = content({ id: 'land', kind: 'lesson', title: 'Block 2: Landscape (Dr Marijn Nieuwenhuis)' })
+    const l12 = child(block, { id: 'l12', kind: 'folder', title: 'Lecture 12: Ways of Seeing' })
+    const aiRows = new Map([[l12.id, ai(l12.id, { role: 'admin', session_type: 'lecture', lecture_ordinal: 12 })]])
+    const m = matchIn(lectures, [block, l12], on(lectures, '17/11'), { ai: aiRows })
+    expect(m.other).toEqual([
+      expect.objectContaining({ content: l12, role: 'other', confidence: 'ordinal', href: l12.url, label: 'Lecture 12: Ways of Seeing' }),
+    ])
+    expect(m.slides).toEqual([])
+  })
+
+  it('GEOG1241 "Monday, 16 November: Understanding Border Crises" (an empty lesson the AI called slides) is Other, not slides', () => {
+    const lectures = timetable('GEOG1241', 'Geographies of Crisis', 'Lecture', ['09/11', '16/11'])
+    const unit = content({ id: 'u16', kind: 'lesson', title: 'Monday, 16 November: Understanding Border Crises (Prof Lauren Martin)' })
+    const aiRows = new Map([[unit.id, ai(unit.id, { role: 'slides', session_type: 'lecture', explicit_date: '2026-11-16' })]])
+    const m = matchIn(lectures, [unit], on(lectures, '16/11'), { ai: aiRows })
+    expect(m.slides).toEqual([])
+    expect(m.other).toEqual([expect.objectContaining({ content: unit, confidence: 'date', href: unit.url })])
+  })
+})
+
+describe('rule 6: hidden items can be restored', () => {
+  const lectures = timetable('GEOG1241', 'Geographies of Crisis', 'Lecture', ['09/11', '16/11'])
+  const unit = content({ id: 'mon', kind: 'lesson', title: 'Monday, 9 November: Borders and Migration (Prof Lauren Martin)' })
+  const deck = child(unit, { id: 'deck', title: 'Border Crises Lecture 1 Slides-Updated 9 Nov. 2026', links: [slides('BC1.pptx')] })
+  const reading = child(unit, { id: 'read', kind: 'other', title: 'Linking Democracy and Borders' })
+  const rows = [unit, deck, reading]
+  const nine = on(lectures, '09/11')
+
+  it('a hidden item moves to `hidden` with its original confidence and leaves every group', () => {
+    const overrides = [{ session_uid: nine.uid, content_id: deck.id, action: 'hide' as const }]
+    const m = matchIn(lectures, rows, nine, { overrides })
+    expect(ids(m)).toEqual(['read'])
+    expect(m.hidden).toEqual([expect.objectContaining({ content: deck, confidence: 'date', role: 'slides' })])
+  })
+
+  it('a hide for an item that would not match this session lists nothing; no hides → empty', () => {
+    const sixteen = on(lectures, '16/11')
+    const overrides = [{ session_uid: sixteen.uid, content_id: deck.id, action: 'hide' as const }]
+    expect(matchIn(lectures, rows, sixteen, { overrides }).hidden).toEqual([])
+    expect(matchIn(lectures, rows, nine).hidden).toEqual([])
+  })
+
+  it('a hidden attachment keeps its attached confidence', () => {
+    const extra = content({ id: 'extra', kind: 'document', title: 'Field course guide' })
+    const overrides = [
+      { session_uid: nine.uid, content_id: extra.id, action: 'attach' as const },
+      { session_uid: nine.uid, content_id: extra.id, action: 'hide' as const },
+    ]
+    const m = matchIn(lectures, [...rows, extra], nine, { overrides })
+    expect(ids(m)).not.toContain('extra')
+    expect(m.hidden).toEqual([expect.objectContaining({ content: extra, confidence: 'attached' })])
+  })
+})
+
+describe('a generic "Online Session" takes items dated to its day, whatever their type', () => {
+  const sessions = [
+    ...timetable('GEOG1241', 'Geographies of Crisis', 'Lecture', ['19/10', '26/10']),
+    ...timetable('GEOG1241', 'Geographies of Crisis', 'Online Session', ['20/10']),
+  ]
+  const dropIn = content({ id: 'drop', kind: 'folder', title: 'Tuesday, 20 October: Democratic Crises drop-in session with Prof. Leshem' })
+  const body = child(dropIn, { id: 'dropDoc', kind: 'document', title: 'ultraDocumentBody' })
+  const aiRows = new Map([
+    [dropIn.id, ai(dropIn.id, { role: 'admin', session_type: 'tutorial', explicit_date: '2026-10-20' })],
+    [body.id, ai(body.id, { role: 'admin' })],
+  ])
+
+  it('the drop-in page shows on the 20 Oct online session, and a tutorial-typed item never on a lecture', () => {
+    expect(ids(matchIn(sessions, [dropIn, body], on(sessions, '20/10', 'Online Session'), { ai: aiRows }))).toEqual(['dropDoc'])
+    expect(ids(matchIn(sessions, [dropIn, body], on(sessions, '19/10'), { ai: aiRows }))).toEqual([])
+    expect(ids(matchIn(sessions, [dropIn, body], on(sessions, '26/10'), { ai: aiRows }))).toEqual([])
   })
 })

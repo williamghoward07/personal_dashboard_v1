@@ -111,6 +111,9 @@ function weekLabelOf(title: string): [number, number] | null {
 const SESSION_WORD_RE =
   /\b(lectures?|tutorials?|seminars?|workshops?|practicals?|fieldwork|field\s?trips?|field\s?class(?:es)?|tests?)\b/gi
 
+/** A timetable type that names no kind of session ("Online Session" → session). */
+const GENERIC_SESSION_TYPE = 'session'
+
 /** Timetable or title session type → one comparable word ("Online Workshop" → workshop). */
 export function normaliseSessionType(type: string | null | undefined): string | null {
   if (!type) return null
@@ -143,15 +146,33 @@ const NUMBER_WORDS: Record<string, number> = {
   eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17,
   eighteen: 18, nineteen: 19, twenty: 20,
 }
+/** Singular session word + number. A plural ("Tutorials 1 & 2") counts several sessions, never one. */
 const ORDINAL_RE = new RegExp(
-  `\\b(lecture|lect|lec|tutorial|seminar|workshop|practical)s?\\s*\\.?\\s*(\\d{1,2}|[ivx]{1,5}|${Object.keys(NUMBER_WORDS).join('|')})\\b(?![.\\d])`,
+  `\\b(lecture|lect|lec|tutorial|seminar|workshop|practical)\\s*\\.?\\s*(\\d{1,2}|[ivx]{1,5}|${Object.keys(NUMBER_WORDS).join('|')})\\b(?![.\\d])`,
   'gi'
 )
-const SHORT_LECTURE_RE = /\bL\s?(\d{1,2})\b(?![.\d])/
+const SHORT_LECTURE_RE = /\bL\s?(\d{1,2})\b(?![.\d])/g
 const ROMAN: Record<string, number> = { I: 1, V: 5, X: 10 }
 
-/** One word straight before "Lecture 3" that names its series ("Climate Lecture 3"). */
-const SERIES_WORD_RE = /(\p{L}{3,})\s+$/u
+/** One word straight before "Lecture 3" that names its series ("Climate Lecture 3", "FM Lecture 2"). */
+const SERIES_WORD_RE = /(\p{L}{3,}|\p{Lu}{2})\s+$/u
+
+/** "1. ", "2.3 ", "4) ", "(5) ", "a) " before a heading. */
+const NUMBERING_PREFIX_RE = /^\s*(?:\d+(?:\.\d+)*[.):]?|\(\d+\)|[a-z][.)])\s+/i
+const LEAD_WORD_RE = /[\p{L}\p{N}]+(?:['’\-–][\p{L}\p{N}]+)*/gu
+/** Words a unit heading may carry before its session word: "Climate Lecture 3", "Border Crises Lecture 1". */
+const MAX_HEADING_QUALIFIERS = 2
+
+/**
+ * True when the text before a session word leaves it opening the title: at
+ * most a numbering prefix and two qualifier words, and not inside brackets.
+ * "Assignments and Feedback (including info about Tutorial 1)" fails.
+ */
+function opensTitle(lead: string): boolean {
+  const rest = lead.replace(NUMBERING_PREFIX_RE, '')
+  if (/[([{]/.test(rest)) return false
+  return (rest.match(LEAD_WORD_RE) ?? []).length <= MAX_HEADING_QUALIFIERS
+}
 /** Words that never name a series ("Week 3 Lecture 2", "Online Lecture 2", "Slides Lecture 4"). */
 const NOT_A_SERIES_WORD = new Set(
   (
@@ -185,19 +206,63 @@ interface TitleOrdinal {
   series: string
 }
 
-/** "Lecture 3", "L3", "Workshop I", "Tutorial Three", "Climate Lecture 1" → ordinal, type and series. */
+/**
+ * The number of a unit heading: "Lecture 3", "L3", "Workshop I", "Tutorial
+ * Three", "Climate Lecture 1", "FM Lecture 2: …" → ordinal, type and series.
+ * Only when the session word and number open the title (`opensTitle`):
+ * never from a plural, from brackets or from mid-sentence text.
+ */
 function ordinalOf(title: string): TitleOrdinal | null {
   for (const m of title.matchAll(ORDINAL_RE)) {
     const n = numberValue(m[2])
     const type = normaliseSessionType(m[1])
     if (!n || n <= 0 || !type) continue
-    const word = SERIES_WORD_RE.exec(title.slice(0, m.index))?.[1]?.toLowerCase()
+    const lead = title.slice(0, m.index)
+    if (!opensTitle(lead)) continue
+    const word = SERIES_WORD_RE.exec(lead)?.[1]?.toLowerCase()
     const series = word && !NOT_A_SERIES_WORD.has(word) ? `${word} ${type}` : type
     return { ordinal: n, type, series }
   }
-  const short = SHORT_LECTURE_RE.exec(title)
-  if (short && Number(short[1]) > 0) return { ordinal: Number(short[1]), type: 'lecture', series: 'lecture' }
+  for (const short of title.matchAll(SHORT_LECTURE_RE)) {
+    const n = Number(short[1])
+    if (n > 0 && opensTitle(title.slice(0, short.index))) return { ordinal: n, type: 'lecture', series: 'lecture' }
+  }
   return null
+}
+
+// ----------------------------------------------- coursework and admin pages --
+
+/** A unit holding assessment, not teaching: "Assignments and Feedback…", "Formative 1: …", "Summative …". */
+const ASSESSMENT_AREA_RE = /^[\W_]*(?:assignments?|assessments?|formative|summative|coursework)\b/i
+
+/**
+ * Pages that are administrative by title wherever they sit: discussion
+ * boards, Q&A / FAQs, help folders, staff and contact pages.
+ */
+const ADMIN_TITLE_RE =
+  /\bdiscussion\s+boards?\b|\bQ\s*&\s*A\b|\bFAQs?\b|^[\W_]*(?:general\s+)?help\b|\bstaff\b|\bcontacts?\b|\bwho\s+is\s+teaching\b/i
+
+/** A title that points at a session: it names a session type or carries a session date. */
+function namesSession(title: string, yearStart: number): boolean {
+  return sessionTypeOf(title) !== undefined || sessionDateMatch(title, yearStart) !== null
+}
+
+/**
+ * Coursework rather than session material: an assignment or discussion; a
+ * title with a deadline ("due …", "Submission Point", "submit … here"); or
+ * anything under an assessment area or a deadline title, unless the item or
+ * an ancestor nearer than that area names a session ("Tutorial 1
+ * activities", "Reading for Term 1 Tutorials"). `up` is nearest first.
+ */
+function isCoursework(row: Pick<BbContentLite, 'kind' | 'title'>, up: string[], yearStart: number): boolean {
+  if (row.kind === 'assignment' || row.kind === 'discussion') return true
+  if (DEADLINE_RE.test(row.title) || ASSESSMENT_AREA_RE.test(row.title)) return true
+  if (namesSession(row.title, yearStart)) return false
+  for (const title of up) {
+    if (DEADLINE_RE.test(title) || ASSESSMENT_AREA_RE.test(title)) return true
+    if (namesSession(title, yearStart)) return false
+  }
+  return false
 }
 
 // ------------------------------------------------------ week calibration --
@@ -507,8 +572,12 @@ export interface SeriesOffset {
 export interface CourseIndexRow {
   content: BbContentLite
   ai: BbContentAiLite | undefined
+  /** Display role. An empty unit with no links is 'other'; an AI-admin row keeps 'admin' (listed under Other). */
   role: BbContentRole
-  /** Matched automatically at all: not AI admin, not a container listed through its children. */
+  /**
+   * Matched automatically at all: not administrative by kind or title
+   * (`ADMIN_TITLE_RE`), not a container listed through its children.
+   */
   auto: boolean
   target: ContentTarget
   /** The session position the ordinal points at (number + series offset). */
@@ -517,6 +586,19 @@ export interface CourseIndexRow {
   inferred: boolean
   /** University weeks of a date that is no session day of the module, when no week label says otherwise. */
   dateWeek?: [number, number]
+  /** Coursework (`isCoursework`): matches only by a date written in its own or an ancestor's title. */
+  coursework: boolean
+  /** The date the row matches by: the target's, or for coursework a title date only (never AI's). */
+  date?: TitleDate
+  /**
+   * The row resolves to particular sessions of the module, so it never
+   * matches by week: 'date' = its date is the day of a session of a
+   * compatible type (its ordinal is then ignored); 'ordinal' = its position
+   * is one of the module's sessions of that type. Unset without a timetable.
+   */
+  pinned?: 'date' | 'ordinal'
+  /** May match by week: not pinned, no date or ordinal without a timetable, not coursework, not AI admin. */
+  byWeek: boolean
 }
 
 export interface CourseIndex {
@@ -698,13 +780,16 @@ export function buildCourseIndex(input: CourseIndexInput): CourseIndex {
     const ai = input.ai.get(row.id)
     const own = { title: row.title, path: row.path ?? [], week_label: row.week_label, childDate: childDate.get(row.id) ?? null }
     const target = resolveContentTarget(own, ancestors, ai, { yearStart, weekOffset })
-    return { row, ai, ancestors, own, target }
+    const up = nearestFirst(own.path, ancestors)
+    const coursework = isCoursework(row, up.map((a) => a.title), yearStart)
+    return { row, ai, ancestors, own, up, target, coursework }
   })
 
-  // Numbered series and the evidence for their offsets.
+  // Numbered series and the evidence for their offsets (coursework never counts).
   const seriesKey = (type: string, name: string) => `${type}|${name}`
   const series = new Map<string, SeriesInfo>()
   for (const e of entries) {
+    if (e.coursework) continue
     const own = ordinalOf(e.row.title)
     if (!own) continue
     const key = seriesKey(own.type, own.series)
@@ -746,7 +831,7 @@ export function buildCourseIndex(input: CourseIndexInput): CourseIndex {
     // Sessions stand-alone units of this type claim by their own date or week.
     const claimed = new Set<number>()
     for (const e of entries) {
-      if (e.target.ordinal !== undefined || sessionTypeOf(e.row.title) !== type) continue
+      if (e.coursework || e.target.ordinal !== undefined || sessionTypeOf(e.row.title) !== type) continue
       const date = sessionDateOf(e.row.title, yearStart)
       const week = date ? null : weekLabelOf(e.row.title)
       let hit: IndexedSession | undefined
@@ -773,9 +858,12 @@ export function buildCourseIndex(input: CourseIndexInput): CourseIndex {
   }
   for (const key of series.keys()) if (!offsets.has(key)) offsets.set(key, { offset: 0, source: 'default' })
 
-  const rows: CourseIndexRow[] = entries.map(({ row, ai, target }) => {
+  const rows: CourseIndexRow[] = entries.map(({ row, ai, own, up, target, coursework }) => {
     const container = row.kind === 'folder' || row.kind === 'lesson'
-    const auto = ai?.role !== 'admin' && !(container && (children.has(row.bb_id) || (row.links ?? []).length === 0))
+    const hasChildren = children.has(row.bb_id)
+    // A unit with children is listed through them; an empty one stands for itself.
+    const auto = !ADMIN_TITLE_RE.test(displayTitle(row)) && !(container && hasChildren)
+    const emptyUnit = container && !hasChildren && (row.links ?? []).length === 0
     let position = target.ordinal
     let inferred = false
     if (target.ordinal !== undefined && target.ordinalSeries && target.ordinalType) {
@@ -785,10 +873,49 @@ export function buildCourseIndex(input: CourseIndexInput): CourseIndex {
         inferred = s.source === 'cumulative'
       }
     }
-    const indexed: CourseIndexRow = { content: row, ai, role: resolveRole(row, ai), auto, target, inferred }
+    if (coursework) position = undefined
+
+    let date: TitleDate | undefined
+    if (coursework) date = titleDateOf(own, up, yearStart)?.date
+    else if (target.date) date = target.endDate ? { date: target.date, endDate: target.endDate } : { date: target.date }
+
+    const indexed: CourseIndexRow = {
+      content: row,
+      ai,
+      role: emptyUnit ? 'other' : resolveRole(row, ai),
+      auto,
+      target,
+      inferred,
+      coursework,
+      byWeek: false,
+    }
     if (position !== undefined) indexed.position = position
-    if (target.date && target.uniWeek === undefined && allSessions.length > 0) {
-      const relevant = target.sessionType ? (byType.get(target.sessionType) ?? []) : allSessions
+    if (date) indexed.date = date
+
+    // Sessions an item of this type can be dated to (a generic "Session" takes any type).
+    const relevant = target.sessionType
+      ? allSessions.filter((s) => {
+          const type = typeOfUid.get(s.uid) ?? ''
+          return type === target.sessionType || type === GENERIC_SESSION_TYPE
+        })
+      : allSessions
+    if (allSessions.length > 0) {
+      const ofOrdinalType = target.ordinalType ? (byType.get(target.ordinalType) ?? []) : []
+      if (date && onDays(relevant, date).length > 0) indexed.pinned = 'date'
+      else if (
+        position !== undefined &&
+        typeCompatible(target.sessionType, target.ordinalType ?? null) &&
+        position >= 1 &&
+        position <= ofOrdinalType.length
+      ) {
+        indexed.pinned = 'ordinal'
+      }
+    }
+    // Without a timetable a date or number can't be checked: it never spreads by week.
+    const unresolved = allSessions.length > 0 ? !indexed.pinned : !date && position === undefined
+    indexed.byWeek = unresolved && !coursework && ai?.role !== 'admin'
+
+    if (!coursework && target.date && target.uniWeek === undefined && allSessions.length > 0) {
       if (onDays(relevant, { date: target.date, endDate: target.endDate }).length === 0) {
         indexed.dateWeek = [
           universityWeekOf(target.date, weekOneStart),
@@ -833,6 +960,13 @@ export interface SessionMatch {
   readings: MatchedItem[]
   recordings: MatchedItem[]
   other: MatchedItem[]
+  /**
+   * Items that would have matched this session but carry a `hide` override,
+   * with their original confidence, so they can be restored. In no other
+   * group and not counted as matches. `matchSession` always sets it
+   * (optional only so hand-built fixtures without it still type-check).
+   */
+  hidden?: MatchedItem[]
   /** Non-dismissed AI key dates for this session (its day, or its week/type). */
   keyDates: BbKeyDate[]
   /** The course's top-level Talis reading list. */
@@ -909,8 +1043,8 @@ function linkFor(row: BbContentLite, role: BbContentRole): { href: string | null
   return { href: row.url, label: displayTitle(row) }
 }
 
-function covers(target: ContentTarget, day: string): boolean {
-  return !!target.date && target.date <= day && day <= (target.endDate ?? target.date)
+function covers(date: TitleDate | undefined, day: string): boolean {
+  return !!date && date.date <= day && day <= (date.endDate ?? date.date)
 }
 
 function coversWeek(target: ContentTarget, week: number): boolean {
@@ -919,17 +1053,23 @@ function coversWeek(target: ContentTarget, week: number): boolean {
 
 /**
  * The strongest way a row matches the session, or null. Trust: date (own,
- * ancestor, children) → ordinal (series offset applied) → week (label, else
- * the week of a date that is no session day of the module).
+ * ancestor, children, then AI; coursework: titles only) → ordinal (series
+ * offset applied; not when the date already names a session) → week (label,
+ * else the week of a date that is no session day of the module) — the week
+ * only for rows that resolve to no session (`byWeek`).
  */
 function confidenceFor(
   row: CourseIndexRow,
   session: { day: string; week: number; type: string | null; ordinal: number | null }
 ): Exclude<MatchConfidence, 'attached'> | null {
   const { target } = row
+  const dated = covers(row.date, session.day)
+  // A generic "Session" says nothing about its kind: an item dated to its day fits whatever its type.
+  if (dated && session.type === GENERIC_SESSION_TYPE) return 'date'
   if (!typeCompatible(target.sessionType, session.type)) return null
-  if (covers(target, session.day)) return 'date'
+  if (dated) return 'date'
   if (
+    row.pinned !== 'date' &&
     row.position !== undefined &&
     session.ordinal !== null &&
     row.position === session.ordinal &&
@@ -937,6 +1077,7 @@ function confidenceFor(
   ) {
     return 'ordinal'
   }
+  if (!row.byWeek) return null
   if (coversWeek(target, session.week)) return 'week'
   if (row.dateWeek && row.dateWeek[0] <= session.week && session.week <= row.dateWeek[1]) return 'week'
   return null
@@ -954,10 +1095,17 @@ function indexFits(index: CourseIndex | undefined, ctx: MatchContext, yearStart:
 
 /**
  * What Blackboard holds for one session: slides, readings, recordings,
- * other items, AI key dates and the module reading list. Folders and
- * lessons pass their date/week down and aren't listed themselves (unless
- * one has no children in the data and carries links). AI `admin` rows are
- * left out. `hide` overrides remove an item; `attach` adds one regardless.
+ * other items, AI key dates and the module reading list.
+ * - Folders and lessons pass their date/week down and aren't listed
+ *   themselves; one with no children in the data is listed as itself
+ *   (as Other, linking to its page, unless it carries links).
+ * - An item that resolves to a session (its date is a session day, or its
+ *   number is a session) matches only that session; the week fallback is
+ *   for items that resolve to none.
+ * - Coursework matches only by a title date; discussion boards, Q&A, help
+ *   and staff/contact pages never match; AI `admin` rows match by date or
+ *   number only (listed under Other), never by week.
+ * - `hide` overrides move an item to `hidden`; `attach` adds one regardless.
  * Pure: never reads or changes prep state.
  */
 export function matchSession(
@@ -995,9 +1143,9 @@ export function matchSession(
   }
 
   const matched: (MatchedItem & { order: number })[] = []
+  const hiddenMatched: (MatchedItem & { order: number })[] = []
   index.rows.forEach((row, order) => {
     const { content } = row
-    if (hidden.has(content.id)) return
     let confidence: MatchConfidence | null = null
     if (attached.has(content.id)) {
       confidence = 'attached'
@@ -1005,7 +1153,7 @@ export function matchSession(
       confidence = confidenceFor(row, info)
     }
     if (!confidence) return
-    matched.push({
+    ;(hidden.has(content.id) ? hiddenMatched : matched).push({
       content,
       role: row.role,
       ...linkFor(content, row.role),
@@ -1014,7 +1162,10 @@ export function matchSession(
       order,
     })
   })
-  matched.sort((a, b) => CONFIDENCE_RANK[a.confidence] - CONFIDENCE_RANK[b.confidence] || a.order - b.order)
+  const byRank = (a: { confidence: MatchConfidence; order: number }, b: { confidence: MatchConfidence; order: number }) =>
+    CONFIDENCE_RANK[a.confidence] - CONFIDENCE_RANK[b.confidence] || a.order - b.order
+  matched.sort(byRank)
+  hiddenMatched.sort(byRank)
 
   const item = (m: MatchedItem): MatchedItem => ({
     content: m.content,
@@ -1037,6 +1188,7 @@ export function matchSession(
     readings: bucket((r) => r === 'reading'),
     recordings: bucket((r) => r === 'recording'),
     other: bucket((r) => r !== 'slides' && r !== 'reading' && r !== 'recording'),
+    hidden: hiddenMatched.map(item),
     keyDates,
     moduleReadingList: index.moduleReadingList,
     uniWeek: info.week,

@@ -89,6 +89,32 @@ export function courseOutlineUrl(bbId: string): string {
   return `${BB_ORIGIN}/ultra/courses/${encodeURIComponent(bbId)}/outline`
 }
 
+export interface BbAttachment {
+  id: string
+  fileName: string
+  mimeType: string
+}
+
+/** The files attached to a content item (`x-bb-file` items: slides, handbooks, briefs). Metadata only. */
+export async function getAttachments(fetchFn: BbFetch, courseId: string, contentId: string): Promise<BbAttachment[]> {
+  const path = `/learn/api/public/v1/courses/${encodeURIComponent(courseId)}/contents/${encodeURIComponent(contentId)}/attachments`
+  const results = await getAllPages<BbJson>(fetchFn, path)
+  return results
+    .filter((a) => a && a.id != null)
+    .map((a) => ({ id: String(a.id), fileName: String(a.fileName ?? ''), mimeType: String(a.mimeType ?? '') }))
+}
+
+/**
+ * Where an attachment's bytes are. It redirects (GET) to `alt-<id>.blackboard.com`
+ * and then a signed `files.blackboard.com` URL, so only the extension's
+ * service worker (host permission for `*.blackboard.com`) can follow it.
+ */
+export function attachmentDownloadUrl(courseId: string, contentId: string, attachmentId: string): string {
+  return absoluteUrl(
+    `/learn/api/public/v1/courses/${encodeURIComponent(courseId)}/contents/${encodeURIComponent(contentId)}/attachments/${encodeURIComponent(attachmentId)}/download`,
+  )
+}
+
 /** `GEOG1241_2026` → GEOG1241 / 2026. Org courses (`X_SCI_2026`) have no module code. */
 export function parseCourseCode(courseId: string): { moduleCode: string | null; year: number | null } {
   const year = /_(\d{4})$/.exec(courseId)

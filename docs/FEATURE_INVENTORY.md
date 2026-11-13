@@ -41,6 +41,8 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
   follow-ups + habits, plus a general-todo checklist with inline add.
   Bug: the ring counts a table (`education_tasks`) that the Education
   module doesn't write to, so coursework deadlines never show here.
+- ✅ **Due soon** widget: deadlines and tests in the next 7 days, plus a
+  count of lectures and tutorials with work set.
 - ❌ Planned but not built: a quick-copy Prompt Library card; the People
   quick-add bar on the home screen (it's on `/people` instead); home-screen
   edit mode (drag widgets).
@@ -64,8 +66,10 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
 - ✅ Clicking a session (on `/lectures` or in a module workspace) opens a
   Teams-style assignment view (`/lectures/session?uid=…`): notes, readings
   and tasks, with **Mark as done** top right (Undo once handed in). Tasks
-  with a link are readings; pasting a link adds a reading directly —
-  Talis/Blackboard are 2FA-locked, so links are never fetched.
+  with a link are readings; pasting a link adds a reading directly (Talis
+  is 2FA-locked, so links are never fetched). A "From Blackboard" section
+  suggests matched slides, readings, recordings and announcements: Pin makes
+  an item a tracked reading, Not relevant hides it (restorable).
 - ✅ Prep only turns green when marked as done, even with every reading
   ticked. Follow-up (concepts to review, "done — nothing left to follow
   up") only appears once handed in, and has no due date.
@@ -73,20 +77,25 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
   handed in, green done), right half = follow-up (grey until handed in,
   then amber concepts outstanding, green done, red once the session ended
   with nothing).
-- ✅ A Lectures | Assignments switch at the top of the page (the Lectures
-  one shows the total past-due count). Assignments is a placeholder until
-  the Blackboard scraper exists; there's no assignments schema yet.
-- ✅ Module filter (All + one chip per module code, each with its past-due
-  count) above the tabbed list; filtering shows the module's name and an
-  Open workspace link and drops the module column from the rows.
-- ✅ Tabbed session list above "Next 7 days", tabbed like Teams: Upcoming
-  (not handed in, soonest first), Past due ("Due n days ago", what's left,
-  one-click Mark as done), Completed (handed in, future sessions too) and
-  History (past due + completed), the last three most recent first. Only
-  prep counts towards past due. Then one card per module code; Create workspace
+- ✅ **Work list** at the top of `/lectures`, built from Blackboard
+  (extension sync, `bb_*` tables) plus the timetable: official assignments,
+  AI-found key dates (suggested until confirmed, re-dated or dismissed),
+  timetable Test sessions and lecture prep. Tabs Upcoming / Past due /
+  Completed; type chips (multi-select) and a module filter with a past-due
+  count per module, remembered in `user_settings.work_filter`. Upcoming
+  shows 10, then three months, then a year, then all. Blackboard's
+  submitted / graded status beats my own done mark. Only prep counts towards
+  past due. A sync line shows when Blackboard last synced and what the AI
+  read. Needs the extension (`extension/`) and the Gemini key; the AI has
+  its own daily cap.
+- ✅ Content and handbooks are the source for key dates; announcements only
+  annotate (a note on the matching item, or a line on a session).
+- ⚠️ Not deployed yet (13 Nov 2026): item text, links and handbook text
+  have not been synced.
+- ✅ Below the list: "Next 7 days", then one card per module code; Create workspace
   makes the module workspace (`workspaces.module_code`), which then lives on
   `/lectures`, not `/workspaces`, and has a Lectures section showing the
-  same tabbed list for its module (`SessionAssignmentsList`).
+  same work list, locked to its module (key dates, tests, lecture prep).
 - ✅ The same lights on `/calendar` (month dots, week/day pills split in
   half, agenda); clicking a session opens an anchored popover with its prep,
   Mark as done and an "Open full view" link.
@@ -147,6 +156,8 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
 - ✅ Month / Week / Day grids (real 24-hour grid), Grid/Agenda toggle,
   hour-density zoom.
 - ✅ **Google Calendar** (read-only; Google is the source of truth).
+- ✅ Blackboard deadlines (assignments and key dates with a day) show as
+  items and open in an anchored popover.
 - ✅/🐛 **Routines** — build a template, drag it onto a day, it creates a
   real Google event. Bug: clicking a routine yanks the panel up the page.
 - ✅ "Auto time-block today" wizard — suggests free slots, creates events.

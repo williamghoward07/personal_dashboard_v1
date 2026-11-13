@@ -6,6 +6,7 @@ import CalendarModule from '../modules/CalendarModule'
 import AppLauncherGlance from '../widgets/app-launcher/AppLauncherGlance'
 import AiUsageGlance from '../widgets/home/AiUsageGlance'
 import DailyGoals from '../widgets/home/DailyGoals'
+import DueSoonGlance from '../widgets/home/DueSoonGlance'
 import EducationGlance from '../widgets/home/EducationGlance'
 import HabitsGlance from '../widgets/home/HabitsGlance'
 import HealthGlance from '../widgets/home/HealthGlance'
@@ -24,6 +25,7 @@ import WorkspacesGlance from '../widgets/home/WorkspacesGlance'
 // them and only the ones that care read it.
 export const HOME_WIDGET_COMPONENTS: Record<HomeWidgetId, ComponentType<HomeWidgetProps>> = {
   'daily-goals': DailyGoals,
+  'due-soon': DueSoonGlance,
   'morning-routine': MorningRoutineCard,
   education: EducationGlance,
   workspaces: WorkspacesGlance,

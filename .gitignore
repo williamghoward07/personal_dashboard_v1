@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Blackboard extension bundle (npm run build:extension)
 /extension/dist
+
+# Local scratch (scripts/bb-eval.ts fixtures)
+tmp/

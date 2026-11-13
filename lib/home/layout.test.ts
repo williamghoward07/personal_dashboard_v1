@@ -99,6 +99,21 @@ describe('resolveHomeLayout', () => {
     expect(health).toEqual({ id: 'health', span: 1, hidden: true })
   })
 
+  it('adds Due soon, visible, to a layout saved before it existed, without disturbing the arrangement', () => {
+    const saved = HOME_WIDGET_IDS.filter((id) => id !== 'due-soon')
+      .reverse()
+      .map((id) => entry(id, id === 'money' ? 3 : 1, id === 'people'))
+    const resolved = resolveHomeLayout(saved)
+    expect(resolved.slice(0, saved.length)).toEqual(saved)
+    expect(resolved[resolved.length - 1]).toEqual({ id: 'due-soon', span: 1, hidden: false })
+  })
+
+  it('registers Due soon right after Daily goals, one column, visible', () => {
+    const ids = HOME_WIDGETS.map((w) => w.id)
+    expect(ids[ids.indexOf('daily-goals') + 1]).toBe('due-soon')
+    expect(homeWidgetMeta('due-soon')).toMatchObject({ label: 'Due soon', defaultSpan: 1, defaultHidden: false })
+  })
+
   it('respects an explicit saved override of a hidden-by-default widget', () => {
     const resolved = resolveHomeLayout([entry('health', 2, false)])
     expect(resolved[0]).toEqual({ id: 'health', span: 2, hidden: false })

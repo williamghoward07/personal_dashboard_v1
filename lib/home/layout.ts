@@ -33,6 +33,7 @@ export interface HomeWidgetProps {
  */
 export type HomeWidgetId =
   | 'daily-goals'
+  | 'due-soon'
   | 'morning-routine'
   | 'education'
   | 'workspaces'
@@ -61,6 +62,7 @@ export interface HomeWidgetMeta {
  */
 export const HOME_WIDGETS: readonly HomeWidgetMeta[] = [
   { id: 'daily-goals', label: 'Daily goals', defaultSpan: 1, defaultHidden: false },
+  { id: 'due-soon', label: 'Due soon', defaultSpan: 1, defaultHidden: false },
   { id: 'morning-routine', label: 'Morning routine', defaultSpan: 1, defaultHidden: false },
   { id: 'education', label: 'Education', defaultSpan: 1, defaultHidden: false },
   { id: 'workspaces', label: 'Workspaces', defaultSpan: 1, defaultHidden: false },

@@ -14,12 +14,14 @@ import {
 import {
   STORAGE,
   SYNC_PATH,
+  activeDashboard,
   browserFetch,
   errorMessage,
+  hostOf,
+  readTargets,
   type ContentCheckReply,
   type ContentMessage,
   type ContentReply,
-  type DashboardConfig,
   type LastRun,
   type SessionCheck,
   type SyncState,
@@ -29,9 +31,25 @@ import {
 } from './shared'
 
 // Clicking the toolbar icon opens the side panel, which stays open across tabs.
-const openPanelOnClick = () => void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
-chrome.runtime.onInstalled.addListener(openPanelOnClick)
-chrome.runtime.onStartup.addListener(openPanelOnClick)
+const onLoad = () => {
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  void idleBadge()
+}
+chrome.runtime.onInstalled.addListener(onLoad)
+chrome.runtime.onStartup.addListener(onLoad)
+
+const ACCENT = '#D97757'
+const MUTED = '#6B6A66'
+/** Shown on the toolbar icon whenever syncs go to Test and nothing else needs attention. */
+const TEST_BADGE = 'TEST'
+
+// Switching Live/Test updates the badge, unless it's showing a problem.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !(STORAGE.dashboards in changes)) return
+  void chrome.action.getBadgeText({}).then((text) => {
+    if (text === '' || text === TEST_BADGE) void idleBadge()
+  })
+})
 
 let running: Promise<LastRun> | null = null
 let startedAt = ''
@@ -97,15 +115,15 @@ async function checkSession(): Promise<SessionCheck> {
 
 async function saveSession(result: SessionCheck) {
   await chrome.storage.session.set({ [STORAGE.session]: result })
-  if (result.status === 'login') await setBadge('!', '#D97757')
-  else if (result.status === 'connected') await setBadge('', '#D97757')
+  if (result.status === 'login') await setBadge('!', ACCENT)
+  else if (result.status === 'connected') await idleBadge()
 }
 
 async function runSync(): Promise<LastRun> {
   startedAt = new Date().toISOString()
   courseCount = undefined
   await writeState('worker', 'session')
-  await setBadge('…', '#6B6A66')
+  await setBadge('…', MUTED)
   let workerError: string
   try {
     const snap = await snapshot(browserFetch, { onProgress: (p) => void writeState('worker', p.stage, p) })
@@ -139,15 +157,15 @@ async function finish(snap: BbSnapshot, via: SyncVia, workerError?: string): Pro
   await chrome.storage.local.set({ [STORAGE.lastRun]: run, [STORAGE.lastSummary]: run.summary })
   await chrome.storage.session.remove(STORAGE.syncState)
   await saveSession({ status: 'connected', via, userName: snap.user.userName })
-  if (upload && !upload.ok) await setBadge('?', '#6B6A66')
+  if (upload && !upload.ok) await setBadge('?', MUTED)
   return run
 }
 
 /** POSTs the snapshot to the dashboard. Undefined when no dashboard is set up. */
 async function sendToDashboard(snap: BbSnapshot): Promise<UploadResult | undefined> {
-  const stored = await chrome.storage.local.get(STORAGE.dashboard)
-  const dashboard = stored[STORAGE.dashboard] as DashboardConfig | undefined
-  if (!dashboard?.url || !dashboard.token) return undefined
+  const dashboard = activeDashboard(await loadTargets())
+  if (!dashboard) return undefined
+  const where = { target: dashboard.target, host: hostOf(dashboard.url) }
   let res: Response
   try {
     res = await fetch(`${dashboard.url}${SYNC_PATH}`, {
@@ -156,12 +174,22 @@ async function sendToDashboard(snap: BbSnapshot): Promise<UploadResult | undefin
       body: JSON.stringify({ trigger: 'manual', snapshot: snap }),
     })
   } catch (err) {
-    return { ok: false, error: `Couldn't reach the dashboard (${errorMessage(err)}).` }
+    return { ...where, ok: false, unreachable: true, error: `Nothing answered at ${where.host} (${errorMessage(err)}).` }
   }
   const body = (await res.json().catch(() => null)) as { counts?: Record<string, unknown>; detail?: string } | null
-  if (res.ok && body?.counts) return { ok: true, counts: body.counts }
-  if (res.status === 401) return { ok: false, error: 'The dashboard rejected the sync token.' }
-  return { ok: false, error: `The dashboard returned ${res.status}${body?.detail ? `: ${body.detail}` : ''}.` }
+  if (res.ok && body?.counts) return { ...where, ok: true, counts: body.counts }
+  if (res.status === 401) return { ...where, ok: false, error: `${where.host} rejected the sync token.` }
+  return { ...where, ok: false, error: `${where.host} returned ${res.status}${body?.detail ? `: ${body.detail}` : ''}.` }
+}
+
+async function loadTargets() {
+  return readTargets(await chrome.storage.local.get([STORAGE.dashboards, STORAGE.dashboard]))
+}
+
+/** No problem to show: blank on Live, TEST on Test. */
+async function idleBadge() {
+  const { active } = await loadTargets()
+  await setBadge(active === 'test' ? TEST_BADGE : '', ACCENT)
 }
 
 async function fail(err: unknown, loginRequired: boolean): Promise<LastRun> {
@@ -175,7 +203,7 @@ async function fail(err: unknown, loginRequired: boolean): Promise<LastRun> {
   await chrome.storage.local.set({ [STORAGE.lastRun]: run })
   await chrome.storage.session.remove(STORAGE.syncState)
   if (loginRequired) await saveSession({ status: 'login', reason: run.error })
-  else await setBadge('?', '#6B6A66')
+  else await setBadge('?', MUTED)
   return run
 }
 

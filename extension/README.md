@@ -24,8 +24,10 @@ Warm base colours with one terracotta accent; light or dark follows the system. 
 
 The sync runs in the service worker, not the panel. Closing the panel or switching tabs doesn't stop it, and reopening the panel picks up the run in progress (state is in `chrome.storage.session`).
 
-Badge: `!` = log in to Blackboard, `?` = another error, `…` = syncing.
+Badge: `!` = log in to Blackboard, `?` = another error, `…` = syncing, `TEST` = syncs go to Test (nothing wrong).
 
-**Dashboard:** after a successful snapshot the worker POSTs it to `<dashboard>/api/blackboard/sync` with `Authorization: Bearer <token>`. A snapshot that failed part-way is never sent. Set it up once in the Dashboard card: the address (e.g. your Vercel URL, or `http://localhost:3000`) and the value of `BLACKBOARD_SYNC_TOKEN`. Saving asks Chrome for permission to that one origin (`optional_host_permissions`). The overview's **Dashboard** row says whether the last sync was saved; a failure also sets the `?` badge.
+**Dashboard:** after a successful snapshot the worker POSTs it to `<dashboard>/api/blackboard/sync` with `Authorization: Bearer <token>`. A snapshot that failed part-way is never sent. The Dashboard card holds two targets, **Live** (the Vercel site) and **Test** (`http://localhost:3000` or a preview URL), each with its own address and `BLACKBOARD_SYNC_TOKEN`, entered once. The Live | Test switch picks where syncs go; Test can't reuse Live's address. Saving asks Chrome for permission to that one origin (`optional_host_permissions`). A single dashboard saved before Live/Test becomes Live.
+
+So a test run is never an accident: the Sync button names the target ("Sync to Live" / "Sync to localhost:3000"), Test shows a chip in the header and the `TEST` badge, and syncing to Test asks first in a dialog. The overview's **Dashboard** row says where the last sync went and whether it was saved; a failure also sets the `?` badge. If Test doesn't answer (dev server not running), it offers **Switch to Live**.
 
 **Download JSON** saves the raw snapshot.

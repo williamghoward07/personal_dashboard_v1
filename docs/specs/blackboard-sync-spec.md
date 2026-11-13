@@ -72,7 +72,7 @@ Gotchas found:
   - `POST`s the raw snapshot (`BbSnapshot` in `lib/blackboard/client.ts`) to `/api/blackboard/sync` as `{ trigger, snapshot }`. The server normalises it (`lib/blackboard/normalise.ts`), so mapping fixes never need an extension reload.
   - **Auth check:** a 401/403, or a redirect to the SSO host from `users/me`, means the session has expired. It sets badge `!` (red), stores `needsLogin = true`, and stops.
   - Triggers: popup button; `chrome.alarms` daily (e.g. 08:00 local); `tabs.onUpdated` for Blackboard URLs (needs no extra permission with host access), throttled to once per 30 min. When `needsLogin` is set, the next successful Blackboard page load clears it and syncs.
-- **Side panel** (replaced the popup): last synced time, counts, **Sync now**, whether the dashboard saved it, and a Dashboard card for the URL + sync token (`chrome.storage.local`), entered once.
+- **Side panel** (replaced the popup): last synced time, counts, **Sync now**, whether the dashboard saved it, and a Dashboard card with two targets, Live and Test, each with its own URL + sync token (`chrome.storage.local` `dashboards`), entered once. A Live | Test switch picks where syncs go; syncing to Test asks first, and Test shows a `TEST` badge.
 - **Verify in phase 1:** whether service-worker fetches carry the Blackboard cookie (they should with host permissions; SameSite rules for extension requests). Fallback: run the fetch from a content script inside an open Blackboard tab.
 - **Expect frequent badge prompts:** Durham sessions expire after hours of idling, so the daily background pull will often find the session gone. The on-visit sync is what will usually keep data fresh.
 

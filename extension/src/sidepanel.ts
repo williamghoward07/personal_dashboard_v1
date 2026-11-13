@@ -7,11 +7,16 @@ import { icon } from './icons'
 import {
   STORAGE,
   SYNC_STALE_MS,
+  TARGET_LABEL,
+  activeDashboard,
   dashboardOrigin,
-  type DashboardConfig,
+  hostOf,
+  readTargets,
+  type DashboardTargets,
   type LastRun,
   type SessionCheck,
   type SyncState,
+  type TargetId,
   type WorkerMessage,
 } from './shared'
 
@@ -25,12 +30,14 @@ const state: {
   lastSummary?: SnapshotSummary
   sync?: SyncState
   session?: SessionCheck
-  dashboard?: DashboardConfig
-  /** The dashboard form: open when nothing is set up yet, or after Change. */
-  editingDashboard: boolean
+  targets: DashboardTargets
+  /** Whose form is open after Change, or after picking a target that isn't set up. */
+  editing?: TargetId
   draft: { url: string; token: string }
   dashboardError?: string
-} = { tab: 'overview', editingDashboard: false, draft: { url: '', token: '' } }
+  /** The "Sync to Test?" dialog is open. */
+  confirming: boolean
+} = { tab: 'overview', targets: { active: 'live' }, draft: { url: '', token: '' }, confirming: false }
 
 // ---------- tiny DOM helper ----------
 
@@ -118,29 +125,72 @@ function startSync() {
   })
 }
 
+/** Sync button: syncs to Test ask first, so a test run is never an accident. */
+function requestSync() {
+  if (activeDashboard(state.targets)?.target === 'test') {
+    state.confirming = true
+    return render()
+  }
+  startSync()
+}
+
+function syncLabel(): string {
+  const dashboard = activeDashboard(state.targets)
+  if (!dashboard) return 'Sync now'
+  return dashboard.target === 'live' ? 'Sync to Live' : `Sync to ${hostOf(dashboard.url)}`
+}
+
+async function saveTargets(targets: DashboardTargets) {
+  state.targets = targets
+  render()
+  await chrome.storage.local.set({ [STORAGE.dashboards]: targets })
+  await chrome.storage.local.remove(STORAGE.dashboard)
+}
+
+/** The form showing now: the one being edited, or the active target when it isn't set up. */
+function formTarget(): TargetId | undefined {
+  return state.editing ?? (state.targets[state.targets.active] ? undefined : state.targets.active)
+}
+
+function pickTarget(id: TargetId) {
+  state.dashboardError = undefined
+  if (state.targets[id]) {
+    state.editing = undefined
+    if (state.targets.active !== id) void saveTargets({ ...state.targets, active: id })
+    return render()
+  }
+  // Not set up yet: open its form. It becomes active once saved.
+  state.editing = id
+  state.draft = { url: '', token: '' }
+  render()
+}
+
 function openUrl(url: string) {
   void chrome.tabs.create({ url })
 }
 
-function saveDashboard() {
+function saveDashboard(id: TargetId) {
   const origin = dashboardOrigin(state.draft.url)
+  const other: TargetId = id === 'live' ? 'test' : 'live'
   // Blank while changing an existing setup keeps the saved token.
-  const token = state.draft.token.trim() || state.dashboard?.token || ''
+  const token = state.draft.token.trim() || state.targets[id]?.token || ''
   state.dashboardError = !origin
-    ? 'Enter the dashboard address, starting https://'
-    : !token
-      ? 'Paste the sync token (BLACKBOARD_SYNC_TOKEN).'
-      : undefined
-  if (!origin || !token) return render()
+    ? 'Enter the dashboard address, starting https:// (or http://localhost)'
+    : origin === state.targets[other]?.url
+      ? `That's the ${TARGET_LABEL[other]} address. Give ${TARGET_LABEL[id]} its own.`
+      : !token
+        ? 'Paste the sync token (BLACKBOARD_SYNC_TOKEN).'
+        : undefined
+  if (state.dashboardError || !origin) return render()
   // Must run straight from the click: Chrome only asks inside a user gesture.
   void chrome.permissions.request({ origins: [`${origin}/*`] }).then(async (granted) => {
     if (!granted) {
       state.dashboardError = `Chrome needs permission to send syncs to ${new URL(origin).host}.`
       return render()
     }
-    state.editingDashboard = false
+    state.editing = undefined
     state.dashboardError = undefined
-    await chrome.storage.local.set({ [STORAGE.dashboard]: { url: origin, token } satisfies DashboardConfig })
+    await saveTargets({ ...state.targets, [id]: { url: origin, token }, active: id })
   })
 }
 
@@ -168,7 +218,12 @@ function header(): HTMLElement {
   return h(
     'header',
     { class: 'header' },
-    h('div', { class: 'brand' }, 'Blackboard Sync'),
+    h(
+      'div',
+      { class: 'brand' },
+      'Blackboard Sync',
+      state.targets.active === 'test' ? h('span', { class: 'chip', title: 'Syncs go to Test' }, 'Test') : null,
+    ),
     h('div', { class: 'status' }, h('span', { class: `status-dot${on ? ' on' : ''}` }), text),
   )
 }
@@ -251,8 +306,8 @@ function overview(): HTMLElement[] {
         s ? row('Found', `${plural(s.courses.length, 'course')} · ${s.todoItems} due · ${s.courses.reduce((n, c) => n + c.contents, 0)} items`) : null,
         row('Dashboard', uploadText()),
       ),
-      run?.ok && run.upload && !run.upload.ok ? h('div', { class: 'step-text error-text' }, run.upload.error) : null,
-      h('button', { class: 'primary', disabled: !!sync, onclick: startSync }, sync ? 'Syncing…' : 'Sync now'),
+      uploadError(),
+      h('button', { class: 'primary', disabled: !!sync, onclick: requestSync }, sync ? 'Syncing…' : syncLabel()),
       s || via
         ? h(
             'div',
@@ -268,30 +323,64 @@ function overview(): HTMLElement[] {
 }
 
 function uploadText(): string {
-  if (!state.dashboard) return 'Not set up'
-  const run = state.lastRun
-  if (!run?.ok || !run.upload) return 'Not sent yet'
-  return run.upload.ok ? 'Saved' : 'Not saved'
+  if (!activeDashboard(state.targets)) return 'Not set up'
+  const upload = state.lastRun?.ok ? state.lastRun.upload : undefined
+  if (!upload) return 'Not sent yet'
+  // Runs from before Live/Test have no host.
+  const where = upload.host ? ` to ${upload.host}` : ''
+  return upload.ok ? `Saved${where}` : `Not saved${where}`
 }
 
-/** Where syncs are sent: the URL and token, entered once. */
+/** Why the last upload failed. Test not answering offers a way back to Live. */
+function uploadError(): HTMLElement | null {
+  const upload = state.lastRun?.ok ? state.lastRun.upload : undefined
+  if (!upload || upload.ok) return null
+  const offerLive = upload.unreachable && upload.target === 'test' && state.targets.active === 'test' && !!state.targets.live
+  return h(
+    'div',
+    {},
+    h('div', { class: 'step-text error-text' }, upload.error),
+    offerLive ? h('button', { class: 'secondary', onclick: () => pickTarget('live') }, 'Switch to Live') : null,
+  )
+}
+
+/** Live | Test. The highlighted one is where syncs go (or whose form is open). */
+function targetSwitch(): HTMLElement {
+  const shown = formTarget() ?? state.targets.active
+  const segment = (id: TargetId) =>
+    h(
+      'button',
+      {
+        class: `segment ${id}${shown === id ? ' on' : ''}`,
+        role: 'radio',
+        'aria-checked': shown === id ? 'true' : 'false',
+        onclick: () => pickTarget(id),
+      },
+      TARGET_LABEL[id],
+    )
+  return h('div', { class: 'segmented', role: 'radiogroup', 'aria-label': 'Send syncs to' }, segment('live'), segment('test'))
+}
+
+/** Where syncs are sent: Live or Test, each with its own URL and token, entered once. */
 function dashboardCard(): HTMLElement {
-  const dashboard = state.dashboard
-  if (dashboard && !state.editingDashboard) {
+  const formFor = formTarget()
+  const dashboard = activeDashboard(state.targets)
+  if (dashboard && !formFor) {
     return h(
       'section',
       { class: 'card' },
       h('h2', {}, 'Dashboard'),
+      targetSwitch(),
       h(
         'div',
         { class: 'course-meta' },
-        h('span', {}, `Syncs go to ${new URL(dashboard.url).host}`),
+        h('span', {}, `Syncs go to ${hostOf(dashboard.url)}`),
         h(
           'button',
           {
             class: 'text-button',
             onclick: () => {
-              state.editingDashboard = true
+              state.editing = dashboard.target
               state.draft = { url: dashboard.url, token: '' }
               render()
             },
@@ -301,6 +390,9 @@ function dashboardCard(): HTMLElement {
       ),
     )
   }
+  const id = formFor ?? state.targets.active
+  const saved = state.targets[id]
+  const switching = id !== state.targets.active
   const field = (label: string, key: 'url' | 'token', props: Record<string, string>) =>
     h(
       'label',
@@ -320,18 +412,25 @@ function dashboardCard(): HTMLElement {
     'section',
     { class: 'card' },
     h('h2', {}, 'Dashboard'),
-    h('p', {}, 'Each sync is sent to Study Copilot. Enter its address and the sync token once.'),
-    field('Address', 'url', { type: 'url', placeholder: 'https://…' }),
-    field('Sync token', 'token', { type: 'password', placeholder: dashboard ? 'Unchanged' : '' }),
+    targetSwitch(),
+    h(
+      'p',
+      { class: 'form-intro' },
+      id === 'live'
+        ? 'Your real Study Copilot site. Enter its address and sync token once.'
+        : 'A test copy, such as http://localhost:3000 or a preview URL. Use that copy’s BLACKBOARD_SYNC_TOKEN.',
+    ),
+    field('Address', 'url', { type: 'url', placeholder: id === 'live' ? 'https://…' : 'http://localhost:3000' }),
+    field('Sync token', 'token', { type: 'password', placeholder: saved ? 'Unchanged' : '' }),
     state.dashboardError ? h('div', { class: 'step-text error-text' }, state.dashboardError) : null,
-    h('button', { class: 'secondary', onclick: saveDashboard }, 'Save'),
-    dashboard
+    h('button', { class: 'secondary', onclick: () => saveDashboard(id) }, switching ? `Save and use ${TARGET_LABEL[id]}` : 'Save'),
+    state.editing && (saved || switching)
       ? h(
           'button',
           {
             class: 'link cancel',
             onclick: () => {
-              state.editingDashboard = false
+              state.editing = undefined
               state.dashboardError = undefined
               render()
             },
@@ -340,6 +439,38 @@ function dashboardCard(): HTMLElement {
         )
       : null,
   )
+}
+
+/** Asks before a sync goes to Test. Esc or Cancel closes it. */
+function confirmDialog(): HTMLDialogElement {
+  const host = hostOf(state.targets.test?.url ?? '')
+  const close = () => {
+    state.confirming = false
+    render()
+  }
+  const dialog = h(
+    'dialog',
+    { class: 'dialog', 'aria-labelledby': 'confirm-title' },
+    h('h2', { id: 'confirm-title' }, 'Sync to Test?'),
+    h('p', {}, state.targets.live ? `This sync goes to ${host}, not your Live site.` : `This sync goes to ${host}.`),
+    h(
+      'button',
+      {
+        class: 'primary',
+        onclick: () => {
+          state.confirming = false
+          startSync()
+        },
+      },
+      `Sync to ${host}`,
+    ),
+    h('button', { class: 'secondary', autofocus: true, onclick: close }, 'Cancel'),
+  ) as HTMLDialogElement
+  // Esc. Ignored once a re-render has already replaced this dialog.
+  dialog.addEventListener('close', () => {
+    if (dialog.isConnected && state.confirming) close()
+  })
+  return dialog
 }
 
 function courses(): HTMLElement[] {
@@ -374,15 +505,22 @@ function courses(): HTMLElement[] {
 const app = document.getElementById('app')!
 
 function render() {
-  app.replaceChildren(header(), tabs(), h('main', { class: 'content', role: 'tabpanel' }, ...(state.tab === 'overview' ? overview() : courses())))
+  const dialog = state.confirming ? confirmDialog() : null
+  app.replaceChildren(
+    header(),
+    tabs(),
+    h('main', { class: 'content', role: 'tabpanel' }, ...(state.tab === 'overview' ? overview() : courses())),
+    ...(dialog ? [dialog] : []),
+  )
+  dialog?.showModal()
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'session' && STORAGE.syncState in changes) state.sync = changes[STORAGE.syncState].newValue as SyncState | undefined
   if (area === 'session' && STORAGE.session in changes) state.session = changes[STORAGE.session].newValue as SessionCheck | undefined
   if (area === 'local' && STORAGE.lastRun in changes) state.lastRun = changes[STORAGE.lastRun].newValue as LastRun | undefined
-  if (area === 'local' && STORAGE.dashboard in changes)
-    state.dashboard = changes[STORAGE.dashboard].newValue as DashboardConfig | undefined
+  if (area === 'local' && STORAGE.dashboards in changes)
+    state.targets = readTargets({ [STORAGE.dashboards]: changes[STORAGE.dashboards].newValue })
   if (area === 'local' && STORAGE.lastSummary in changes)
     state.lastSummary = changes[STORAGE.lastSummary].newValue as SnapshotSummary | undefined
   render()
@@ -390,14 +528,16 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 async function init() {
   const [local, session] = await Promise.all([
-    chrome.storage.local.get([STORAGE.lastRun, STORAGE.lastSummary, STORAGE.dashboard]),
+    chrome.storage.local.get([STORAGE.lastRun, STORAGE.lastSummary, STORAGE.dashboards, STORAGE.dashboard]),
     chrome.storage.session.get([STORAGE.syncState, STORAGE.session]),
   ])
   state.lastRun = local[STORAGE.lastRun] as LastRun | undefined
   // Installs from before lastSummary existed still have it inside lastRun.
   const last = state.lastRun
   state.lastSummary = (local[STORAGE.lastSummary] as SnapshotSummary | undefined) ?? (last?.ok ? last.summary : undefined)
-  state.dashboard = local[STORAGE.dashboard] as DashboardConfig | undefined
+  state.targets = readTargets(local)
+  // One-time move of a pre-Live/Test dashboard into Live.
+  if (!local[STORAGE.dashboards] && local[STORAGE.dashboard]) void saveTargets(state.targets)
   state.sync = session[STORAGE.syncState] as SyncState | undefined
   state.session = session[STORAGE.session] as SessionCheck | undefined
   render()

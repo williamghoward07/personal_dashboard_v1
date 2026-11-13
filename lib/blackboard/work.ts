@@ -122,13 +122,29 @@ function foldedKeyDate(list: KeyDateLite[] | undefined): KeyDateLite | null {
   )[0]
 }
 
-/** Builds every work item. Dismissed key dates never appear. */
+/**
+ * A `dueAt` that falls on a different London day from its `dueOn` is stale
+ * (the day was edited, the time wasn't): trust the day and drop the time.
+ */
+function consistentDueAt(dueOn: string | null, dueAt: string | null): string | null {
+  if (!dueAt || !dueOn) return dueAt
+  return londonDateKey(dueAt) === dueOn ? dueAt : null
+}
+
+/**
+ * Builds every work item. Dismissed key dates never appear. A key date
+ * linked to an official assignment folds into it only when that assignment
+ * is among the live ones loaded; otherwise (removed, or not loaded) it shows
+ * as its own item.
+ */
 export function toWorkItems(input: WorkInput): WorkItem[] {
   const courseById = new Map(input.courses.map((c) => [c.id, c]))
+  const liveAssignments = new Set(input.assignments.filter((a) => !a.removed_at).map((a) => a.id))
   const live = input.keyDates.filter((kd) => kd.status === 'suggested' || kd.status === 'confirmed')
+  const folds = (kd: KeyDateLite) => !!kd.assignment_id && liveAssignments.has(kd.assignment_id)
   const byAssignment = new Map<string, KeyDateLite[]>()
   for (const kd of live) {
-    if (!kd.assignment_id) continue
+    if (!kd.assignment_id || !folds(kd)) continue
     byAssignment.set(kd.assignment_id, [...(byAssignment.get(kd.assignment_id) ?? []), kd])
   }
 
@@ -147,7 +163,7 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
       courseName: course?.name ?? null,
       title: a.title,
       dueOn: a.due_at ? londonDateKey(a.due_at) : (fold?.due_on ?? null),
-      dueAt: a.due_at ?? fold?.due_at ?? null,
+      dueAt: a.due_at ?? (fold ? consistentDueAt(fold.due_on, fold.due_at) : null),
       done: bbDone || !!a.done_at,
       doneVia: bbDone ? 'blackboard' : a.done_at ? 'dashboard' : null,
       ai: null,
@@ -169,7 +185,7 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
   }
 
   for (const kd of live) {
-    if (kd.assignment_id) continue // the official row wins
+    if (folds(kd)) continue // the official row wins
     const course = courseById.get(kd.course_id)
     const url = sourceUrl(kd)
     items.push({
@@ -180,7 +196,7 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
       courseName: course?.name ?? null,
       title: kd.title,
       dueOn: kd.due_on,
-      dueAt: kd.due_at,
+      dueAt: consistentDueAt(kd.due_on, kd.due_at),
       done: !!kd.done_at,
       doneVia: kd.done_at ? 'dashboard' : null,
       ai: { status: kd.status as 'suggested' | 'confirmed', quote: kd.quote, sourceUrl: url },
@@ -228,11 +244,13 @@ export function toWorkItems(input: WorkInput): WorkItem[] {
 
 /**
  * When an item is due, as epoch ms: its `dueAt`, else the end of its London
- * `dueOn` day (so an all-day item sorts after timed ones that day). Null
- * when undated.
+ * `dueOn` day (so an all-day item sorts after timed ones that day). A
+ * `dueAt` on a different London day from `dueOn` is ignored (the day wins).
+ * Null when undated.
  */
 export function workDueInstant(item: Pick<WorkItem, 'dueOn' | 'dueAt'>): number | null {
-  if (item.dueAt) return Date.parse(item.dueAt)
+  const dueAt = consistentDueAt(item.dueOn, item.dueAt)
+  if (dueAt) return Date.parse(dueAt)
   if (item.dueOn) return Date.parse(londonDayBoundsUTC(new Date(`${item.dueOn}T12:00:00Z`)).timeMax)
   return null
 }
@@ -248,7 +266,7 @@ export function isWorkPastDue(item: WorkItem, now: Date): boolean {
   if (item.source === 'prep' && item.session) return hasEnded(item.session, now)
   const due = workDueInstant(item)
   if (due === null) return false
-  return item.dueAt ? now.getTime() > due : now.getTime() >= due
+  return consistentDueAt(item.dueOn, item.dueAt) ? now.getTime() > due : now.getTime() >= due
 }
 
 export type WorkLists = Record<WorkTab, WorkItem[]>

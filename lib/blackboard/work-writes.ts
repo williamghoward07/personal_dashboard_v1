@@ -1,7 +1,7 @@
 'use client'
 
 import { supabase } from '@/lib/supabase'
-import { isDateKey } from './dates'
+import { dueAtOnDay, isDateKey } from './dates'
 import { notifyWorkChanged } from './events'
 import { BB_KEY_DATE_CATEGORIES, type BbKeyDateCategory } from './types'
 
@@ -32,7 +32,10 @@ export function confirmKeyDate(id: string): Promise<WriteResult> {
 
 export interface KeyDateEdit {
   due_on: string
-  /** ISO instant; null clears the time. Omitted = left as is. */
+  /**
+   * ISO instant; null clears the time. Omitted = keep the stored London
+   * wall-clock time, moved onto the new day (`dueAtOnDay`).
+   */
   due_at?: string | null
   title?: string
   category?: BbKeyDateCategory
@@ -40,20 +43,28 @@ export interface KeyDateEdit {
 
 /**
  * Correct an AI-found date. Editing confirms it. `ai_due_on` (what the AI
- * originally said) is never touched.
+ * originally said) is never touched. With no `due_at` given, a stored time
+ * moves with the day: 11 Nov 14:00 edited to 26 Nov becomes 26 Nov 14:00.
  */
 export async function editKeyDate(id: string, edit: KeyDateEdit): Promise<WriteResult> {
   if (!isDateKey(edit.due_on)) return { error: 'Not a valid date' }
   if (edit.due_at != null && Number.isNaN(Date.parse(edit.due_at))) return { error: 'Not a valid time' }
   if (edit.category !== undefined && !BB_KEY_DATE_CATEGORIES.includes(edit.category)) return { error: 'Unknown category' }
   const patch: Record<string, unknown> = { due_on: edit.due_on, status: 'confirmed', updated_at: now() }
-  if (edit.due_at !== undefined) patch.due_at = edit.due_at
   if (edit.title !== undefined) {
     const title = edit.title.trim()
     if (!title) return { error: 'A title is required' }
     patch.title = title
   }
   if (edit.category !== undefined) patch.category = edit.category
+  if (edit.due_at !== undefined) {
+    patch.due_at = edit.due_at
+  } else {
+    const { data, error } = await supabase.from('bb_key_dates').select('due_at').eq('id', id).maybeSingle()
+    if (error) return { error: error.message }
+    if (!data) return { error: 'Key date not found' }
+    patch.due_at = dueAtOnDay((data as { due_at: string | null }).due_at, edit.due_on)
+  }
   return done(supabase.from('bb_key_dates').update(patch).eq('id', id))
 }
 

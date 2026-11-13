@@ -266,20 +266,110 @@ function parseTime(text: string): string | undefined {
   return undefined
 }
 
-/**
- * The first calendar date written in `text`, with a range end and a time
- * when given. A date with no year is placed in the academic year starting
- * 1 Aug `ctx.yearStart`. Week, lecture and block numbers are never dates.
- */
-export function parseTitleDate(text: string, ctx: { yearStart: number }): TitleDate | null {
+export interface TitleDateContext {
+  yearStart: number
+  /**
+   * A date whose preceding text matches this (anchored with `$`, not global)
+   * is skipped, along with anything overlapping it: "Slides-Updated 9 Nov."
+   * says when a file changed, not which day it is for.
+   */
+  skipAfter?: RegExp
+}
+
+/** A title date and where it sits in the text. */
+export interface TitleDateMatch extends TitleDate {
+  index: number
+  length: number
+}
+
+function blank(text: string, spans: { index: number; length: number }[]): string {
+  let out = text
+  for (const s of spans) out = out.slice(0, s.index) + ' '.repeat(s.length) + out.slice(s.index + s.length)
+  return out
+}
+
+/** `parseTitleDate`, plus the matched span. */
+export function findTitleDate(text: string, ctx: TitleDateContext): TitleDateMatch | null {
   if (!text) return null
-  const candidates = dateCandidates(text, ctx.yearStart)
+  let candidates = dateCandidates(text, ctx.yearStart)
+  let skipped: Candidate[] = []
+  if (ctx.skipAfter) {
+    const re = ctx.skipAfter
+    skipped = candidates.filter((c) => re.test(text.slice(0, c.index)))
+    candidates = candidates.filter(
+      (c) => !skipped.some((s) => c.index < s.index + s.length && s.index < c.index + c.length)
+    )
+  }
   if (candidates.length === 0) return null
   // Earliest in the text; at the same position the longest (a range beats its first day).
   candidates.sort((a, b) => a.index - b.index || b.length - a.length)
   const best = candidates[0]
   // Look for a time with the date itself blanked out, so "12.11.2026" can't read as 12:11.
-  const rest = text.slice(0, best.index) + ' '.repeat(best.length) + text.slice(best.index + best.length)
-  const time = parseTime(rest)
-  return time ? { ...best.value, time } : best.value
+  const time = parseTime(blank(text, [best, ...skipped]))
+  return { ...best.value, ...(time ? { time } : {}), index: best.index, length: best.length }
+}
+
+/**
+ * The first calendar date written in `text`, with a range end and a time
+ * when given. A date with no year is placed in the academic year starting
+ * 1 Aug `ctx.yearStart`. Week, lecture and block numbers are never dates.
+ */
+export function parseTitleDate(text: string, ctx: TitleDateContext): TitleDate | null {
+  const found = findTitleDate(text, ctx)
+  if (!found) return null
+  const date: TitleDate = { date: found.date }
+  if (found.endDate) date.endDate = found.endDate
+  if (found.time) date.time = found.time
+  return date
+}
+
+// ------------------------------------------------------ London wall clock --
+
+const LONDON_PARTS = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/London',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
+/** An instant's Europe/London calendar day and 'HH:MM' wall time. */
+function londonWallClock(epochMs: number): { day: string; time: string; wallMs: number } {
+  const parts = Object.fromEntries(LONDON_PARTS.formatToParts(new Date(epochMs)).map((p) => [p.type, p.value]))
+  const [y, mo, d, h, mi] = [parts.year, parts.month, parts.day, parts.hour, parts.minute].map(Number)
+  return { day: toKey(y, mo, d), time: hhmm(h, mi), wallMs: Date.UTC(y, mo - 1, d, h, mi) }
+}
+
+/**
+ * A Europe/London wall time ('HH:MM') on a London day → UTC ISO instant.
+ * The offset is read at the target instant, not at midnight, so clock-change
+ * Sundays come out right (same two-pass method as ai/grounding.ts's
+ * `toDueAt`, which can't be imported here: it pulls in node:crypto, and this
+ * file is bundled for the browser).
+ */
+export function londonWallTimeToIso(dateKey: string, time: string): string | null {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time)
+  if (!m || !isDateKey(dateKey)) return null
+  const [y, mo, d] = keyParts(dateKey)
+  const wall = Date.UTC(y, mo - 1, d, Number(m[1]), Number(m[2]))
+  const offsetAt = (epochMs: number) => londonWallClock(epochMs).wallMs - Math.floor(epochMs / 60_000) * 60_000
+  const guess = wall - offsetAt(Date.UTC(y, mo - 1, d))
+  return new Date(wall - offsetAt(guess)).toISOString()
+}
+
+/**
+ * The `due_at` to store once an item's London day becomes `dueOn`: none
+ * stays none; a time already on that day stays; otherwise the same London
+ * wall-clock time moved to the new day (moving 11 Nov 14:00 to 26 Nov gives
+ * 26 Nov 14:00, never a stale 11 Nov instant).
+ */
+export function dueAtOnDay(previousDueAt: string | null | undefined, dueOn: string): string | null {
+  if (!previousDueAt) return null
+  const at = Date.parse(previousDueAt)
+  if (Number.isNaN(at)) return null
+  const wall = londonWallClock(at)
+  if (wall.day === dueOn) return previousDueAt
+  return londonWallTimeToIso(dueOn, wall.time)
 }

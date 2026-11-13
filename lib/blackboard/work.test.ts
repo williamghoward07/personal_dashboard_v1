@@ -8,6 +8,7 @@ import {
   dueWithin,
   isWorkPastDue,
   syncStatus,
+  workDueInstant,
   toWorkItems,
   workCategory,
   workLists,
@@ -270,6 +271,62 @@ describe('toWorkItems: AI key dates', () => {
       dueFromKeyDateId: 'dup2',
       ai: null,
     })
+  })
+})
+
+describe('toWorkItems: a key date whose assignment is gone', () => {
+  it('shows a confirmed key date linked to an assignment that is not loaded', () => {
+    const items = build({
+      keyDates: [keyDate({ id: 'orphan', due_on: '2026-11-20', status: 'confirmed', assignment_id: 'not-loaded' })],
+    })
+    expect(keys(items)).toEqual(['kd:orphan'])
+    expect(one(items, 'kd:orphan')).toMatchObject({ source: 'key_date', dueOn: '2026-11-20', keyDateId: 'orphan' })
+  })
+
+  it('shows a key date linked to a removed assignment, and never the removed assignment', () => {
+    const items = build({
+      assignments: [assignment({ id: 'gone', title: 'Formative Discussion Post I', removed_at: '2026-11-11T00:00:00Z' })],
+      keyDates: [keyDate({ id: 'kd-gone', due_on: '2026-11-13', assignment_id: 'gone' })],
+    })
+    expect(keys(items)).toEqual(['kd:kd-gone'])
+  })
+
+  it('still folds into a live assignment', () => {
+    const items = build({
+      assignments: [assignment({ id: 'live', title: 'Formative Discussion Post I' })],
+      keyDates: [keyDate({ id: 'kd-live', due_on: '2026-11-13', assignment_id: 'live' })],
+    })
+    expect(keys(items)).toEqual(['bba:live'])
+    expect(one(items, 'bba:live')).toMatchObject({ dueOn: '2026-11-13', dueFromKeyDateId: 'kd-live' })
+  })
+})
+
+describe('a due time left on another day by an edit', () => {
+  // Edited from 11 Nov 14:00 to 26 Nov, with the old instant still stored.
+  const stale = keyDate({ id: 'moved', due_on: '2026-11-26', due_at: '2026-11-11T14:00:00Z', status: 'confirmed' })
+
+  it('trusts due_on: not past due on 12 Nov, due at the end of 26 Nov', () => {
+    const items = build({ keyDates: [stale] })
+    const item = one(items, 'kd:moved')
+    expect(item).toMatchObject({ dueOn: '2026-11-26', dueAt: null })
+    expect(isWorkPastDue(item, NOW)).toBe(false)
+    expect(keys(workLists(items, NOW).upcoming)).toEqual(['kd:moved'])
+    expect(workDueInstant(item)).toBe(Date.parse('2026-11-27T00:00:00Z'))
+  })
+
+  it('workDueInstant ignores a dueAt on another London day, and keeps one on the same day', () => {
+    expect(workDueInstant({ dueOn: '2026-11-26', dueAt: '2026-11-11T14:00:00Z' })).toBe(Date.parse('2026-11-27T00:00:00Z'))
+    expect(workDueInstant({ dueOn: '2026-11-26', dueAt: '2026-11-26T14:00:00Z' })).toBe(Date.parse('2026-11-26T14:00:00Z'))
+    // 23:30 UTC on 20 Oct is 21 Oct in London: consistent.
+    expect(workDueInstant({ dueOn: '2026-10-21', dueAt: '2026-10-20T23:30:00Z' })).toBe(Date.parse('2026-10-20T23:30:00Z'))
+  })
+
+  it('a folded key date with a stale time gives its assignment the day only', () => {
+    const items = build({
+      assignments: [assignment({ id: 'undated', title: 'Formative Discussion Post I' })],
+      keyDates: [{ ...stale, assignment_id: 'undated' }],
+    })
+    expect(one(items, 'bba:undated')).toMatchObject({ dueOn: '2026-11-26', dueAt: null, dueFromKeyDateId: 'moved' })
   })
 })
 

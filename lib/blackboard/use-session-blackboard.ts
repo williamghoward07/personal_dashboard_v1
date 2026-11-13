@@ -8,11 +8,13 @@ import { useWorkVersion } from './events'
 import {
   CONTENT_AI_MATCH_COLUMNS,
   CONTENT_MATCH_COLUMNS,
+  buildCourseIndex,
   defaultWeekOneStart,
   matchSession,
   sessionOrdinals,
   type BbContentAiLite,
   type BbContentLite,
+  type CourseIndex,
   type SessionMatch,
 } from './match'
 import type { BbCourseRecord, BbKeyDate, BbSessionOverride } from './types'
@@ -89,6 +91,42 @@ function bundleFor(moduleCode: string, version: number): Promise<CourseBundle | 
   return promise
 }
 
+// The course index (targets, series offsets) once per loaded bundle, week-one
+// date and timetable: every session page of the module reuses it.
+const indexCache = new WeakMap<CourseBundle, { weekOneStart: string; sessions: TimetableSession[]; index: CourseIndex }>()
+
+function indexFor(bundle: CourseBundle, weekOneStart: string, moduleSessions: TimetableSession[]): CourseIndex {
+  const hit = indexCache.get(bundle)
+  if (hit && hit.weekOneStart === weekOneStart && hit.sessions === moduleSessions) return hit.index
+  const index = buildCourseIndex({
+    course: bundle.course,
+    contents: bundle.contents,
+    ai: bundle.ai,
+    overrides: bundle.overrides,
+    weekOneStart,
+    sessions: moduleSessions,
+  })
+  indexCache.set(bundle, { weekOneStart, sessions: moduleSessions, index })
+  return index
+}
+
+// Per timetable array, per module code: the same array each time, so the index cache hits.
+const moduleSessionsCache = new WeakMap<TimetableSession[], Map<string, TimetableSession[]>>()
+
+function sessionsOfModule(sessions: TimetableSession[], moduleCode: string): TimetableSession[] {
+  let byModule = moduleSessionsCache.get(sessions)
+  if (!byModule) {
+    byModule = new Map()
+    moduleSessionsCache.set(sessions, byModule)
+  }
+  let list = byModule.get(moduleCode)
+  if (!list) {
+    list = sessions.filter((s) => s.moduleCode === moduleCode)
+    byModule.set(moduleCode, list)
+  }
+  return list
+}
+
 // The whole timetable, once per page: lecture ordinals need every session of
 // the module, and week 1 is derived from the first one when not set.
 let timetablePromise: Promise<TimetableSession[]> | null = null
@@ -162,11 +200,19 @@ export function useSessionBlackboard(
     [settings.week_one_start, sessions]
   )
   const ordinals = useMemo(() => (sessions ? sessionOrdinals(sessions) : null), [sessions])
+  const moduleSessions = useMemo(
+    () => (sessions && moduleCode ? sessionsOfModule(sessions, moduleCode) : null),
+    [sessions, moduleCode]
+  )
+  const index = useMemo(
+    () => (bundle && weekOneStart && moduleSessions ? indexFor(bundle, weekOneStart, moduleSessions) : null),
+    [bundle, weekOneStart, moduleSessions]
+  )
   const uid = session?.uid
   const start = session?.start
   const type = session?.type
   const match = useMemo(() => {
-    if (!bundle || !weekOneStart || !uid || !start || !type) return null
+    if (!bundle || !weekOneStart || !index || !uid || !start || !type) return null
     return matchSession(
       { uid, start, type },
       {
@@ -177,9 +223,11 @@ export function useSessionBlackboard(
         keyDates: bundle.keyDates,
         weekOneStart,
         ordinal: ordinals?.get(uid) ?? null,
+        sessions: moduleSessions ?? undefined,
+        index,
       }
     )
-  }, [bundle, weekOneStart, ordinals, uid, start, type])
+  }, [bundle, weekOneStart, ordinals, moduleSessions, index, uid, start, type])
 
   if (!moduleCode) return { match: null, course: null, loading: false, error: null }
   const error = ready ? state.error : null

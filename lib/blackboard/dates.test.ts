@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { academicYearStart, addDays, daysBetween, isDateKey, londonToday, mondayOf, parseTitleDate } from './dates'
+import { toDueAt } from './ai/grounding'
+import {
+  academicYearStart,
+  addDays,
+  daysBetween,
+  dueAtOnDay,
+  findTitleDate,
+  isDateKey,
+  londonToday,
+  londonWallTimeToIso,
+  mondayOf,
+  parseTitleDate,
+} from './dates'
 
 const ctx = { yearStart: 2026 }
 const parse = (text: string) => parseTitleDate(text, ctx)
@@ -167,5 +179,62 @@ describe('date keys', () => {
   it("reads today's London day, not UTC's", () => {
     expect(londonToday(new Date('2026-06-30T23:30:00Z'))).toBe('2026-07-01')
     expect(londonToday(new Date('2026-12-31T23:30:00Z'))).toBe('2026-12-31')
+  })
+})
+
+describe('parseTitleDate: skipAfter', () => {
+  const skip = { yearStart: 2026, skipAfter: /\bupdated\s*$/i }
+
+  it('skips a date after the marker and keeps an earlier session date', () => {
+    expect(parseTitleDate('Lecture slides 5 Oct, updated 9 Nov', skip)).toEqual({ date: '2026-10-05' })
+    expect(parseTitleDate('Lecture slides updated 9 Nov', skip)).toBeNull()
+  })
+
+  it('drops anything overlapping a skipped date (a range and its last day)', () => {
+    expect(parseTitleDate('Slides updated 9-10 Nov', skip)).toBeNull()
+  })
+
+  it('leaves parsing unchanged without a marker, and reports the span', () => {
+    expect(parseTitleDate('Lecture slides updated 9 Nov', ctx)).toEqual({ date: '2026-11-09' })
+    expect(findTitleDate('13/10/2026 : Human Geography', ctx)).toEqual({ date: '2026-10-13', index: 0, length: 10 })
+  })
+})
+
+describe('London wall clock', () => {
+  it('turns a London wall time into an instant, like grounding.toDueAt, across both clock changes', () => {
+    const days = ['2026-03-28', '2026-03-29', '2026-03-30', '2026-10-20', '2026-10-24', '2026-10-25', '2026-10-26', '2026-11-26']
+    for (const day of days) {
+      for (const time of ['00:30', '02:30', '09:00', '14:00', '23:59']) {
+        expect(londonWallTimeToIso(day, time)).toBe(toDueAt(day, time))
+      }
+    }
+    expect(londonWallTimeToIso('2026-10-25', '14:00')).toBe('2026-10-25T14:00:00.000Z') // GMT again
+    expect(londonWallTimeToIso('2026-03-29', '14:00')).toBe('2026-03-29T13:00:00.000Z') // BST from 01:00
+    expect(londonWallTimeToIso('2026-02-30', '14:00')).toBeNull()
+    expect(londonWallTimeToIso('2026-11-26', '25:00')).toBeNull()
+  })
+})
+
+describe('dueAtOnDay (editing a key date moves its time with it)', () => {
+  it('moves 11 Nov 14:00 to 26 Nov 14:00', () => {
+    expect(dueAtOnDay('2026-11-11T14:00:00Z', '2026-11-26')).toBe('2026-11-26T14:00:00.000Z')
+  })
+
+  it('keeps the London wall time across the clock change (14:00 BST → 14:00 GMT)', () => {
+    expect(dueAtOnDay('2026-10-20T13:00:00Z', '2026-11-03')).toBe('2026-11-03T14:00:00.000Z')
+    expect(dueAtOnDay('2026-11-11T14:00:00Z', '2026-10-25')).toBe('2026-10-25T14:00:00.000Z')
+    expect(dueAtOnDay('2026-11-11T14:00:00Z', '2027-03-28')).toBe('2027-03-28T13:00:00.000Z')
+  })
+
+  it('reads the London day of a late-evening time, not the UTC one', () => {
+    // 23:30 UTC on 20 Oct is 00:30 on 21 Oct in London.
+    expect(dueAtOnDay('2026-10-20T23:30:00Z', '2026-10-21')).toBe('2026-10-20T23:30:00Z')
+    expect(dueAtOnDay('2026-10-20T23:30:00Z', '2026-10-28')).toBe('2026-10-28T00:30:00.000Z')
+  })
+
+  it('no time stays no time; a time already on the day is kept as is', () => {
+    expect(dueAtOnDay(null, '2026-11-26')).toBeNull()
+    expect(dueAtOnDay(undefined, '2026-11-26')).toBeNull()
+    expect(dueAtOnDay('2026-11-26T14:00:00Z', '2026-11-26')).toBe('2026-11-26T14:00:00Z')
   })
 })

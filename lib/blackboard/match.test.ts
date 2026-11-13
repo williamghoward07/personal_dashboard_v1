@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionWithPrep, TimetableSession } from '@/lib/timetable/session'
 import {
+  buildCourseIndex,
   calibrateWeekOffset,
   defaultWeekOneStart,
   effectiveWeekOffset,
@@ -600,5 +601,409 @@ describe('matchSession never depends on prep state', () => {
     expect(matchSession(notDone, context)).toEqual(matchSession(done, context))
     expect(notDone.status).toBe('red')
     expect(done.prepDone).toBe(true)
+  })
+})
+
+// ------------------------------------------------- real course layouts --
+// The user's actual Blackboard structures and timetable (2026/27). Each
+// module's sessions are passed in, as useSessionBlackboard does.
+
+function timetable(moduleCode: string, moduleName: string, type: string, days: string[]): TimetableSession[] {
+  return days.map((d) => {
+    const [dd, mm] = d.split('/')
+    return session({ moduleCode, moduleName, type, start: `2026-${mm}-${dd}T10:00:00Z` })
+  })
+}
+
+const panopto = (label: string): BbContentLink => ({ href: `https://durham.cloud.panopto.eu/${encodeURIComponent(label)}`, label, kind: 'panopto' })
+const file = (label: string): BbContentLink => ({ href: `https://blackboard.durham.ac.uk/bbcswebdav/${encodeURIComponent(label)}`, label, kind: 'file' })
+
+/** Match one session the way the hook does: module sessions, ordinals, and (optionally) a prebuilt index. */
+function matchIn(
+  sessions: TimetableSession[],
+  contents: BbContentLite[],
+  s: TimetableSession,
+  over: Partial<MatchContext> = {}
+) {
+  return matchSession(
+    s,
+    ctx({ contents, sessions, ordinal: sessionOrdinals(sessions).get(s.uid) ?? null, ...over })
+  )
+}
+
+const ids = (m: ReturnType<typeof matchSession>) => all(m).map((i) => i.content.id)
+const on = (sessions: TimetableSession[], day: string, type = 'Lecture') => {
+  const [dd, mm] = day.split('/')
+  const s = sessions.find((x) => x.start.startsWith(`2026-${mm}-${dd}`) && x.type === type)
+  if (!s) throw new Error(`no ${type} on ${day}`)
+  return s
+}
+
+describe('real layout: GEOG1071 Human Geography (dated recordings, lecture numbers)', () => {
+  const lectures = timetable('GEOG1071', 'Human Geography', 'Lecture', [
+    '06/10', '13/10', '15/10', '20/10', '22/10', '27/10', '29/10', '03/11', '05/11', '10/11', '12/11', '17/11', '19/11', '24/11',
+  ])
+  const tutorials = timetable('GEOG1071', 'Human Geography', 'Tutorial', ['12/11', '10/12'])
+  const sessions = [...lectures, ...tutorials]
+
+  const l1 = content({ id: 'l1', kind: 'lesson', title: 'Lecture 1: Situating the Discipline (Dr Ivan Marković)' })
+  const l1rec = child(l1, { id: 'l1rec', kind: 'tool', title: '06/10/2026 : Human Geography', links: [panopto('Recording')] })
+  const l1slides = child(l1, { id: 'l1slides', title: 'HG_1_SLIDES.pptx', links: [slides('HG_1_SLIDES.pptx')] })
+  const nature = content({ id: 'nature', kind: 'folder', title: 'Block 2: Nature (Dr Ivan Marković)' })
+  const natureDates: Record<number, string> = {
+    2: '13/10/2026', 3: '15/10/2026', 4: '20/10/2026', 5: '22/10/2026', 6: '27/10/2026',
+    7: '29/10/2026', 8: '03/11/2026', 9: '05/11/2026', 10: '10/11/2026',
+  }
+  const natureRows = Object.entries(natureDates).flatMap(([n, date]) => {
+    const folder = child(nature, { id: `nl${n}`, kind: 'folder', title: `Lecture ${n}: ${n === '2' ? 'Nature' : `Nature topic ${n}`}` })
+    const rec = child(folder, { id: `nl${n}rec`, kind: 'tool', title: `${date} : Human Geography`, links: [panopto(`Recording ${n}`)] })
+    const name = n === '2' ? 'HG_2_Nature_SLIDES.pptx' : `HG_${n}_SLIDES.pptx`
+    const deck = child(folder, { id: `nl${n}slides`, title: name, links: [slides(name)] })
+    return [folder, rec, deck]
+  })
+  const lecture8 = natureRows.find((r) => r.id === 'nl8')!
+  const chapter = child(lecture8, { id: 'chap4', title: 'Chap. 4 - Changes in the land ….pdf', links: [file('Chap. 4 - Changes in the land.pdf')] })
+  const tutorial1 = child(nature, { id: 't1', kind: 'folder', title: 'Tutorial 1: Theory Goes Wild' })
+  const casePack = child(tutorial1, { id: 'casepack', title: '2_Student_Case_Pack.pdf', links: [file('2_Student_Case_Pack.pdf')] })
+  const landscape = content({ id: 'landscape', kind: 'folder', title: 'Block 2: Landscape (Dr Marijn Nieuwenhuis)' })
+  const landscapeRows = [11, 12, 19].flatMap((n) => {
+    const title = n === 11 ? 'Lecture 11: Introducing Landscape' : n === 19 ? 'Lecture 19: Writing new Landscapes' : `Lecture ${n}: Landscape ${n}`
+    const folder = child(landscape, { id: `ll${n}`, kind: 'folder', title })
+    return [folder, child(folder, { id: `ll${n}doc`, kind: 'document', title: 'ultraDocumentBody' })]
+  })
+  const tutorial3 = child(landscape, { id: 't3', kind: 'folder', title: 'Tutorial Three: Cinematic Landscapes' })
+  const tutorial3Doc = child(tutorial3, { id: 't3doc', kind: 'document', title: 'ultraDocumentBody' })
+  const rows = [
+    l1, l1rec, l1slides, nature, ...natureRows, chapter, tutorial1, casePack, landscape, ...landscapeRows, tutorial3, tutorial3Doc,
+  ]
+  const course = { id: 'course', week_offset: 0, name: 'Human Geography' }
+
+  it('a lecture folder takes the date of its recording; its slides match that lecture by date', () => {
+    const m = matchIn(sessions, rows, on(lectures, '13/10'), { course })
+    expect(titles(m.slides)).toEqual(['HG_2_Nature_SLIDES.pptx'])
+    expect(m.slides[0].confidence).toBe('date')
+    expect(titles(m.recordings)).toEqual(['13/10/2026 : Human Geography'])
+  })
+
+  it('Lecture 1 (a top-level lesson) gets its recording and slides on 6 Oct', () => {
+    expect(ids(matchIn(sessions, rows, on(lectures, '06/10'), { course })).sort()).toEqual(['l1rec', 'l1slides'])
+  })
+
+  it("the Lecture 8 pdf goes to 3 Nov", () => {
+    const m = matchIn(sessions, rows, on(lectures, '03/11'), { course })
+    expect(ids(m)).toContain('chap4')
+    expect(all(m).find((i) => i.content.id === 'chap4')?.confidence).toBe('date')
+  })
+
+  it('Lecture 11 (no recordings yet) goes to the 11th lecture, 12 Nov, from the dated series (not a guess)', () => {
+    const index = buildCourseIndex({ course, contents: rows, ai: new Map(), overrides: [], weekOneStart: WEEK_ONE, sessions })
+    expect(index.series.get('lecture|lecture')).toEqual({ offset: 0, source: 'dated' })
+    const m = matchIn(sessions, rows, on(lectures, '12/11'), { course, index })
+    expect(ids(m)).toEqual(['ll11doc'])
+    expect(all(m)[0]).toMatchObject({ confidence: 'ordinal' })
+    expect(all(m)[0].inferred).toBeUndefined()
+    expect(ids(matchIn(sessions, rows, on(lectures, '17/11'), { course }))).toEqual(['ll12doc'])
+  })
+
+  it('the tutorial case pack goes to the first tutorial (12 Nov) and never to a lecture', () => {
+    expect(ids(matchIn(sessions, rows, on(tutorials, '12/11', 'Tutorial'), { course }))).toEqual(['casepack'])
+    for (const l of lectures) expect(ids(matchIn(sessions, rows, l, { course }))).not.toContain('casepack')
+  })
+
+  it('Tutorial Three runs past the two timetabled tutorials: matched nowhere', () => {
+    for (const s of sessions) expect(ids(matchIn(sessions, rows, s, { course }))).not.toContain('t3doc')
+    // Lecture 19 runs past the 14 lectures too.
+    for (const s of sessions) expect(ids(matchIn(sessions, rows, s, { course }))).not.toContain('ll19doc')
+  })
+
+  it('a prebuilt index gives exactly what matchSession builds itself', () => {
+    const index = buildCourseIndex({ course, contents: rows, ai: new Map(), overrides: [], weekOneStart: WEEK_ONE, sessions })
+    for (const s of sessions) {
+      expect(matchIn(sessions, rows, s, { course, index })).toEqual(matchIn(sessions, rows, s, { course }))
+    }
+  })
+
+  it('a recording titled with the module name only counts when the name is known', () => {
+    // Without the course name or the module's sessions, "Human Geography" is just words.
+    const bare = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: rows, ai: new Map(), overrides: [], weekOneStart: WEEK_ONE })
+    expect(bare.rows.find((r) => r.content.id === 'nl2slides')?.target.date).toBeUndefined()
+    const named = buildCourseIndex({ course, contents: rows, ai: new Map(), overrides: [], weekOneStart: WEEK_ONE })
+    expect(named.rows.find((r) => r.content.id === 'nl2slides')?.target).toMatchObject({ date: '2026-10-13', via: 'ancestor' })
+  })
+})
+
+describe('real layout: GEOG1081 Physical Geography (numbering restarts per block)', () => {
+  const lectures = timetable('GEOG1081', 'Physical Geography', 'Lecture', [
+    '05/10', '07/10', '12/10', '14/10', '19/10', '21/10', '26/10', '02/11', '04/11', '09/11', '11/11', '16/11', '18/11', '23/11',
+  ])
+  const intro = content({ id: 'intro', kind: 'folder', title: 'Week 12: Introduction Lecture', week_label: 12 })
+  const introDoc = child(intro, { id: 'introDoc', kind: 'document', title: 'ultraDocumentBody' })
+  const climateTopics = [
+    'The Climate System', 'Radiation', 'Atmospheric Circulation', 'Oceans', 'Past Climates', 'Future Climates',
+    'Climate Interactive/Revision session',
+  ]
+  const block1 = content({ id: 'b1', kind: 'folder', title: 'Block 1: Climate' })
+  const climate = climateTopics.flatMap((topic, i) => {
+    const folder = child(block1, { id: `c${i + 1}`, kind: 'folder', title: `Climate Lecture ${i + 1}: ${topic}` })
+    return [folder, child(folder, { id: `c${i + 1}doc`, kind: 'document', title: 'ultraDocumentBody' })]
+  })
+  const waterTopics = ['Hydrological Cycle', 'Rivers', 'Groundwater', 'Water Resources', 'Solutes and Anthropogenic Sediment']
+  const block2 = content({ id: 'b2', kind: 'folder', title: 'Block 2: Water and Water Resources' })
+  const water = waterTopics.flatMap((topic, i) => {
+    const folder = child(block2, { id: `w${i + 1}`, kind: 'folder', title: `Water Lecture ${i + 1}: ${topic}` })
+    return [folder, child(folder, { id: `w${i + 1}doc`, kind: 'document', title: 'ultraDocumentBody' })]
+  })
+  // Listed in an arbitrary order, as the database returns them: course order comes from the paths.
+  const rows = [...water, block2, intro, introDoc, block1, ...climate]
+  const at = (day: string) => ids(matchIn(lectures, rows, on(lectures, day)))
+
+  it('counts each block on from the last: intro 5 Oct, Climate 1 → 7 Oct, Climate 7 → 2 Nov, Water 1 → 4 Nov, Water 5 → 18 Nov', () => {
+    expect(at('05/10')).toEqual(['introDoc'])
+    expect(at('07/10')).toContain('c1doc')
+    expect(at('07/10')).not.toContain('w1doc')
+    expect(at('02/11')).toEqual(['c7doc'])
+    expect(at('04/11')).toEqual(['w1doc'])
+    expect(at('18/11')).toEqual(['w5doc'])
+    expect(at('23/11')).toEqual([])
+  })
+
+  it('marks the counted-on matches as a best guess', () => {
+    const m = matchIn(lectures, rows, on(lectures, '04/11'))
+    expect(all(m)).toEqual([expect.objectContaining({ confidence: 'ordinal', inferred: true })])
+    const index = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: rows, ai: new Map(), overrides: [], weekOneStart: WEEK_ONE, sessions: lectures })
+    expect(index.weekOffset).toBe(0)
+    expect(index.series.get('lecture|climate lecture')).toEqual({ offset: 1, source: 'cumulative' })
+    expect(index.series.get('lecture|water lecture')).toEqual({ offset: 8, source: 'cumulative' })
+  })
+
+  it('matches nothing past the last lecture rather than guessing', () => {
+    const block3 = content({ id: 'b3', kind: 'folder', title: 'Block 3: Landscapes' })
+    const extra = [1, 2].flatMap((n) => {
+      const folder = child(block3, { id: `x${n}`, kind: 'folder', title: `Landscape Lecture ${n}: Glaciers` })
+      return [folder, child(folder, { id: `x${n}doc`, kind: 'document', title: 'ultraDocumentBody' })]
+    })
+    const more = [...rows, block3, ...extra]
+    expect(ids(matchIn(lectures, more, on(lectures, '23/11')))).toEqual(['x1doc'])
+    for (const s of lectures) expect(ids(matchIn(lectures, more, s))).not.toContain('x2doc')
+  })
+
+  it('an attached numbered item calibrates its series and outranks counting on', () => {
+    // I attach Water Lecture 1 to the 9 Nov lecture (10th): water is one later than counted.
+    const overrides = [{ session_uid: on(lectures, '09/11').uid, content_id: 'w1doc', action: 'attach' as const }]
+    const index = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: rows, ai: new Map(), overrides, weekOneStart: WEEK_ONE, sessions: lectures })
+    expect(index.series.get('lecture|water lecture')).toEqual({ offset: 9, source: 'attached' })
+    const m = matchIn(lectures, rows, on(lectures, '11/11'), { overrides })
+    expect(all(m)).toEqual([expect.objectContaining({ content: expect.objectContaining({ id: 'w2doc' }), confidence: 'ordinal' })])
+    expect(all(m)[0].inferred).toBeUndefined()
+  })
+})
+
+describe('numbered series: evidence and defaults', () => {
+  const lectures = timetable('GEOG1222', 'Geographic Research', 'Lecture', ['05/10', '12/10', '19/10', '26/10', '02/11', '09/11'])
+  const folders = [1, 2, 3, 4].flatMap((n) => {
+    const folder = content({ id: `f${n}`, kind: 'folder', title: `Lecture ${n}: Topic ${n}` })
+    return [folder, child(folder, { id: `f${n}doc`, kind: 'document', title: 'ultraDocumentBody' })]
+  })
+  const intro = content({ id: 'intro', kind: 'folder', title: 'Week 12: Introduction Lecture', week_label: 12 })
+  const introDoc = child(intro, { id: 'introDoc', kind: 'document', title: 'ultraDocumentBody' })
+
+  it('a single unprefixed series with no evidence keeps offset 0, whatever stands before it', () => {
+    const index = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: [intro, introDoc, ...folders], ai: new Map(), overrides: [], weekOneStart: WEEK_ONE, sessions: lectures })
+    expect(index.series.get('lecture|lecture')).toEqual({ offset: 0, source: 'default' })
+    expect(ids(matchIn(lectures, [...folders], on(lectures, '12/10')))).toEqual(['f2doc'])
+  })
+
+  it('dated members shift undated ones: Lecture 2 dated 19 Oct (3rd) puts Lecture 4 on the 5th lecture', () => {
+    const dated = child(folders[2], { id: 'f2rec', kind: 'tool', title: '19/10/2026 : Geographic Research', links: [panopto('rec')] })
+    const contents = [...folders, dated]
+    const m = matchIn(lectures, contents, on(lectures, '02/11'))
+    expect(ids(m)).toEqual(['f4doc'])
+    expect(all(m)[0]).toMatchObject({ confidence: 'ordinal' })
+    expect(ids(matchIn(lectures, contents, on(lectures, '26/10')))).toEqual(['f3doc'])
+  })
+
+  it('an attachment outranks dated evidence', () => {
+    const dated = child(folders[2], { id: 'f2rec', kind: 'tool', title: '19/10/2026 : Geographic Research', links: [panopto('rec')] })
+    const overrides = [
+      { session_uid: on(lectures, '05/10').uid, content_id: 'f1doc', action: 'attach' as const },
+      { session_uid: on(lectures, '12/10').uid, content_id: 'f2doc', action: 'attach' as const },
+    ]
+    const index = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: [...folders, dated], ai: new Map(), overrides, weekOneStart: WEEK_ONE, sessions: lectures })
+    expect(index.series.get('lecture|lecture')).toEqual({ offset: 0, source: 'attached' })
+  })
+
+  it('without the timetable, numbers match positions directly (as before)', () => {
+    expect(ids(matchSession(on(lectures, '19/10'), ctx({ contents: folders, ordinal: 3 })))).toEqual(['f3doc'])
+  })
+})
+
+describe('real layout: GEOG1061 Planet Under Pressure (teaching weeks, dates a day off)', () => {
+  const lectures = timetable('GEOG1061', 'Planet Under Pressure', 'Lecture', [
+    '05/10', '12/10', '19/10', '26/10', '02/11', '09/11', '16/11', '23/11', '30/11', '07/12',
+  ])
+  const block1 = content({ id: 'b1', kind: 'folder', title: 'Block 1 - – Environment and Conservation' })
+  const week2 = child(block1, { id: 'w2', kind: 'folder', title: 'BLOCK 1.2, DRB, Week 2 (12 October)' })
+  const recording = child(week2, { id: 'w2rec', kind: 'folder', title: 'Week 2 recording' })
+  const recordingBody = child(recording, { id: 'w2body', kind: 'document', title: 'ultraDocumentBody' })
+  const block2 = content({ id: 'b2', kind: 'folder', title: 'Block 2 - Biodiversity Under Pressure' })
+  const week6 = child(block2, { id: 'w6', kind: 'folder', title: 'Week 6 (Nov 10) - Biodiversity: Threats & Challenges' })
+  const session6 = child(week6, {
+    id: 's6',
+    title: 'Session 6_Biodiversity Under Pressure_Student_2627.pptx',
+    links: [slides('Session 6_Biodiversity Under Pressure_Student_2627.pptx')],
+  })
+  const week7 = child(block2, { id: 'w7', kind: 'folder', title: 'Week 7 (Nov 17) - Ecosystem Services' })
+  const week7Doc = child(week7, { id: 'w7doc', kind: 'document', title: 'ultraDocumentBody' })
+  const week10 = child(block2, { id: 'w10', kind: 'folder', title: 'Week 10 (Dec 8) - Conservation Futures' })
+  const week10Doc = child(week10, { id: 'w10doc', kind: 'document', title: 'ultraDocumentBody' })
+  const rows = [block1, week2, recording, recordingBody, block2, week6, session6, week7, week7Doc, week10, week10Doc]
+
+  it('calibrates offset 11 from the dated week titles', () => {
+    expect(matchIn(lectures, rows, on(lectures, '09/11')).weekOffset).toBe(11)
+  })
+
+  it('Session 6 slides (in "Week 6 (Nov 10)", a Tuesday) go to the Monday 9 Nov lecture by week', () => {
+    const m = matchIn(lectures, rows, on(lectures, '09/11'))
+    expect(titles(m.slides)).toEqual(['Session 6_Biodiversity Under Pressure_Student_2627.pptx'])
+    expect(m.slides[0].confidence).toBe('week')
+    expect(ids(matchIn(lectures, rows, on(lectures, '02/11')))).toEqual([])
+    expect(ids(matchIn(lectures, rows, on(lectures, '16/11')))).toEqual(['w7doc'])
+    expect(ids(matchIn(lectures, rows, on(lectures, '07/12')))).toEqual(['w10doc'])
+  })
+
+  it('the week 2 recording goes to 12 Oct by date', () => {
+    const m = matchIn(lectures, rows, on(lectures, '12/10'))
+    expect(ids(m)).toEqual(['w2body'])
+    expect(all(m)[0].confidence).toBe('date')
+  })
+
+  it("an unlabelled date that is no session day falls back to that date's week", () => {
+    const lesson = content({ id: 'tue', kind: 'lesson', title: 'Tuesday 10 November: Biodiversity', links: [slides('Bio.pptx')] })
+    const m = matchIn(lectures, [lesson], on(lectures, '09/11'))
+    expect(all(m)).toEqual([expect.objectContaining({ confidence: 'week' })])
+    expect(ids(matchIn(lectures, [lesson], on(lectures, '16/11')))).toEqual([])
+    // Without the timetable there is no way to tell: nothing, as before.
+    expect(all(matchSession(on(lectures, '09/11'), ctx({ contents: [lesson] })))).toEqual([])
+  })
+})
+
+describe('real layout: GEOG1241 / GEOG1222 dated titles keep working with the timetable', () => {
+  const lectures = timetable('GEOG1241', 'Borders', 'Lecture', ['05/10', '12/10', '19/10', '26/10', '02/11', '09/11', '11/11', '16/11'])
+  const workshops = timetable('GEOG1241', 'Borders', 'Workshop', ['04/11', '02/12'])
+  const sessions = [...lectures, ...workshops]
+  const lesson = content({
+    id: 'l9',
+    kind: 'lesson',
+    title: 'Monday, 9 November: Borders and Migration (Prof Lauren Martin)',
+    links: [slides('Borders and Migration.pptx')],
+  })
+  const workshop = content({ id: 'w1', kind: 'folder', title: '2-6 November: Workshop I - Crisis of Democracy' })
+  const brief = child(workshop, { id: 'w1b', kind: 'document', title: 'Workshop brief' })
+  const updated = content({ id: 'upd', title: 'Border Crises Lecture 1 Slides-Updated 9 Nov. 2026', links: [slides('Border Crises 1.pptx')] })
+  const rows = [lesson, workshop, brief, updated]
+
+  it('the 9 Nov lesson matches 9 Nov only (a session day: no spreading to 11 Nov)', () => {
+    expect(matchIn(sessions, rows, on(lectures, '09/11')).slides.map((s) => [s.content.id, s.confidence])).toEqual([['l9', 'date']])
+    expect(ids(matchIn(sessions, rows, on(lectures, '11/11')))).toEqual([])
+  })
+
+  it('the workshop range matches the 4 Nov workshop, never a lecture', () => {
+    expect(ids(matchIn(sessions, rows, on(workshops, '04/11', 'Workshop')))).toEqual(['w1b'])
+    expect(ids(matchIn(sessions, rows, on(lectures, '02/11')))).not.toContain('w1b')
+  })
+
+  it('an "Updated 9 Nov" date is not a session date: Lecture 1 slides go to lecture 1 only', () => {
+    const first = matchIn(sessions, rows, on(lectures, '05/10'))
+    expect(first.slides).toEqual([expect.objectContaining({ content: updated, confidence: 'ordinal' })])
+    expect(ids(matchIn(sessions, rows, on(lectures, '09/11')))).not.toContain('upd')
+  })
+
+  it('GEOG1222 "Lecture 1 - Mon 5th Oct 2026, 10am, ER201" still matches 5 Oct by date', () => {
+    const g = timetable('GEOG1222', 'Geographic Research', 'Lecture', ['05/10', '12/10'])
+    const l1 = content({ id: 'g1', title: 'Lecture 1 - Mon 5th Oct 2026, 10am, ER201', links: [slides('L1.pptx')] })
+    expect(matchIn(g, [l1], on(g, '05/10')).slides[0]).toMatchObject({ confidence: 'date' })
+    expect(ids(matchIn(g, [l1], on(g, '12/10')))).toEqual([])
+  })
+})
+
+describe('"updated" and similar dates are never session dates', () => {
+  const t = { yearStart: 2026, weekOffset: 0 }
+  const target = (title: string) => resolveContentTarget({ title, path: [], week_label: null }, [], null, t)
+
+  it('drops the date, keeps the lecture number', () => {
+    expect(target('Border Crises Lecture 1 Slides-Updated 9 Nov. 2026')).toMatchObject({
+      ordinal: 1,
+      ordinalType: 'lecture',
+      ordinalSeries: 'crises lecture',
+    })
+    expect(target('Border Crises Lecture 1 Slides-Updated 9 Nov. 2026').date).toBeUndefined()
+  })
+
+  it('covers revised / posted / uploaded / as of / version markers, any case', () => {
+    for (const title of [
+      'Lecture 3 slides (revised: 12/11/2026)',
+      'Reading list as of 5 October',
+      'Notes v2 12 October',
+      'Handout UPLOADED on Monday 9 November',
+      'Slides - posted - 9 Nov',
+      'Slides version 3 9 Nov',
+    ]) {
+      expect(target(title).date, title).toBeUndefined()
+    }
+  })
+
+  it('leaves real session dates alone', () => {
+    expect(target('Monday, 9 November: Borders and Migration (Prof Lauren Martin)').date).toBe('2026-11-09')
+    expect(target('Week 2 (12 October) - updated slides').date).toBe('2026-10-12')
+  })
+
+  it('does not calibrate weeks', () => {
+    const cal = { weekOneStart: WEEK_ONE, yearStart: 2026 }
+    expect(calibrateWeekOffset([{ title: 'Week 2 slides - updated 9 Nov', week_label: 2 }], cal)).toBe(11)
+  })
+})
+
+describe('series names and number words', () => {
+  const t = { yearStart: 2026, weekOffset: 0 }
+  const target = (title: string) => resolveContentTarget({ title, path: [], week_label: null }, [], null, t)
+
+  it('reads the words before the number', () => {
+    expect(target('Climate Lecture 7: Climate Interactive/Revision session')).toMatchObject({ ordinal: 7, ordinalSeries: 'climate lecture' })
+    expect(target('Water Lecture 1: Hydrological Cycle')).toMatchObject({ ordinal: 1, ordinalSeries: 'water lecture' })
+    expect(target('Lecture 2: Nature')).toMatchObject({ ordinal: 2, ordinalSeries: 'lecture' })
+    expect(target('Week 3 Lecture 2')).toMatchObject({ ordinal: 2, ordinalSeries: 'lecture' })
+    expect(target('Online Lecture 2')).toMatchObject({ ordinal: 2, ordinalSeries: 'lecture' })
+  })
+
+  it('reads number words and roman numerals', () => {
+    expect(target('Tutorial Three: Cinematic Landscapes')).toMatchObject({ ordinal: 3, ordinalType: 'tutorial', ordinalSeries: 'tutorial' })
+    expect(target('2-6 November: Workshop I - Crisis of Democracy')).toMatchObject({ ordinal: 1, ordinalSeries: 'workshop' })
+    expect(target('Lecture in the field').ordinal).toBeUndefined()
+  })
+})
+
+describe('calibrateWeekOffset: labels on both scales', () => {
+  const cal = (sessionDays?: string[]) => ({ weekOneStart: WEEK_ONE, yearStart: 2026, sessionDays })
+  // A module teaching in university weeks 12-21 (5 Oct - 7 Dec).
+  const term = ['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16', '2026-11-23', '2026-11-30', '2026-12-07']
+  const rows = (labels: number[]) => labels.map((w) => ({ title: `Week ${w}`, week_label: w }))
+
+  it('Week 2 + Week 14 (twice) with no dates: 0 puts more items in teaching weeks than 11 does', () => {
+    expect(calibrateWeekOffset(rows([2, 14, 14]), cal(term))).toBe(0)
+  })
+
+  it('a tie, or no timetable to score against, → 0 (never Week 14 → week 25)', () => {
+    expect(calibrateWeekOffset(rows([2, 14]), cal(term))).toBe(0)
+    expect(calibrateWeekOffset(rows([2, 14]), cal())).toBe(0)
+  })
+
+  it('mostly teaching weeks scores 11', () => {
+    expect(calibrateWeekOffset(rows([2, 3, 13]), cal(term))).toBe(11)
+  })
+
+  it('all ≤ 11 → 11; all ≥ 12 → 0; dated evidence still wins', () => {
+    expect(calibrateWeekOffset(rows([1, 11]), cal(term))).toBe(11)
+    expect(calibrateWeekOffset(rows([12, 20]), cal(term))).toBe(0)
+    expect(calibrateWeekOffset([...rows([14, 14]), { title: 'Week 2 (12 October)', week_label: 2 }], cal(term))).toBe(11)
   })
 })

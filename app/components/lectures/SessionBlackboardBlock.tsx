@@ -242,7 +242,7 @@ export default function SessionBlackboardBlock({
       {dueItems.length > 0 && (
         <Group label="Due for this session" icon={<CalendarClock className="h-3 w-3" strokeWidth={1.75} aria-hidden />}>
           {dueItems.map((item) => (
-            <WorkRow key={item.key} item={item} now={now} accent={accent} showModule={false} />
+            <WorkRow key={item.key} item={item} now={now} accent={accent} showModule={false} compact />
           ))}
         </Group>
       )}

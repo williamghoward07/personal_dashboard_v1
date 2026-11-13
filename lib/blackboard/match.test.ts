@@ -4,6 +4,7 @@ import {
   buildCourseIndex,
   calibrateWeekOffset,
   defaultWeekOneStart,
+  displayTitle,
   effectiveWeekOffset,
   matchSession,
   moduleReadingList,
@@ -491,6 +492,15 @@ describe('matchSession: roles, links and exclusions', () => {
     const removed = { ...handout, removed_at: '2026-11-11T00:00:00Z' }
     const r = matchSession(session({ start: '2026-10-05T10:00:00Z' }), ctx({ contents: [week, removed] }))
     expect(all(r)).toEqual([])
+  })
+
+  it('labels an Ultra document body by its parent title', () => {
+    expect(displayTitle({ title: 'ultraDocumentBody', path: ['Week 12', 'Reading list'] })).toBe('Reading list')
+    expect(displayTitle({ title: 'ULTRADOCUMENTBODY', path: [] })).toBe('ULTRADOCUMENTBODY')
+    expect(displayTitle({ title: 'Handout', path: ['Week 12'] })).toBe('Handout')
+    const body = child(week, { id: 'ub', kind: 'document', title: 'ultraDocumentBody', path: ['Week 12: Introduction Lecture'] })
+    const r = matchSession(session({ start: '2026-10-05T10:00:00Z' }), ctx({ contents: [week, body] }))
+    expect(r.other.map((i) => i.label)).toEqual(['Week 12: Introduction Lecture'])
   })
 
   it('a deadline title is not a session date', () => {

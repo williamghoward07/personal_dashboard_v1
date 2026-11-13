@@ -27,9 +27,17 @@ export interface BbProcessingTotals {
   added: number
 }
 
+export interface BbProcessingScope {
+  /** Distinct sources that needed reading when this run's first call started. */
+  read: number
+  /** Distinct sources in scope, as of the latest call. */
+  total: number
+}
+
 export interface BbProcessing {
   state: BbProcessingState
   totals: BbProcessingTotals
+  scope: BbProcessingScope
   remaining: number
   error: string | null
   /** Rows currently marked failed on the server, as of the latest call. */
@@ -54,6 +62,7 @@ interface ProcessResponse {
   error?: string
   failed?: number
   note?: string
+  scope?: { total?: number; pending?: number }
 }
 
 const ENDPOINT = '/api/work/process'
@@ -64,6 +73,7 @@ const LOCK_TTL_MS = 2 * 60_000
 interface Snapshot {
   state: BbProcessingState
   totals: BbProcessingTotals
+  scope: BbProcessingScope
   remaining: number
   error: string | null
   failed: number
@@ -73,6 +83,7 @@ interface Snapshot {
 const INITIAL: Snapshot = {
   state: 'idle',
   totals: { processed: 0, unchanged: 0, added: 0 },
+  scope: { read: 0, total: 0 },
   remaining: 0,
   error: null,
   failed: 0,
@@ -171,7 +182,8 @@ async function loop() {
     return
   }
   looping = true
-  set({ state: 'running', error: null, totals: { processed: 0, unchanged: 0, added: 0 }, notes: [] })
+  set({ state: 'running', error: null, totals: { processed: 0, unchanged: 0, added: 0 }, scope: { read: 0, total: 0 }, notes: [] })
+  let firstCall = true
   try {
     for (;;) {
       await whenVisible()
@@ -194,8 +206,14 @@ async function loop() {
         added: snapshot.totals.added + (r.added ?? 0),
       }
       const note = r.note?.trim()
+      const scope = {
+        read: firstCall ? (r.scope?.pending ?? 0) : snapshot.scope.read,
+        total: r.scope?.total ?? snapshot.scope.total,
+      }
+      firstCall = false
       set({
         totals,
+        scope,
         remaining: r.remaining ?? 0,
         failed: r.failed ?? snapshot.failed,
         notes: note && !snapshot.notes.includes(note) ? [...snapshot.notes, note] : snapshot.notes,

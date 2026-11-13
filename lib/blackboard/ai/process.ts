@@ -104,6 +104,13 @@ export interface ProcessResult {
   /** Units still pending after this one. */
   remaining: number
   budgetHit: boolean
+  /**
+   * Reporting only. `total`: distinct sources in scope (content rows,
+   * announcements, documents; not removed). `pending`: how many of them needed
+   * any work when this unit started (a content row needing classification and
+   * extraction counts once; rows marked `fail:` are not pending).
+   */
+  scope: { total: number; pending: number }
   error?: string
   /** E.g. a document read in parts, a batch split after an unusable reply. */
   note?: string
@@ -269,6 +276,7 @@ function emptyResult(unit: ProcessUnit): ProcessResult {
     calls: 0,
     remaining: 0,
     budgetHit: false,
+    scope: { total: 0, pending: 0 },
   }
 }
 
@@ -392,6 +400,12 @@ export async function processNext(supabase: SupabaseClient, deps: ProcessDeps): 
   let extractPending = content.filter((c) => needsWork(extractState(c)))
   let announcementPending = announcements.filter((a) => needsWork(announcementState(a)))
   const documentPending = documents.filter((d) => needsWork(documentState(d)))
+
+  const pendingContentIds = new Set([...classifyPending, ...extractPending].map((c) => c.id))
+  result.scope = {
+    total: content.length + announcements.length + documents.length,
+    pending: pendingContentIds.size + announcementPending.length + documentPending.length,
+  }
 
   const isDoneState = (s: HashState) => s.kind === 'done'
   result.skippedUnchanged =

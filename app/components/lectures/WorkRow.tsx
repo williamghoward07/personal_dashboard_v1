@@ -96,12 +96,18 @@ export default function WorkRow({
   now,
   accent,
   showModule = true,
+  compact = false,
 }: {
   item: WorkItem
   now: Date
   accent: UiAccent
   /** Show the module chip (off inside a module's own list). */
   showModule?: boolean
+  /**
+   * For a narrow column (one session's block): no day, time or module chip;
+   * the title takes the full width and the chips and actions sit on a second line.
+   */
+  compact?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -129,154 +135,184 @@ export default function WorkRow({
   const suggested = item.ai?.status === 'suggested'
   const moduleLabel = item.moduleCode ?? item.courseName
 
-  return (
-    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-      <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-container-high/60">
-        {canToggle ? (
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={item.done}
-            aria-label={item.done ? `Mark ${item.title} as not done` : `Mark ${item.title} as done`}
-            disabled={busy}
-            onClick={toggle}
-            className={cn(
-              'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors disabled:opacity-50',
-              'focus:outline-none focus-visible:ring-1 focus-visible:ring-outline',
-              item.done
-                ? 'border-primary-container bg-primary-container text-on-primary-container'
-                : 'border-outline-variant bg-surface-container-lowest hover:border-outline'
-            )}
-          >
-            {item.done && <Check className="h-3 w-3" strokeWidth={3} aria-hidden />}
-          </button>
-        ) : (
-          <span className="flex h-4 w-4 shrink-0 items-center justify-center text-primary-container">
-            {item.done && <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-label="Done" />}
-          </span>
-        )}
+  const checkbox = canToggle ? (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={item.done}
+      aria-label={item.done ? `Mark ${item.title} as not done` : `Mark ${item.title} as done`}
+      disabled={busy}
+      onClick={toggle}
+      className={cn(
+        'flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors disabled:opacity-50',
+        'focus:outline-none focus-visible:ring-1 focus-visible:ring-outline',
+        item.done
+          ? 'border-primary-container bg-primary-container text-on-primary-container'
+          : 'border-outline-variant bg-surface-container-lowest hover:border-outline'
+      )}
+    >
+      {item.done && <Check className="h-3 w-3" strokeWidth={3} aria-hidden />}
+    </button>
+  ) : (
+    <span className="flex h-4 w-4 shrink-0 items-center justify-center text-primary-container">
+      {item.done && <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-label="Done" />}
+    </span>
+  )
 
-        <span className="w-20 shrink-0 text-xs text-on-surface-variant">
-          {item.dueOn ? formatDueDay(item.dueOn) : 'No date'}
-        </span>
-        <span className="w-12 shrink-0 font-mono text-[11px] tabular-nums text-on-surface-variant">{time ?? ''}</span>
+  const titleLine = (
+    <span className="flex min-w-0 flex-1 items-center gap-2">
+      <span
+        title={compact ? item.title : undefined}
+        className={cn('truncate text-sm text-on-surface', item.done && 'text-on-surface-variant line-through')}
+      >
+        {item.title}
+      </span>
+      {item.url && (
+        <a
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Open ${item.title} in Blackboard`}
+          className="shrink-0 text-outline transition-colors hover:text-on-surface focus:outline-none focus-visible:text-on-surface"
+        >
+          <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
+        </a>
+      )}
+    </span>
+  )
 
-        <span className="flex min-w-0 flex-1 items-center gap-2">
-          <span className={cn('truncate text-sm text-on-surface', item.done && 'text-on-surface-variant line-through')}>
-            {item.title}
-          </span>
-          {item.url && (
-            <a
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Open ${item.title} in Blackboard`}
-              className="shrink-0 text-outline transition-colors hover:text-on-surface focus:outline-none focus-visible:text-on-surface"
+  const chips = (
+    <span className={cn('flex items-center gap-1.5', compact ? 'flex-wrap' : 'shrink-0')}>
+      {showModule && !compact && moduleLabel && (
+        <MetadataChip accent={item.moduleCode ? accent : 'neutral'} className="max-w-40">
+          <span className="truncate">{moduleLabel}</span>
+        </MetadataChip>
+      )}
+      <span className="text-[11px] text-on-surface-variant">{WORK_CATEGORY_LABEL[item.category]}</span>
+      {item.bbStatus === 'submitted' && <StatusBadge size="sm" accent="mint">Submitted</StatusBadge>}
+      {item.bbStatus === 'graded' && <StatusBadge size="sm" accent="blue">Graded</StatusBadge>}
+      {item.ai && (
+        <Popover
+          label="Where this date came from"
+          panelClassName="w-[min(24rem,calc(100vw-2rem))]"
+          trigger={(props) => (
+            <button
+              type="button"
+              {...props}
+              className="rounded-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-outline"
             >
-              <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden />
-            </a>
-          )}
-        </span>
-
-        <span className="flex shrink-0 items-center gap-1.5">
-          {showModule && moduleLabel && (
-            <MetadataChip accent={item.moduleCode ? accent : 'neutral'} className="max-w-40">
-              <span className="truncate">{moduleLabel}</span>
-            </MetadataChip>
-          )}
-          <span className="text-[11px] text-on-surface-variant">{WORK_CATEGORY_LABEL[item.category]}</span>
-          {item.bbStatus === 'submitted' && <StatusBadge size="sm" accent="mint">Submitted</StatusBadge>}
-          {item.bbStatus === 'graded' && <StatusBadge size="sm" accent="blue">Graded</StatusBadge>}
-          {item.ai && (
-            <Popover
-              label="Where this date came from"
-              panelClassName="w-[min(24rem,calc(100vw-2rem))]"
-              trigger={(props) => (
-                <button
-                  type="button"
-                  {...props}
-                  className="rounded-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-outline"
-                >
-                  <MetadataChip accent="blue" icon={<Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden />}>
-                    AI-found
-                  </MetadataChip>
-                </button>
-              )}
-            >
-              <div className="flex flex-col gap-2 text-sm">
-                <span className="label-caps text-on-surface-variant">
-                  {suggested ? 'Found by AI, not confirmed yet' : 'Found by AI, confirmed'}
-                </span>
-                <blockquote className={cn('border-l-2 pl-3 text-on-surface', ACCENT_BORDER.blue)}>
-                  &ldquo;{item.ai.quote}&rdquo;
-                </blockquote>
-                {item.ai.sourceUrl && (
-                  <a
-                    href={item.ai.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={cn('inline-flex items-center gap-1 self-start text-xs font-semibold hover:underline', ACCENT_TEXT.blue)}
-                  >
-                    Open source
-                    <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />
-                  </a>
-                )}
-              </div>
-            </Popover>
-          )}
-          {item.dueFromKeyDateId && (
-            <MetadataChip
-              accent="blue"
-              title="This assignment has no Blackboard due date; the date was found by AI in a Blackboard item."
-              icon={<Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden />}
-            >
-              AI-found date
-            </MetadataChip>
-          )}
-        </span>
-
-        <span
-          className={cn(
-            'w-28 shrink-0 text-right text-[11px]',
-            overdue ? cn('font-semibold', ACCENT_TEXT.crimson) : 'text-on-surface-variant'
+              <MetadataChip accent="blue" icon={<Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden />}>
+                AI-found
+              </MetadataChip>
+            </button>
           )}
         >
-          {when}
-        </span>
-      </div>
+          <div className="flex flex-col gap-2 text-sm">
+            <span className="label-caps text-on-surface-variant">
+              {suggested ? 'Found by AI, not confirmed yet' : 'Found by AI, confirmed'}
+            </span>
+            <blockquote className={cn('border-l-2 pl-3 text-on-surface', ACCENT_BORDER.blue)}>
+              &ldquo;{item.ai.quote}&rdquo;
+            </blockquote>
+            {item.ai.sourceUrl && (
+              <a
+                href={item.ai.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn('inline-flex items-center gap-1 self-start text-xs font-semibold hover:underline', ACCENT_TEXT.blue)}
+              >
+                Open source
+                <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />
+              </a>
+            )}
+          </div>
+        </Popover>
+      )}
+      {item.dueFromKeyDateId && (
+        <MetadataChip
+          accent="blue"
+          title="This assignment has no Blackboard due date; the date was found by AI in a Blackboard item."
+          icon={<Sparkles className="h-3 w-3" strokeWidth={1.75} aria-hidden />}
+        >
+          AI-found date
+        </MetadataChip>
+      )}
+    </span>
+  )
 
-      {item.ai && (
-        <div className="flex shrink-0 items-center gap-1">
-          {suggested && (
-            <Button
-              variant="outline"
-              size="sm"
-              accent={accent}
-              disabled={busy}
-              onClick={() => void run(() => confirmKeyDate(item.keyDateId as string))}
-            >
-              Confirm
+  const whenLabel = (
+    <span
+      className={cn(
+        compact ? 'text-[11px]' : 'w-28 shrink-0 text-right text-[11px]',
+        overdue ? cn('font-semibold', ACCENT_TEXT.crimson) : 'text-on-surface-variant'
+      )}
+    >
+      {when}
+    </span>
+  )
+
+  const actions = item.ai && (
+    <div className="flex shrink-0 items-center gap-1">
+      {suggested && (
+        <Button
+          variant="outline"
+          size="sm"
+          accent={accent}
+          disabled={busy}
+          onClick={() => void run(() => confirmKeyDate(item.keyDateId as string))}
+        >
+          Confirm
+        </Button>
+      )}
+      {item.keyDateId && (
+        <Popover
+          label={`Edit date for ${item.title}`}
+          align="end"
+          trigger={(props) => (
+            <Button variant="ghost" size="sm" accent={accent} disabled={busy} {...props}>
+              Edit date
             </Button>
           )}
-          {item.keyDateId && (
-            <Popover
-              label={`Edit date for ${item.title}`}
-              align="end"
-              trigger={(props) => (
-                <Button variant="ghost" size="sm" accent={accent} disabled={busy} {...props}>
-                  Edit date
-                </Button>
-              )}
-            >
-              {(close) => <EditDateForm item={item} accent={accent} onSaved={close} />}
-            </Popover>
-          )}
-          {suggested && (
-            <Button variant="destructive" size="sm" disabled={busy} onClick={() => setConfirmDismiss(true)}>
-              Dismiss
-            </Button>
-          )}
+        >
+          {(close) => <EditDateForm item={item} accent={accent} onSaved={close} />}
+        </Popover>
+      )}
+      {suggested && (
+        <Button variant="destructive" size="sm" disabled={busy} onClick={() => setConfirmDismiss(true)}>
+          Dismiss
+        </Button>
+      )}
+    </div>
+  )
+
+  return (
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      {compact ? (
+        <div className="flex min-w-0 flex-1 items-start gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-container-high/60">
+          <span className="flex h-5 items-center">{checkbox}</span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex min-w-0 items-center">{titleLine}</div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {chips}
+              {whenLabel}
+            </div>
+            {actions}
+          </div>
         </div>
+      ) : (
+        <>
+          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-container-high/60">
+            {checkbox}
+            <span className="w-20 shrink-0 text-xs text-on-surface-variant">
+              {item.dueOn ? formatDueDay(item.dueOn) : 'No date'}
+            </span>
+            <span className="w-12 shrink-0 font-mono text-[11px] tabular-nums text-on-surface-variant">{time ?? ''}</span>
+            {titleLine}
+            {chips}
+            {whenLabel}
+          </div>
+          {actions}
+        </>
       )}
 
       {error && (

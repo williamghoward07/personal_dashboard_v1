@@ -28,9 +28,9 @@ afterEach(() => {
 describe('useBbProcessing', () => {
   it('loops until nothing is left, summing totals and announcing changes', async () => {
     const fetchMock = mockResponses([
-      { body: { processed: 40, skippedUnchanged: 0, added: 0, remaining: 2, budgetHit: false } },
-      { body: { processed: 6, skippedUnchanged: 40, added: 2, remaining: 1, budgetHit: false } },
-      { body: { processed: 1, skippedUnchanged: 46, added: 0, remaining: 0, budgetHit: false } },
+      { body: { processed: 40, skippedUnchanged: 0, added: 0, remaining: 2, budgetHit: false, scope: { total: 49, pending: 47 } } },
+      { body: { processed: 6, skippedUnchanged: 40, added: 2, remaining: 1, budgetHit: false, scope: { total: 49, pending: 7 } } },
+      { body: { processed: 1, skippedUnchanged: 46, added: 0, remaining: 0, budgetHit: false, scope: { total: 50, pending: 1 } } },
     ])
     const { useBbProcessing, spy } = await load()
     const { result, rerender } = renderHook(() => useBbProcessing({ auto: true }))
@@ -39,6 +39,8 @@ describe('useBbProcessing', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(fetchMock).toHaveBeenCalledWith('/api/work/process', { method: 'POST' })
     expect(result.current.totals).toEqual({ processed: 47, unchanged: 46, added: 2 })
+    // `read` is the first call's pending count; `total` the latest.
+    expect(result.current.scope).toEqual({ read: 47, total: 50 })
     expect(result.current.remaining).toBe(0)
     expect(spy).toHaveBeenCalledTimes(1)
     expect(window.localStorage.getItem('bb-processing-lock')).toBeNull()

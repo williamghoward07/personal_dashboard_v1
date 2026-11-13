@@ -245,6 +245,9 @@ describe('processNext', () => {
     expect(first.map((r) => r.unit)).toEqual(['classify', 'classify', 'announcements', 'content', 'document'])
     expect(first.map((r) => r.remaining)).toEqual([4, 3, 2, 1, 0])
     expect(first.every((r) => !r.error)).toBe(true)
+    // Scope counts distinct sources: 46 content + 2 announcements + 1 document,
+    // each once even when it needs both classifying and extracting.
+    expect(first[0].scope).toEqual({ total: 49, pending: 49 })
 
     // 46 module items → 40 + 6 classify; 1 announcement with a date signal;
     // one content batch of the 5 items with a signal; one handbook chunk.
@@ -285,6 +288,7 @@ describe('processNext', () => {
     const second = await processNext(SUPABASE, { ai, userId: 'u1', now: NOW, store: memoryStore(db), loadTimetable: noTimetable })
     expect(second).toMatchObject({ unit: 'none', calls: 0, remaining: 0, processed: 0, added: 0, budgetHit: false })
     expect(second.skippedUnchanged).toBe(46 + 46 + 2 + 1)
+    expect(second.scope).toEqual({ total: 49, pending: 0 })
     expect(requests.length).toBe(calls)
     expect(db.writes).toBe(writes)
   })
@@ -305,6 +309,7 @@ describe('processNext', () => {
     expect(sent[0].prompt).toContain('Lecture 8 slides')
     expect(results[0].skippedNoSignal).toBe(1)
     expect(results[results.length - 1].remaining).toBe(0)
+    expect(results[0].scope).toEqual({ total: 49, pending: 1 })
   })
 
   it('re-extracts a changed deadline item alone, and never brings back a dismissed or overwrites a confirmed date', async () => {

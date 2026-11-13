@@ -889,12 +889,24 @@ const ROLE_LINK: Partial<Record<BbContentRole, BbContentLink['kind']>> = {
 }
 const RELEVANT_LINKS = new Set<BbContentLink['kind']>(['slides', 'talis', 'panopto', 'file'])
 
+const ULTRA_BODY_TITLE_RE = /^ultraDocumentBody$/i
+
+/**
+ * What to call a content row. Ultra stores a document page as a parent plus a
+ * child literally titled "ultraDocumentBody"; that child shows its parent's
+ * title (the last path segment) instead.
+ */
+export function displayTitle(row: { title: string; path: string[] | null }): string {
+  const parent = row.path?.[row.path.length - 1]
+  return ULTRA_BODY_TITLE_RE.test(row.title.trim()) && parent ? parent : row.title
+}
+
 function linkFor(row: BbContentLite, role: BbContentRole): { href: string | null; label: string } {
   const links = row.links ?? []
   const preferred = ROLE_LINK[role]
   const link = (preferred && links.find((l) => l.kind === preferred)) || links.find((l) => RELEVANT_LINKS.has(l.kind))
-  if (link) return { href: link.href, label: link.label?.trim() || row.title }
-  return { href: row.url, label: row.title }
+  if (link) return { href: link.href, label: link.label?.trim() || displayTitle(row) }
+  return { href: row.url, label: displayTitle(row) }
 }
 
 function covers(target: ContentTarget, day: string): boolean {
@@ -1037,7 +1049,7 @@ export function moduleReadingList(contents: BbContentLite[]): { href: string; la
   for (const row of contents) {
     if (row.removed_at || row.parent_bb_id || (row.path ?? []).length > 0) continue
     const link = (row.links ?? []).find((l) => l.kind === 'talis')
-    if (link) return { href: link.href, label: link.label?.trim() || row.title }
+    if (link) return { href: link.href, label: link.label?.trim() || displayTitle(row) }
   }
   return null
 }

@@ -10,4 +10,4 @@
 - `isOverdue` = ended and prep not handed in. Follow-up has no due date and never counts. `assignmentLists` builds /lectures' Upcoming / Past due / Completed / History tabs.
 - Clicking a session opens `/lectures/session?uid=…` (`sessionHref`), a query param because UIDs carry `@` and dots. Only timetable sessions have it; Google events stay in the calendar popover.
 - Google events can be tracked too: off by default, switched on per event in its popover (`lecture_sessions.tracked`, uid `gcal:<event id>`). `/api/timetable` returns their prep as `tracked`; the calendar joins it to the Google events it already has (`calendarEventSession`). Only same-day timed events become prep items. They have no module code, so a pasted link stays a `session_tasks` row.
-- Talis and Blackboard are 2FA-locked: readings are pasted links, never fetched.
+- Talis is 2FA-locked: readings are pasted links, never fetched. Pasted links are still what makes prep amber. Blackboard items are read by the extension (`lib/blackboard/CLAUDE.md`) and only suggested on the session page; they become a tracked reading only when pinned, and never change prep status on their own.

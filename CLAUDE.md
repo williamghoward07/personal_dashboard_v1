@@ -26,6 +26,7 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
   - `useStoredIdSet`
   - `lib/ui/pagination.ts`
 - Drag and drop: `@dnd-kit` with a grip handle (see `HabitCard`).
+- The calendar also shows Blackboard deadlines (`deadline` `DayItem`s), and the `due-soon` home widget lists deadlines and tests.
 - Calendar event details open in an anchored popover or bottom sheet, never a full-screen modal.
 - Page titles: a page publishes its context once with `usePageTitle(...)` (`lib/page-title.ts`), which feeds the breadcrumb and browser tab title. It's a hook, so keep it above any early return (see `WorkspaceDetailBoard.tsx`).
 - Nav tabs can be hidden from the settings menu (`user_settings.hidden_nav_items`); `Sidebar` and `MobileBottomNav` both read `useVisibleNavItems()`.
@@ -35,6 +36,7 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
 ## AI
 - Every AI call goes through `lib/ai/gemini.ts`. Don't import a provider SDK anywhere else.
 - Every call is logged to `ai_usage` (append-only, one row per call, with a feature key). The daily cap is set in `lib/ai/constants.ts`.
+- Blackboard AI (`lib/blackboard/ai/`) has its own cap (`BB_DAILY_CALL_CAP`) and `bb_*` feature keys. Its dates are kept only when grounded in a verbatim quote, and the user confirms or dismisses them.
 - Find mode: AI only extracts keywords. The queries themselves are hand-written `ilike` lookups, with no AI in query execution.
 - Capture and Brain Dump only produce drafts. Nothing is written until the user confirms it (`/api/capture/confirm`).
 
@@ -52,6 +54,7 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
 - `link_folders.color` can't be teal.
 - `user_settings`: one row per user for UI layout and visibility (`home_layout`, `hidden_nav_items`, `launcher_link_ids`), via `useSettings()` (`lib/settings/use-settings.ts`). Falls back to defaults when the row or table is missing.
 - Lecture prep: the timetable is never stored — it's read from the ICS feed (`lib/timetable/CLAUDE.md`). `lecture_sessions` holds per-session state keyed by ICS UID (or `gcal:<id>` for a Google event with prep tracked); module readings are `workspace_links` with `session_uid`; tasks and post-session concepts are `session_tasks`; `workspaces.module_code` marks a module workspace. Prep is green only once handed in with Mark as done (`prep_done_at`); follow-up never makes a session overdue.
+- Blackboard work: `/lectures` is one work list built from `bb_*` tables (`lib/blackboard/work.ts`). `bb_key_dates` holds AI-found dates (suggested / confirmed / dismissed); `bb_assignments.done_at` is my own done mark. The feature never reads or writes `tasks` or `education_tasks`.
 - `launcher_link_ids` is the home launcher's membership and order. `quick_links.is_pinned` is retired: it's only read once to seed that array.
 
 ## Integrations and boundaries
@@ -59,7 +62,7 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
 - Instagram: no API, scraping or automation. Follows are imported only from the user's data export (`following.json`), and re-importing is additive-only.
 - Perplexity: links are saved manually. There is no public API.
 - Bible: store references only, never scripture text. No Bible API, zero AI calls.
-- Blackboard: read-only, through my logged-in browser (Chrome extension in `extension/`, logic in `lib/blackboard/client.ts`). Never store credentials. Rules: `lib/blackboard/CLAUDE.md`.
+- Blackboard: read-only, through my logged-in browser (Chrome extension in `extension/`, logic in `lib/blackboard/client.ts`). Never store credentials. The only files ever downloaded are handbooks and briefs (pdf/docx), and only their extracted text is kept. Its AI pass runs from the dashboard, with its own daily cap. Rules: `lib/blackboard/CLAUDE.md`.
 - `/api/alexa` is public in `proxy.ts` and verifies requests itself (`lib/alexa/CLAUDE.md`).
 - No push or email notifications are built yet.
 - Env vars are documented in `.env.example`. Never commit values.

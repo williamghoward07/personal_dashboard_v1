@@ -13,8 +13,7 @@ Moved out of `CLAUDE.md` on 2026-10-01.
 
 ## Backlog
 - **Blackboard**: a picker to attach an item to a session by hand (the
-  override exists; only hide / restore have UI); an "Open source" link on
-  the session page's announcement lines; `npm run bb:eval` can't log to
+  override exists; only hide / restore have UI); `npm run bb:eval` can't log to
   `ai_usage` until `20261113010000_ai_usage_service_role.sql` is applied;
   the handbook download (now from an Ultra Document's body, 13 Nov 2026)
   and PDF text extraction in the extension's service worker are untested

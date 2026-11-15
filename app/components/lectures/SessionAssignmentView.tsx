@@ -22,6 +22,7 @@ import {
 } from '@/lib/timetable/session'
 import { formatSessionDay, sessionMeta } from '@/lib/timetable/format'
 import PrepLight from './PrepLight'
+import AnnouncementsChip from './AnnouncementsChip'
 import HandInButton from './HandInButton'
 import SessionBlackboardBlock from './SessionBlackboardBlock'
 import { AddForm, ItemRow, Tick, microLabel, readingItem, taskItem, type PrepItem } from './SessionPrepPanel'
@@ -32,11 +33,14 @@ function Section({
   icon,
   title,
   count,
+  corner,
   children,
 }: {
   icon: ReactNode
   title: string
   count?: string
+  /** Top-right of the card, after the count. */
+  corner?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -46,7 +50,10 @@ function Section({
           {icon}
           {title}
         </h2>
-        {count && <span className="text-[11px] tabular-nums text-on-surface-variant">{count}</span>}
+        <div className="flex items-center gap-2">
+          {count && <span className="text-[11px] tabular-nums text-on-surface-variant">{count}</span>}
+          {corner}
+        </div>
       </div>
       {children}
     </ModuleGlassCard>
@@ -201,7 +208,11 @@ function AssignmentBody({ session }: { session: SessionWithPrep }) {
           </Section>
 
           {session.moduleCode && (
-            <Section icon={<GraduationCap className="h-4 w-4 text-academic-orange" strokeWidth={1.75} />} title="From Blackboard">
+            <Section
+              icon={<GraduationCap className="h-4 w-4 text-academic-orange" strokeWidth={1.75} />}
+              title="From Blackboard"
+              corner={<AnnouncementsChip moduleCode={session.moduleCode} />}
+            >
               <SessionBlackboardBlock session={session} accent={ACCENT} readings={prep.readings} addReading={prep.addReading} />
             </Section>
           )}

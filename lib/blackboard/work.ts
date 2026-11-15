@@ -178,7 +178,21 @@ function isSessionWork(kd: Pick<KeyDateLite, 'category' | 'for_session_type'>): 
 }
 
 /**
- * Builds every work item. Dismissed key dates never appear. A key date
+ * An announcement's date that nobody confirmed and whose day has passed. An
+ * announcement only annotates, so once it's too late to act on, an
+ * unconfirmed one is noise, not overdue work. Confirmed dates and dates from
+ * content or handbooks are never dropped this way.
+ */
+export function isStaleAnnouncementDate(
+  kd: Pick<KeyDateLite, 'status' | 'announcement_id' | 'due_on' | 'done_at'>,
+  now: Date,
+): boolean {
+  return kd.status === 'suggested' && !!kd.announcement_id && !kd.done_at && kd.due_on < londonToday(now)
+}
+
+/**
+ * Builds every work item. Dismissed key dates never appear, nor do stale
+ * announcement dates (`isStaleAnnouncementDate`). A key date
  * linked to an official assignment folds into it only when that assignment
  * is among the live ones loaded; otherwise (removed, or not loaded) it shows
  * as its own item. Session work (see `isSessionWork`) with a timetable
@@ -188,7 +202,9 @@ function isSessionWork(kd: Pick<KeyDateLite, 'category' | 'for_session_type'>): 
 export function toWorkItems(input: WorkInput): WorkItem[] {
   const courseById = new Map(input.courses.map((c) => [c.id, c]))
   const liveAssignments = new Set(input.assignments.filter((a) => !a.removed_at).map((a) => a.id))
-  const live = input.keyDates.filter((kd) => kd.status === 'suggested' || kd.status === 'confirmed')
+  const live = input.keyDates.filter(
+    (kd) => (kd.status === 'suggested' || kd.status === 'confirmed') && !isStaleAnnouncementDate(kd, input.now),
+  )
   const folds = (kd: KeyDateLite) => !!kd.assignment_id && liveAssignments.has(kd.assignment_id)
   const byAssignment = new Map<string, KeyDateLite[]>()
   for (const kd of live) {

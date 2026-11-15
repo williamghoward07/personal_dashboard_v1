@@ -33,6 +33,12 @@ describe('matchCount', () => {
     ).toBe(9)
   })
 
+  it('does not count announcement-sourced dates: the corner chip owns those', () => {
+    expect(
+      matchCount(match({ keyDates: [{ announcement_id: 'a1' }, { announcement_id: null }, { announcement_id: null }] as BbKeyDate[] }))
+    ).toBe(2)
+  })
+
   it('does not count hidden items', () => {
     expect(matchCount(match({ slides: items(1), hidden: items(3) }))).toBe(1)
   })

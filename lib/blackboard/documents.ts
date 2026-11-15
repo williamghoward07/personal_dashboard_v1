@@ -31,7 +31,8 @@ export function handbookWords(text: string): string {
     .replace(/\s+/g, ' ')
 }
 
-function matchesHandbook(text: string): boolean {
+/** Does this title, folder name or file name look like a handbook or assessment brief? */
+export function matchesHandbook(text: string): boolean {
   return HANDBOOK_PATTERN.test(handbookWords(text))
 }
 
@@ -101,8 +102,14 @@ export function wantedDocuments(
   const out: WantedDocument[] = []
   for (const list of byCourse.values()) {
     list.sort((a, b) => a.rank - b.rank || a.row.path.length - b.row.path.length || a.index - b.index)
-    for (const { row } of list.slice(0, Math.max(0, cap))) {
-      out.push({ course_bb_id: row.course_bb_id, content_bb_id: row.bb_id, known: { ...(opts.known.get(row.bb_id) ?? {}) } })
+    for (const { row, rank } of list.slice(0, Math.max(0, cap))) {
+      out.push({
+        course_bb_id: row.course_bb_id,
+        content_bb_id: row.bb_id,
+        known: { ...(opts.known.get(row.bb_id) ?? {}) },
+        // An explicit pick means every pdf / docx in the item, not just the handbook-looking ones.
+        ...(rank === 0 ? { all: true as const } : {}),
+      })
     }
   }
   return out

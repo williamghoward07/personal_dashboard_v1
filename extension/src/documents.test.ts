@@ -64,6 +64,70 @@ describe('documentKind', () => {
   })
 })
 
+describe('readDocuments on an Ultra Document', () => {
+  const PDF_MIME = 'application/pdf'
+  const signed = (rid: number) => `${BB_ORIGIN}/bbcswebdav/pid-7-dt-content-rid-${rid}_1/xid-${rid}_1?k=v`
+  const embed = (data: Record<string, unknown>) => `<a data-bbfile="${JSON.stringify(data).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" href="x">f</a>`
+  const page = (html: string) =>
+    ({
+      courses: [{ bbId: '_10_1', contents: [{ id: '_7_1', modified: 'v1', contentHandler: { id: 'resource/x-bb-document' }, body: html }] }],
+    }) as unknown as BbSnapshot
+  const wantPage = (extra: Partial<WantedDocument> = {}): WantedDocument[] => [{ course_bb_id: '_10_1', content_bb_id: '_7_1', known: {}, ...extra }]
+  /** Blackboard's real answer for an Ultra Document's file list. */
+  const noFileList: BbFetch = async (url) => ({ status: 400, url, body: { status: 400, message: 'The Content Item does not support file attachments' } })
+
+  const brief = embed({ linkName: 'GroupSummativeAssignment_26-27.docx', mimeType: 'application/octet-stream', resourceUrl: signed(1) })
+  const article = embed({ linkName: 'Article-1.pdf', mimeType: PDF_MIME, resourceUrl: signed(2) })
+  const slides = embed({ fileName: 'Lecture 2.pptx', mimeType: 'application/vnd.ms-powerpoint', resourceUrl: signed(3) })
+
+  it('reads the files in its body without asking for a file list', async () => {
+    let asked = 0
+    const { d, uploads, downloads } = deps({ bbFetch: async (url) => (asked++, noFileList(url)) })
+    const result = await readDocuments(page(embed({ linkName: 'Handbook_26-27.pdf', displayName: 'Term 1 Handbook', mimeType: PDF_MIME, resourceUrl: signed(1) })), wantPage(), d)
+    expect(asked).toBe(0)
+    expect(downloads).toEqual([signed(1)])
+    expect(result).toMatchObject({ read: 1, failed: [], skipped: [] })
+    expect(uploads[0]).toMatchObject({ content_bb_id: '_7_1', bb_id: '_7_1:xid-1_1', file_name: 'Handbook_26-27.pdf', version: 'v1' })
+    // The signed URL is used for the download only.
+    expect(JSON.stringify(uploads)).not.toContain('bbcswebdav')
+  })
+
+  it('prefers the brief over readings and slides on the same page, unless the whole item was asked for', async () => {
+    const first = deps()
+    await readDocuments(page(brief + article + slides), wantPage(), first.d)
+    expect(first.downloads).toEqual([signed(1)])
+
+    const all = deps()
+    await readDocuments(page(brief + article + slides), wantPage({ all: true }), all.d)
+    expect(all.downloads).toEqual([signed(1), signed(2)])
+  })
+
+  it('reads every pdf / docx when no file name looks like a handbook', async () => {
+    const { d, downloads } = deps()
+    await readDocuments(page(article + slides), wantPage(), d)
+    expect(downloads).toEqual([signed(2)])
+  })
+
+  it('skips a file the dashboard already has at this version', async () => {
+    const { d, downloads } = deps()
+    const result = await readDocuments(page(brief), wantPage({ known: { '_7_1:xid-1_1': 'v1' } }), d)
+    expect(downloads).toEqual([])
+    expect(result.unchanged).toBe(1)
+  })
+
+  it('falls back to the body when another item type refuses its file list', async () => {
+    const other = { courses: [{ bbId: '_10_1', contents: [{ id: '_7_1', modified: 'v1', contentHandler: { id: 'resource/x-bb-other' }, body: brief }] }] } as unknown as BbSnapshot
+    const withBody = deps({ bbFetch: noFileList })
+    expect(await readDocuments(other, wantPage(), withBody.d)).toMatchObject({ read: 1, failed: [] })
+
+    const empty = { courses: [{ bbId: '_10_1', contents: [{ id: '_7_1', contentHandler: { id: 'resource/x-bb-other' }, body: '<p>No files</p>' }] }] } as unknown as BbSnapshot
+    const without = deps({ bbFetch: noFileList })
+    const result = await readDocuments(empty, wantPage(), without.d)
+    expect(result.failed).toHaveLength(1)
+    expect(result.failed[0].reason).toMatch(/couldn't list its files/)
+  })
+})
+
 describe('readDocuments', () => {
   it('reads new pdf/docx files, skips slides, and sends text with the item version', async () => {
     const { d, uploads, downloads } = deps()

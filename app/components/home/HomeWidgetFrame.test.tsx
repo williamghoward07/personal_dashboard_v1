@@ -1,8 +1,9 @@
 import { createRef } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, cleanup } from '@testing-library/react'
 import { DndContext } from '@dnd-kit/core'
 import { SortableContext } from '@dnd-kit/sortable'
+import { launcherHeightForRows } from '@/lib/app-launcher/launcher-layout'
 import HomeWidgetFrame from './HomeWidgetFrame'
 
 // The frame is where drag, resize and show/hide meet, so the things worth
@@ -18,21 +19,24 @@ function renderFrame(props: Partial<React.ComponentProps<typeof HomeWidgetFrame>
 
   const utils = render(
     <DndContext>
-      <SortableContext items={['money']}>
-        <HomeWidgetFrame
-          id="money"
-          label="Money"
-          span={1}
-          editing={false}
-          gridRef={gridRef}
-          onHide={onHide}
-          onSizePreview={onSizePreview}
-          onSizeCommit={onSizeCommit}
-          {...props}
-        >
-          <p>widget body</p>
-        </HomeWidgetFrame>
-      </SortableContext>
+      <div ref={gridRef} style={{ gridTemplateColumns: '250px 250px' }}>
+        <SortableContext items={[props.id ?? 'money']}>
+          <HomeWidgetFrame
+            id="money"
+            label="Money"
+            span={1}
+            editing={false}
+            gridRef={gridRef}
+            gridColumns={2}
+            onHide={onHide}
+            onSizePreview={onSizePreview}
+            onSizeCommit={onSizeCommit}
+            {...props}
+          >
+            <p>widget body</p>
+          </HomeWidgetFrame>
+        </SortableContext>
+      </div>
     </DndContext>
   )
 
@@ -40,6 +44,19 @@ function renderFrame(props: Partial<React.ComponentProps<typeof HomeWidgetFrame>
 }
 
 describe('HomeWidgetFrame', () => {
+  beforeEach(() => {
+    vi.stubGlobal('PointerEvent', class extends MouseEvent {})
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      disconnect() {}
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
   it('shows no handles outside edit mode', () => {
     const { queryByLabelText, getByText } = renderFrame()
     expect(queryByLabelText('Reorder Money')).toBeNull()
@@ -59,7 +76,7 @@ describe('HomeWidgetFrame', () => {
 
   it('applies the static span class for its span', () => {
     const { container } = renderFrame({ span: 3 })
-    const wrapper = container.firstElementChild as HTMLElement
+    const wrapper = container.firstElementChild?.firstElementChild as HTMLElement
     expect(wrapper.className).toContain('xl:col-span-3')
     expect(wrapper.className).toContain('sm:col-span-2')
     cleanup()
@@ -94,5 +111,47 @@ describe('HomeWidgetFrame', () => {
     fireEvent.keyDown(four.getByLabelText('Money size'), { key: 'ArrowRight' })
     expect(four.onSizeCommit).not.toHaveBeenCalled()
     cleanup()
+  })
+
+  it('changes launcher width and rows in separate steps on a two-column home grid', () => {
+    const { getByRole, onSizeCommit } = renderFrame({ id: 'app-launcher', label: 'App Launcher', editing: true })
+    fireEvent.click(getByRole('button', { name: 'Wider' }))
+    expect(onSizeCommit).toHaveBeenLastCalledWith('app-launcher', 2, undefined)
+    fireEvent.keyDown(getByRole('slider'), { key: 'ArrowDown' })
+    expect(onSizeCommit).toHaveBeenLastCalledWith('app-launcher', 1, launcherHeightForRows(3))
+    cleanup()
+  })
+
+  it('limits launcher row controls to whole sizes from two through four', () => {
+    const { getByRole, getByText, onSizeCommit } = renderFrame({
+      id: 'app-launcher',
+      label: 'App Launcher',
+      editing: true,
+      span: 4,
+      height: launcherHeightForRows(4),
+    })
+    fireEvent.click(getByRole('button', { name: 'More rows' }))
+    expect(onSizeCommit).not.toHaveBeenCalled()
+    fireEvent.click(getByRole('button', { name: 'Fewer rows' }))
+    expect(onSizeCommit).toHaveBeenCalledWith('app-launcher', 4, launcherHeightForRows(3))
+    expect(getByText('widget body').parentElement?.style.minHeight).toBe('')
+    cleanup()
+  })
+
+  it('snaps a launcher corner drag and commits the last preview on release', () => {
+    const { getByRole, onSizeCommit, onSizePreview } = renderFrame({ id: 'app-launcher', editing: true })
+    const handle = getByRole('slider')
+    handle.setPointerCapture = vi.fn()
+    handle.hasPointerCapture = () => false
+
+    fireEvent.pointerDown(handle, { clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(handle, { clientX: 100, clientY: 130 })
+    expect(onSizePreview).not.toHaveBeenCalled()
+    fireEvent.pointerMove(handle, { clientX: 240, clientY: 140 })
+    expect(onSizePreview).toHaveBeenLastCalledWith('app-launcher', 2, launcherHeightForRows(3))
+    fireEvent.pointerMove(handle, { clientX: 240, clientY: 214 })
+    expect(onSizePreview).toHaveBeenLastCalledWith('app-launcher', 2, launcherHeightForRows(4))
+    fireEvent.pointerUp(handle)
+    expect(onSizeCommit).toHaveBeenCalledWith('app-launcher', 2, launcherHeightForRows(4))
   })
 })

@@ -146,6 +146,15 @@ export function calendarItemSession(item: Extract<DayItem, { kind: 'calendar' }>
   return calendarEventSession({ id: item.id, title: item.title, start: item.start, end: item.end }, null, new Date())
 }
 
+export function formatDayHeading(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  })
+}
+
 export function formatSpanEnd(endKey: string) {
   return new Date(`${endKey}T00:00:00Z`).toLocaleDateString('en-GB', {
     day: 'numeric',

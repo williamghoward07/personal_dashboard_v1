@@ -1,95 +1,76 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CalendarClock, Sparkles } from 'lucide-react'
-import { addDays, londonToday } from '@/lib/blackboard/dates'
+import { BookOpenCheck } from 'lucide-react'
+import { londonToday } from '@/lib/blackboard/dates'
 import { useWorkItems } from '@/lib/blackboard/use-work-items'
-import { dueWithin, type WorkItem } from '@/lib/blackboard/work'
+import { dueWithin, workLists, type WorkItem } from '@/lib/blackboard/work'
 import { moduleNameMap } from '../../lectures/module-names'
 import { formatDueDay, relativeDueLabel } from '../../lectures/work-format'
 import HomeSectionCard from './HomeSectionCard'
 
 const DAYS = 7
-const MAX_ROWS = 6
-
-// Deadlines and tests only: lecture prep is the Lectures page's job.
-const isDeadlineOrTest = (item: WorkItem) =>
+const MAX_ROWS = 4
+const isDeadline = (item: WorkItem) =>
   item.source === 'assignment' || item.source === 'key_date' || (item.source === 'session' && item.category === 'test')
 
-// Lectures and tutorials in the window that have work set for them.
-function sessionsWithWork(items: WorkItem[], today: string): number {
-  const end = addDays(today, DAYS)
-  return items.filter((item) => {
-    const type = item.session?.type.trim().toLowerCase()
-    return (
-      (type === 'lecture' || type === 'tutorial') &&
-      !!item.setWork?.length &&
-      item.dueOn !== null &&
-      item.dueOn >= today &&
-      item.dueOn < end
-    )
-  }).length
-}
-
 export default function DueSoonGlance() {
-  const { items, loading } = useWorkItems()
+  const { items, loading, error, timetableError } = useWorkItems()
   const [now] = useState(() => new Date())
-
-  const { due, names, withWork, today } = useMemo(() => {
-    const today = londonToday(now)
+  const { deadlines, prep, names, today } = useMemo(() => {
+    const soon = dueWithin(items, now, DAYS)
+    const overdue = workLists(items, now).pastDue.filter(isDeadline)
     return {
-      today,
-      due: dueWithin(items, now, DAYS).filter(isDeadlineOrTest),
+      today: londonToday(now),
+      deadlines: [...overdue, ...soon.filter(isDeadline)],
+      prep: soon.filter((item) => item.source === 'prep'),
       names: moduleNameMap(items),
-      withWork: sessionsWithWork(items, today),
     }
   }, [items, now])
 
-  const shown = due.slice(0, MAX_ROWS)
-
   return (
-    <HomeSectionCard href="/lectures" title="Due soon" icon={<CalendarClock className="h-4 w-4" />} accent="orange">
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {shown.length === 0 ? (
-            <p>Nothing due in the next 7 days.</p>
-          ) : (
-            <ul className="flex flex-col gap-1.5">
-              {shown.map((item) => {
-                const name = item.moduleCode ? names.get(item.moduleCode) : null
-                const moduleLabel = [item.moduleCode, name].filter(Boolean).join(' ')
-                return (
-                  <li key={item.key} className="flex flex-col gap-0.5 text-on-surface">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        {item.ai && (
-                          <Sparkles className="h-3 w-3 shrink-0 text-on-surface-variant" aria-label="AI-found" />
-                        )}
-                        <span className="truncate" title={item.title}>
-                          {item.title}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-xs text-on-surface-variant">
-                        {relativeDueLabel(item.dueOn as string, today)}
-                      </span>
+    <HomeSectionCard href="/lectures" title="Study priorities" icon={<BookOpenCheck className="h-4 w-4" />} accent="orange">
+      {loading ? <p>Loading study priorities…</p> : (
+        <div className="grid gap-4 md:grid-cols-2">
+          <section className="min-w-0">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Deadlines · next 7 days</h3>
+            {deadlines.length === 0 ? <p>Nothing due soon.</p> : (
+              <ul className="space-y-2">
+                {deadlines.slice(0, MAX_ROWS).map((item) => (
+                  <li key={item.key} className="border-b border-outline-variant/50 pb-2 last:border-0">
+                    <div className="flex items-start justify-between gap-3 text-on-surface">
+                      <span className="min-w-0 break-words font-medium">{item.title}</span>
+                      <span className="shrink-0 text-xs text-on-surface-variant">{item.dueOn && relativeDueLabel(item.dueOn, today)}</span>
                     </div>
-                    <div className="flex items-center justify-between gap-2 text-xs text-on-surface-variant">
-                      <span className="truncate">{moduleLabel}</span>
-                      <span className="shrink-0 tabular-nums">{formatDueDay(item.dueOn as string)}</span>
-                    </div>
+                    <p className="mt-0.5 text-xs text-on-surface-variant">
+                      {[item.moduleCode, item.moduleCode ? names.get(item.moduleCode) : null, item.dueOn ? formatDueDay(item.dueOn) : null].filter(Boolean).join(' · ')}
+                      {item.ai?.status === 'suggested' && ' · Date to review'}
+                      {item.dueFromKeyDateId && ' · Extracted date'}
+                    </p>
                   </li>
-                )
-              })}
-            </ul>
-          )}
-          {due.length > MAX_ROWS && <p className="text-xs">+{due.length - MAX_ROWS} more</p>}
-          {withWork > 0 && (
-            <p className="text-xs">
-              {withWork} {withWork === 1 ? 'session has' : 'sessions have'} work set
-            </p>
-          )}
+                ))}
+              </ul>
+            )}
+            {deadlines.length > MAX_ROWS && <p className="mt-2 text-xs">+{deadlines.length - MAX_ROWS} more in Lectures</p>}
+          </section>
+          <section className="min-w-0">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Upcoming prep · next 7 days</h3>
+            {prep.length === 0 ? <p>No upcoming prep.</p> : (
+              <ul className="space-y-2">
+                {prep.slice(0, MAX_ROWS).map((item) => (
+                  <li key={item.key} className="border-b border-outline-variant/50 pb-2 last:border-0">
+                    <div className="flex items-start justify-between gap-3 text-on-surface">
+                      <span className="min-w-0 break-words font-medium">{item.title}</span>
+                      <span className="shrink-0 text-xs text-on-surface-variant">{item.dueOn && relativeDueLabel(item.dueOn, today)}</span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-on-surface-variant">{item.moduleCode}{item.setWork?.length ? ` · ${item.setWork.length} work set` : ' · Prep not completed'}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {prep.length > MAX_ROWS && <p className="mt-2 text-xs">+{prep.length - MAX_ROWS} more in Lectures</p>}
+          </section>
+          {(error || timetableError) && <p className="text-xs text-error md:col-span-2">Some study data could not be loaded. Open Lectures to check.</p>}
         </div>
       )}
     </HomeSectionCard>

@@ -3,7 +3,6 @@ import {
   reorderLauncherIds,
   resolveLauncherIds,
   seedLauncherIds,
-  tilesForSpan,
   toggleLauncherLink,
   type SeedableLink,
 } from './launcher-selection'
@@ -77,17 +76,5 @@ describe('reorderLauncherIds', () => {
 
   it('returns the ids unchanged for an unknown over id', () => {
     expect(reorderLauncherIds(['a', 'b'], 'a', 'nope')).toEqual(['a', 'b'])
-  })
-})
-
-describe('tilesForSpan', () => {
-  it('matches the old MAX_TILES = 7 at span 1', () => {
-    expect(tilesForSpan(1)).toBe(7)
-  })
-
-  it('grows with span', () => {
-    expect(tilesForSpan(2)).toBe(15)
-    expect(tilesForSpan(3)).toBe(23)
-    expect(tilesForSpan(4)).toBe(31)
   })
 })

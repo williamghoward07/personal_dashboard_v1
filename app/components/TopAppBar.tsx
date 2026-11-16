@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { LogOut, Maximize, Minimize2 } from 'lucide-react'
+import { LogOut, Maximize, Minimize2, Plus, UserRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { supabase } from '@/lib/supabase'
 import { useScrollDirection } from '@/lib/use-scroll-direction'
@@ -11,7 +12,9 @@ import { ACCENT_TEXT, MODULE_ACCENT, type UiAccent } from '@/lib/theme'
 import { activeNavItem } from '@/lib/nav-items'
 import { BREADCRUMB_PREFIX, useResolvedPageTitle } from '@/lib/page-title'
 import { StatusBadge } from '@/components/ui/status-badge'
+import Popover from './Popover'
 import SettingsMenu from './settings/SettingsMenu'
+import styles from './WorkspaceShell.module.css'
 
 // The chrome icon button — shared verbatim by full screen, settings and
 // sign out so the three read as one control group.
@@ -34,15 +37,20 @@ const PILLS: { label: string; providers: string[] }[] = [
   { label: 'Microsoft', providers: ['microsoft_onenote'] },
 ]
 
-type PillState = { label: string; accent: UiAccent; dot: 'pulse' | 'static'; title: string }
+type PillState = {
+  label: string
+  accent: UiAccent
+  status: string
+  detail?: string
+}
 
 function pillState(label: string, rows: IntegrationRow[]): PillState {
   if (rows.length === 0) {
-    return { label, accent: 'neutral', dot: 'static', title: `${label} is not connected` }
+    return { label, accent: 'neutral', status: 'Not connected' }
   }
   const failing = rows.find((row) => row.last_error)
   if (failing) {
-    return { label, accent: 'amber', dot: 'static', title: `${label}: ${failing.last_error}` }
+    return { label, accent: 'amber', status: 'Sync error', detail: failing.last_error ?? undefined }
   }
   const syncedAt = rows
     .map((row) => row.last_synced_at)
@@ -52,13 +60,13 @@ function pillState(label: string, rows: IntegrationRow[]): PillState {
   return {
     label,
     accent: 'mint',
-    dot: 'pulse',
-    title: syncedAt ? `${label} connected — last synced ${new Date(syncedAt).toLocaleString()}` : `${label} connected`,
+    status: 'Connected',
+    detail: syncedAt ? `Last synced ${new Date(syncedAt).toLocaleString()}` : undefined,
   }
 }
 
-function IntegrationPills() {
-  const [rows, setRows] = useState<IntegrationRow[] | null>(null)
+function useIntegrationStatus() {
+  const [rows, setRows] = useState<IntegrationRow[] | null | undefined>(undefined)
 
   useEffect(() => {
     // RLS scopes `integrations` to the signed-in user, so no filter is
@@ -66,11 +74,11 @@ function IntegrationPills() {
     supabase
       .from('integrations')
       .select('provider, last_error, last_synced_at')
-      .then(({ data, error }) => setRows(error ? [] : ((data as IntegrationRow[] | null) ?? [])))
+      .then(({ data, error }) => setRows(error ? null : ((data as IntegrationRow[] | null) ?? [])))
   }, [])
 
-  const pills = useMemo(() => {
-    if (!rows) return null
+  return useMemo(() => {
+    if (!rows) return rows
     return PILLS.map(({ label, providers }) =>
       pillState(
         label,
@@ -78,7 +86,9 @@ function IntegrationPills() {
       )
     )
   }, [rows])
+}
 
+function IntegrationPills({ pills }: { pills: PillState[] | null | undefined }) {
   // Nothing until the read lands, so a connected service never flashes as
   // "off" on every page load.
   if (!pills) return null
@@ -86,7 +96,13 @@ function IntegrationPills() {
   return (
     <div className="hidden shrink-0 items-center gap-2 xl:flex">
       {pills.map((pill) => (
-        <StatusBadge key={pill.label} accent={pill.accent} dot={pill.dot} size="sm" title={pill.title}>
+        <StatusBadge
+          key={pill.label}
+          accent={pill.accent}
+          dot={pill.accent === 'mint' ? 'pulse' : 'static'}
+          size="sm"
+          title={[pill.label, pill.status, pill.detail].filter(Boolean).join(' · ')}
+        >
           {pill.label}
         </StatusBadge>
       ))}
@@ -130,15 +146,16 @@ function Breadcrumb() {
 
 // ---------------------------------------------------------------------------
 
-export default function TopAppBar() {
+export default function TopAppBar({ compact }: { compact: boolean }) {
   const router = useRouter()
   const [email, setEmail] = useState<string | null>(null)
-  const [username, setUsername] = useState<string | null>(null)
+  const [displayName, setDisplayName] = useState<string | null>(null)
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const scrollDirection = useScrollDirection()
   const { isFullscreen, isSupported: fullscreenSupported, toggle: toggleFullscreen } = useFullscreen()
+  const pills = useIntegrationStatus()
 
   useEffect(() => {
     const client = createClient()
@@ -147,7 +164,7 @@ export default function TopAppBar() {
       setEmail(sessionUser?.email ?? null)
 
       const fullName = sessionUser?.user_metadata?.full_name ?? sessionUser?.user_metadata?.name
-      setUsername(fullName?.split(' ')[0] ?? sessionUser?.email?.split('@')[0] ?? null)
+      setDisplayName(typeof fullName === 'string' && fullName.trim() ? fullName.trim() : null)
     })
   }, [])
 
@@ -168,6 +185,81 @@ export default function TopAppBar() {
     router.push('/login')
   }
 
+  const username = displayName?.split(' ')[0] ?? email?.split('@')[0] ?? null
+  const fullscreenLabel = isFullscreen ? 'Exit full screen' : 'Enter full screen'
+  const FullscreenIcon = isFullscreen ? Minimize2 : Maximize
+  const signOutLabel = signingOut ? 'Signing out…' : 'Sign out'
+
+  if (compact) {
+    return (
+      <header className={styles.compactBar}>
+        <Link
+          href="/brain-dump"
+          className={`${styles.utilityButton} ${styles.mobileCapture}`}
+          aria-label="Quick capture"
+          title="Quick capture"
+        >
+          <Plus aria-hidden size={17} strokeWidth={1.75} />
+        </Link>
+        <SettingsMenu triggerClassName={styles.utilityButton} />
+        <Popover
+          label="Account"
+          align="end"
+          panelClassName={styles.accountPanel}
+          trigger={(props) => (
+            <button
+              type="button"
+              {...props}
+              aria-label="Account"
+              title="Account"
+              className={`${styles.utilityButton} ${styles.accountButton}`}
+            >
+              {username ? username[0].toUpperCase() : <UserRound aria-hidden size={16} strokeWidth={1.75} />}
+            </button>
+          )}
+        >
+          <div className={styles.accountIdentity}>
+            <div className={styles.accountName}>{displayName ?? username ?? 'Account'}</div>
+            {email && <div>{email}</div>}
+          </div>
+          <div className={styles.accountSection}>
+            <h2 className={styles.accountHeading}>Integrations</h2>
+            {pills ? (
+              <ul className={styles.connections}>
+                {pills.map(({ label, status, detail }) => (
+                  <li key={label}>
+                    <div className={styles.connection}>
+                      <span>{label}</span>
+                      <span>{status}</span>
+                    </div>
+                    {detail && <div className={styles.connectionDetail}>{detail}</div>}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className={styles.connectionDetail}>
+                {pills === undefined ? 'Checking connections…' : 'Connection status unavailable'}
+              </p>
+            )}
+          </div>
+          <div className={styles.accountActions}>
+            {fullscreenSupported && (
+              <button type="button" onClick={toggleFullscreen} className={styles.accountAction}>
+                <FullscreenIcon aria-hidden size={16} strokeWidth={1.75} />
+                {fullscreenLabel}
+              </button>
+            )}
+            <button type="button" onClick={handleSignOut} disabled={signingOut} className={styles.accountAction}>
+              <LogOut aria-hidden size={16} strokeWidth={1.75} />
+              {signOutLabel}
+            </button>
+            {error && <p className={styles.accountError} role="alert">{error}</p>}
+          </div>
+        </Popover>
+      </header>
+    )
+  }
+
   // The bar collapses on scroll-down (mobile only — it is sticky from `md`
   // up), but never while the settings panel is open, or the panel would
   // slide off screen with it.
@@ -181,28 +273,24 @@ export default function TopAppBar() {
     >
       <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4">
         <Breadcrumb />
-        <IntegrationPills />
+        <IntegrationPills pills={pills} />
       </div>
 
       <div className="flex shrink-0 items-center gap-2 md:gap-4">
         <span className="hidden label-caps text-on-surface-variant lg:inline">
           {username ? `${username}'s Dashboard` : 'Personal Dashboard'}
         </span>
-        {error && <span className="text-xs text-error">{error}</span>}
+        {error && <span className="text-xs text-error" role="alert">{error}</span>}
         {email && <span className="hidden text-xs text-on-surface-variant xl:inline">{email}</span>}
         {fullscreenSupported && (
           <button
             type="button"
             onClick={toggleFullscreen}
-            title={isFullscreen ? 'Exit full screen' : 'Enter full screen'}
-            aria-label={isFullscreen ? 'Exit full screen' : 'Enter full screen'}
+            title={fullscreenLabel}
+            aria-label={fullscreenLabel}
             className={ICON_BUTTON_CLASS}
           >
-            {isFullscreen ? (
-              <Minimize2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-            ) : (
-              <Maximize className="h-3.5 w-3.5" strokeWidth={1.75} />
-            )}
+            <FullscreenIcon aria-hidden className="h-3.5 w-3.5" strokeWidth={1.75} />
             <span className="hidden md:inline">{isFullscreen ? 'Exit full screen' : 'Full screen'}</span>
           </button>
         )}
@@ -216,7 +304,7 @@ export default function TopAppBar() {
           className={ICON_BUTTON_CLASS}
         >
           <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
-          <span className="hidden md:inline">{signingOut ? 'Signing out…' : 'Sign out'}</span>
+          <span className="hidden md:inline">{signOutLabel}</span>
         </button>
       </div>
     </header>

@@ -1,22 +1,21 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowUpRight, LayoutGrid, Plus } from 'lucide-react'
+import { ArrowUpRight, LayoutGrid } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { QuickLink } from '@/lib/types'
 import { ACCENT_TEXT } from '@/lib/theme'
-import type { HomeWidgetSpan } from '@/lib/settings/schema'
-import { useSettings } from '@/lib/settings/use-settings'
+import type { HomeWidgetProps } from '@/lib/home/layout'
 import { useStoredIdSet } from '@/lib/utils/use-stored-id-set'
+import { LAUNCHER_TILE_GAP, LAUNCHER_TILE_HEIGHT, launcherColumns, launcherRowsForHeight } from '@/lib/app-launcher/launcher-layout'
 import {
-  LAUNCHER_GRID_COLS_CLASS,
   reorderLauncherIds,
   resolveLauncherIds,
   seedLauncherIds,
-  tilesForSpan,
   toggleLauncherLink,
 } from '@/lib/app-launcher/launcher-selection'
+import { useAppSettings } from '../../settings/SettingsProvider'
 import WidgetCard from '../../WidgetCard'
 import FaviconTile from './FaviconTile'
 import LauncherMenu from './LauncherMenu'
@@ -40,14 +39,23 @@ const SEED_MARKER_ID = 'done'
  * `launcher_link_ids` (lib/settings) is the single source of truth for
  * membership *and* order — `quick_links.is_pinned`/`sort_order` are only
  * read once, to seed it for an existing user (CLAUDE.md's App Library
- * section). `span` is P3's home-grid contract: a wider widget shows more
- * tiles (see lib/app-launcher/launcher-selection.ts's tilesForSpan).
+ * section).
  */
-export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan }) {
+export default function AppLauncherGlance({ span = 1, height }: HomeWidgetProps) {
   const [links, setLinks] = useState<QuickLink[]>([])
   const [loading, setLoading] = useState(true)
-  const { settings, loading: settingsLoading, updateSettings } = useSettings()
+  const { settings, loading: settingsLoading, updateSettings } = useAppSettings()
   const [seedMarker, setSeedMarker] = useStoredIdSet(SEED_MARKER_KEY)
+  const gridRef = useRef<HTMLDivElement | null>(null)
+  const [gridWidth, setGridWidth] = useState(0)
+
+  useEffect(() => {
+    const grid = gridRef.current
+    if (!grid) return
+    const observer = new ResizeObserver(([entry]) => setGridWidth(entry.contentRect.width))
+    observer.observe(grid)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     supabase
@@ -88,7 +96,8 @@ export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan 
     () => selectedIds.map((id) => linksById.get(id)).filter((link): link is QuickLink => Boolean(link)),
     [selectedIds, linksById]
   )
-  const visibleLinks = selectedLinks.slice(0, tilesForSpan(span))
+  const columns = launcherColumns(span, gridWidth)
+  const visibleLinks = selectedLinks.slice(0, columns * launcherRowsForHeight(height))
 
   const handleToggle = (linkId: string) => {
     updateSettings({ launcher_link_ids: toggleLauncherLink(selectedIds, linkId) })
@@ -102,7 +111,6 @@ export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan 
       title="App Launcher"
       icon={<LayoutGrid className="h-4 w-4" />}
       accent="neutral"
-      className="h-full"
       action={
         <div className="flex items-center gap-2">
           <LauncherMenu links={links} selectedIds={selectedIds} onToggle={handleToggle} onReorder={handleReorder} />
@@ -116,43 +124,43 @@ export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan 
         </div>
       }
     >
-      {loading ? (
-        <p>Loading...</p>
-      ) : visibleLinks.length === 0 ? (
-        <p>No apps selected yet — choose some from the menu above, or the App Library.</p>
-      ) : (
-        <div className={`grid gap-2 ${LAUNCHER_GRID_COLS_CLASS[span]}`}>
-          {visibleLinks.map((link) => (
-            <button
-              key={link.id}
-              type="button"
-              onClick={() => openQuickLink(link)}
-              title={link.title}
-              className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-surface-container-high"
-            >
-              <FaviconTile
-                title={link.title}
-                url={link.url}
-                faviconPath={link.favicon_path}
-                faviconCustomUrl={link.favicon_custom_url}
-                size="sm"
-              />
-              <span className="w-full truncate text-center text-[10px] text-on-surface-variant">
-                {link.title}
-              </span>
-            </button>
-          ))}
-          <Link
-            href="/apps"
-            className="flex flex-col items-center gap-1 rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+      <div ref={gridRef}>
+        {loading || settingsLoading ? (
+          <p>Loading...</p>
+        ) : selectedLinks.length === 0 ? (
+          <p>No apps selected yet — choose some from the menu above, or the App Library.</p>
+        ) : (
+          <div
+            className="grid"
+            style={{
+              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+              gridAutoRows: LAUNCHER_TILE_HEIGHT,
+              gap: LAUNCHER_TILE_GAP,
+            }}
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-outline-variant">
-              <Plus className="h-4 w-4" />
-            </span>
-            <span className="text-[10px]">More</span>
-          </Link>
-        </div>
-      )}
+            {visibleLinks.map((link) => (
+              <button
+                key={link.id}
+                type="button"
+                onClick={() => openQuickLink(link)}
+                title={link.title}
+                className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg p-1 hover:bg-surface-container-high"
+              >
+                <FaviconTile
+                  title={link.title}
+                  url={link.url}
+                  faviconPath={link.favicon_path}
+                  faviconCustomUrl={link.favicon_custom_url}
+                  size="sm"
+                />
+                <span className="w-full truncate text-center text-[10px]/4 text-on-surface-variant">
+                  {link.title}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </WidgetCard>
   )
 }

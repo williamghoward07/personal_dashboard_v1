@@ -11,6 +11,25 @@ deliberately diverges, that is recorded in §7.
 
 ---
 
+## Approved planning workspace override
+
+Home (`/`), Lectures (`/lectures` and its detail routes), and Calendar (`/calendar`)
+use the user-approved Sunsama-inspired planning workspace. This supersedes the
+original dark-only and equal-weight bento rules on those routes. Other routes
+retain the BIO-SYSTEM palette below.
+
+Use warm ivory ground, white flat cards, neutral hairlines, restrained sage and
+module accents, Instrument Sans, and compact controls. No card lift, neon glow,
+or decorative glass. Study priorities lead Home; personal todos follow. Retain
+all widgets and saved customisation, with an explicit Study layout preset.
+Lectures uses a work list with details; deadline certainty is separate from prep
+and follow-up completion. Calendar retains all its view modes and tools.
+
+The desktop navigation is a 64px icon rail that expands to 220px on hover or
+keyboard focus without shifting content. Route tokens live in
+`app/workspace-ui.css`, activated by `.workspace-ui` in AppChrome. Root-level
+scoping also themes portalled dialogs. Shared component defaults remain dark.
+
 ## 1. Visual Theme & Atmosphere
 
 **Dark-only, techno-minimalist mission control.** The mood is analytical,

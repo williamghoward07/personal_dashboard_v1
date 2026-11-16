@@ -108,14 +108,11 @@ export default function LecturesBoard() {
   )
 
   return (
-    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
-      <h1 className="font-display text-headline-lg font-bold text-academic-orange">Lectures</h1>
-
-      <p className="-mt-3 text-sm text-on-surface-variant">
-        Left half: prep before (red: nothing added · amber: not marked as done · green: done). Right half:
-        follow-up, which opens once prep is marked as done (amber: concepts to review · green: done). Open a session
-        to hand it in.
-      </p>
+    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-5 px-4 py-5 sm:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-semibold text-on-surface">Lectures</h1>
+        <SyncStatusChip />
+      </div>
 
       {error === 'not_configured' && (
         <Notice title="Connect your timetable">
@@ -141,8 +138,8 @@ export default function LecturesBoard() {
       )}
 
       <ModuleGlassCard accent={ACCENT} size="sm" className="flex flex-col gap-3">
-        <SyncStatusChip />
         <WorkList
+          detailView
           items={work.items}
           now={now}
           accent={ACCENT}

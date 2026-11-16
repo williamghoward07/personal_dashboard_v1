@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
-import { Sparkles } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ChevronRight, Sparkles } from 'lucide-react'
+import { addDays, londonToday } from '@/lib/blackboard/dates'
 import { Button } from '@/components/ui/button'
 import { FilterTabs } from '@/components/ui/filter-tabs'
 import { MetadataChip } from '@/components/ui/metadata-chip'
@@ -24,13 +25,16 @@ import type { WorkFilterSetting } from '@/lib/settings/schema'
 import { useSettings } from '@/lib/settings/use-settings'
 import { ACCENT_TEXT, type UiAccent } from '@/lib/theme'
 import { formatSessionDay } from '@/lib/timetable/format'
-import { addCounts, type SessionWithPrep } from '@/lib/timetable/session'
+import { addCounts, POST_LABEL, PREP_LABEL, type SessionWithPrep } from '@/lib/timetable/session'
 import { cn } from '@/lib/utils/cn'
 import HandInButton, { CONFIRM_MS } from './HandInButton'
 import { moduleNameMap } from './module-names'
 import SessionRow from './SessionRow'
 import { pageWork, type WorkStage } from './work-paging'
 import WorkRow from './WorkRow'
+import ConnectedSessionPrep from './ConnectedSessionPrep'
+import PrepLight from './PrepLight'
+import { formatDueDay } from './work-format'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const ALL_MODULES = 'all'
@@ -100,6 +104,7 @@ export default function WorkList({
   error,
   lockedModule,
   title,
+  detailView = false,
 }: {
   items: WorkItem[]
   /** Fixed by the caller: "now" shouldn't re-sort rows mid-click. */
@@ -112,6 +117,8 @@ export default function WorkList({
   lockedModule?: string
   /** Left of the tabs in the header. */
   title?: ReactNode
+  /** Split work selection and details on the Lectures page. */
+  detailView?: boolean
 }) {
   const { settings, updateSettings } = useSettings()
   // Instant feedback while the save is in flight (and when nothing is saved
@@ -121,6 +128,16 @@ export default function WorkList({
   // The staged "show more" position, tied to the list it was set on: another tab, type or module starts over.
   const [paging, setPaging] = useState<{ key: string; stage: WorkStage }>({ key: '', stage: 0 })
   const [completeError, setCompleteError] = useState<string | null>(null)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const detailRef = useRef<HTMLElement>(null)
+  const focusDetail = useRef(false)
+
+  useEffect(() => {
+    if (!focusDetail.current) return
+    focusDetail.current = false
+    detailRef.current?.focus({ preventScroll: true })
+    detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [selectedKey])
 
   const setFilter = (patch: Partial<WorkFilterSetting>) => {
     const next = { ...filter, ...patch }
@@ -180,6 +197,8 @@ export default function WorkList({
   const tabList = lists[tab]
   const listKey = [tab, activeModule ?? ALL_MODULES, categories.join(',')].join('|')
   const { visible: shown, next } = pageWork(tabList, tab, now, paging.key === listKey ? paging.stage : 0)
+
+  const selected = shown.find((item) => item.key === selectedKey) ?? shown[0] ?? null
 
   const chipCounts = useMemo(() => {
     const counts = new Map<WorkCategory, number>()
@@ -280,8 +299,7 @@ export default function WorkList({
               value: code,
               label: (
                 <span title={moduleNames.get(code) ? `${code} ${moduleNames.get(code)}` : code}>
-                  <span className="font-mono">{code}</span>
-                  {moduleNames.get(code) && <span className="ml-1.5">{moduleNames.get(code)}</span>}
+                  <span>{code}</span>
                 </span>
               ),
               count: pastDueByCode.get(code) || undefined,
@@ -316,7 +334,76 @@ export default function WorkList({
           {tabList.length === 0 ? (
             <p className="text-sm text-on-surface-variant">{emptyText}</p>
           ) : (
-            <ul className="flex flex-col gap-0.5">{shown.map(row)}</ul>
+            detailView ? (
+              <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(20rem,2fr)]">
+                <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low p-2 sm:p-3">
+                  {(() => {
+                    const today = londonToday(now)
+                    const end = addDays(today, 7)
+                    const groups = tab === 'upcoming' ? [
+                      { label: 'Today', items: shown.filter((item) => item.dueOn === today) },
+                      { label: 'Next 7 days', items: shown.filter((item) => item.dueOn && item.dueOn > today && item.dueOn < end) },
+                      { label: 'Later', items: shown.filter((item) => !item.dueOn || item.dueOn < today || item.dueOn >= end) },
+                    ] : [{ label: TAB_LABEL[tab], items: shown }]
+                    return groups.filter((group) => group.items.length > 0).map((group) => (
+                      <section key={group.label} className="mb-4 last:mb-0">
+                        <h3 className="px-2 py-2 text-sm font-semibold text-on-surface">{group.label} <span className="font-normal text-on-surface-variant">({group.items.length})</span></h3>
+                        <ul>
+                          {group.items.map((item) => (
+                            <li key={item.key}>
+                              <button type="button" aria-pressed={selected?.key === item.key}
+                                onClick={() => {
+                                  const mobile = window.matchMedia('(max-width: 1023px)').matches
+                                  if (mobile && selectedKey === item.key) {
+                                    detailRef.current?.focus({ preventScroll: true })
+                                    detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                                  } else {
+                                    focusDetail.current = mobile
+                                  }
+                                  setSelectedKey(item.key)
+                                }}
+                                className={cn('flex w-full items-center gap-3 rounded-lg border px-3 py-3 text-left transition-colors', selected?.key === item.key ? 'border-primary-container bg-primary-container/10' : 'border-transparent hover:bg-surface-container-high/60')}>
+                                {item.session && <PrepLight status={item.session.status} postStatus={item.session.postStatus} />}
+                                <span className="min-w-0 flex-1">
+                                  <span className="block break-words text-sm font-semibold text-on-surface">{item.title}</span>
+                                  <span className="mt-0.5 block text-xs text-on-surface-variant">{[item.moduleCode, item.moduleCode ? moduleNames.get(item.moduleCode) : item.courseName, WORK_CATEGORY_LABEL[item.category]].filter(Boolean).join(' · ')}</span>
+                                  {item.session && <span className="mt-0.5 block text-xs text-on-surface-variant">Prep: {PREP_LABEL[item.session.status]} · Follow-up: {POST_LABEL[item.session.postStatus]}</span>}
+                                </span>
+                                <span className="hidden shrink-0 text-xs text-on-surface-variant sm:block">{item.dueOn ? formatDueDay(item.dueOn) : 'No date'}</span>
+                                {item.ai?.status === 'suggested' && <span className="hidden shrink-0 rounded-full bg-tertiary-container px-2 py-1 text-xs text-on-tertiary-container sm:block">Date to confirm</span>}
+                                <ChevronRight className="h-4 w-4 shrink-0 text-on-surface-variant" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ))
+                  })()}
+                </div>
+                <aside ref={detailRef} tabIndex={-1} aria-label="Selected work details" className="min-w-0 scroll-mt-4 rounded-xl border border-outline-variant bg-surface-container-low p-4">
+                  {selected && (
+                    <div key={selected.key} className="flex flex-col gap-4">
+                      <div>
+                        <p className="text-xs text-on-surface-variant">{[selected.moduleCode, selected.moduleCode ? moduleNames.get(selected.moduleCode) : selected.courseName].filter(Boolean).join(' · ')}</p>
+                        <h3 className="mt-1 break-words font-display text-lg font-semibold text-on-surface">{selected.title}</h3>
+                        <p className="mt-2 text-sm text-on-surface-variant">{WORK_CATEGORY_LABEL[selected.category]} · {selected.dueOn ? formatDueDay(selected.dueOn) : 'No date'}</p>
+                      </div>
+                      {selected.session ? (
+                        <ConnectedSessionPrep key={selected.session.uid} session={selected.session} showHeader={false} />
+                      ) : (
+                        <>
+                          {selected.ai && <div className="rounded-lg bg-surface-container-high p-3 text-sm text-on-surface">
+                            <p className="font-semibold">{selected.ai.status === 'suggested' ? 'Date needs confirmation' : 'Date confirmed'}</p>
+                            <blockquote className="mt-2 text-on-surface-variant">“{selected.ai.quote}”</blockquote>
+                          </div>}
+                          <ul><WorkRow item={selected} now={now} accent={accent} compact hideTitle showModule={false} moduleName={selected.moduleCode ? moduleNames.get(selected.moduleCode) : null} /></ul>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </aside>
+              </div>
+            ) : <ul className="flex flex-col gap-0.5">{shown.map(row)}</ul>
           )}
         </>
       )}

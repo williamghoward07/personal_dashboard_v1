@@ -98,6 +98,7 @@ export default function WorkRow({
   showModule = true,
   moduleName,
   compact = false,
+  hideTitle = false,
 }: {
   item: WorkItem
   now: Date
@@ -111,6 +112,8 @@ export default function WorkRow({
    * the title takes the full width and the chips and actions sit on a second line.
    */
   compact?: boolean
+  /** The surrounding details panel already displays the title. */
+  hideTitle?: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -164,12 +167,12 @@ export default function WorkRow({
 
   const titleLine = (
     <span className="flex min-w-0 flex-1 items-center gap-2">
-      <span
+      {!hideTitle && <span
         title={compact ? item.title : undefined}
         className={cn('truncate text-sm text-on-surface', item.done && 'text-on-surface-variant line-through')}
       >
         {item.title}
-      </span>
+      </span>}
       {item.url && (
         <a
           href={item.url}

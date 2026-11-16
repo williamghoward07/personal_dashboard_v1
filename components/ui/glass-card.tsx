@@ -35,7 +35,7 @@ const glassCardSectionVariants = cva("", {
 export type GlassCardProps = React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof glassCardVariants>
 
 export const GlassCard = React.forwardRef<HTMLDivElement, GlassCardProps>(({ className, size, ...props }, ref) => (
-  <div ref={ref} className={cn(glassCardVariants({ size }), className)} {...props} />
+  <div ref={ref} data-ui="glass-card" className={cn(glassCardVariants({ size }), className)} {...props} />
 ))
 
 GlassCard.displayName = "GlassCard"

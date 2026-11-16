@@ -1,0 +1,118 @@
+/* Approved planning workspace: Home, Lectures and Calendar. Root scope also
+   themes dialogs/popovers portalled to body, without changing other routes. */
+:root:has(.workspace-ui) {
+  color-scheme: light;
+  --background: #f6f5f1;
+  --foreground: #272b28;
+  --color-background: #f6f5f1;
+  --color-foreground: #272b28;
+  --color-surface: #f6f5f1;
+  --color-surface-dim: #f6f5f1;
+  --color-surface-bright: #e3e5dc;
+  --color-surface-container-lowest: #efeee9;
+  --color-surface-container-low: #fff;
+  --color-surface-container: #f1f0eb;
+  --color-surface-container-high: #eeede7;
+  --color-surface-container-highest: #e5e5de;
+  --color-on-surface: #272b28;
+  --color-on-surface-variant: #626b62;
+  --color-outline: #737c71;
+  --color-outline-variant: #dddeda;
+  --color-border: #dddeda;
+  --color-primary: #26382b;
+  --color-on-primary: #fff;
+  --color-primary-container: #62774f;
+  --color-on-primary-container: #fff;
+  --color-primary-fixed: #526943;
+  --color-primary-fixed-dim: #526943;
+  --color-secondary: #426a79;
+  --color-on-secondary: #fff;
+  --color-secondary-container: #527b88;
+  --color-on-secondary-container: #fff;
+  --color-secondary-fixed: #426a79;
+  --color-secondary-fixed-dim: #426a79;
+  --color-tertiary: #7d5739;
+  --color-on-tertiary: #fff;
+  --color-tertiary-container: #f1e1ce;
+  --color-on-tertiary-container: #754624;
+  --color-tertiary-fixed-dim: #936642;
+  --color-error: #b34840;
+  --color-on-error: #fff;
+  --color-error-container: #f8e5e1;
+  --color-on-error-container: #8c302b;
+  --color-academic-orange: #9c572e;
+  --color-research-pink: #9b5e80;
+  --color-habit-purple: #8167a4;
+  --color-people-amber: #8a691f;
+  --color-bible-crimson: #b34840;
+  --color-workspace-teal: #4e8076;
+  --color-accent: #62774f;
+  --font-display: var(--font-instrument-sans), "Instrument Sans", sans-serif;
+  --spacing-container-padding: 16px;
+  --spacing-card-gap: 16px;
+  --glass-border: #dddeda;
+  --glass-refraction-top: #dddeda;
+  --glass-saturate: 100%;
+  --glass-1-surface: #fff;
+  --glass-2-surface: #fff;
+  --glass-3-surface: #fff;
+  --glass-4-surface: #fff;
+  --glass-1-blur: 0px;
+  --glass-2-blur: 0px;
+  --glass-3-blur: 0px;
+  --glass-4-blur: 0px;
+  --glass-3-shadow: none;
+  --glass-4-shadow: none;
+}
+
+body:has(.workspace-ui) :is(.label-caps, .text-label-caps) {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+body:has(.workspace-ui) :is([data-ui="widget-card"], [data-ui="glass-card"]) {
+  background: var(--color-surface-container-low);
+  border-color: var(--color-outline-variant);
+  border-radius: 12px;
+  box-shadow: none;
+  translate: none;
+  transform: none;
+}
+
+body:has(.workspace-ui) [data-ui="widget-card"] h2 > span {
+  transform: none;
+}
+
+body:has(.workspace-ui) [data-ui="filter-tabs"] {
+  border-radius: 8px;
+}
+
+body:has(.workspace-ui) [data-ui="filter-tabs"] button[aria-pressed="true"] {
+  background: #e2e7dc;
+  color: #354830;
+  box-shadow: none;
+}
+
+body:has(.workspace-ui) [data-ui="query-modes"] {
+  background: var(--color-surface-container);
+  border-radius: 8px;
+  backdrop-filter: none;
+}
+
+body:has(.workspace-ui) [data-ui="query-modes"] > div {
+  background: var(--color-surface-container-low);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(39 43 40 / 8%);
+  backdrop-filter: none;
+}
+
+body:has(.workspace-ui) [data-ui="query-modes"] button {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+body:has(.workspace-ui) .rainbow-ring::before,
+body:has(.workspace-ui) .rainbow-ring::after {
+  display: none;
+}

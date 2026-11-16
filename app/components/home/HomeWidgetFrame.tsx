@@ -2,8 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { EyeOff, GripVertical, MoveDiagonal2 } from 'lucide-react'
-import { heightFromPointer, spanClass, spanFromPointer, type HomeWidgetSpan } from '@/lib/home/layout'
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, EyeOff, GripVertical, MoveDiagonal2 } from 'lucide-react'
+import {
+  LAUNCHER_ROW_STEP,
+  MAX_LAUNCHER_ROWS,
+  MIN_LAUNCHER_ROWS,
+  clampLauncherRows,
+  launcherHeightForRows,
+  launcherRowsForHeight,
+  stepLauncherSpan,
+} from '@/lib/app-launcher/launcher-layout'
+import { HOME_GRID_COLUMNS, heightFromPointer, spanClass, spanFromPointer, type HomeWidgetSpan } from '@/lib/home/layout'
 
 export interface HomeWidgetFrameProps {
   id: string
@@ -14,6 +23,7 @@ export interface HomeWidgetFrameProps {
   editing: boolean
   /** The grid element, measured to turn a pointer position into a span. */
   gridRef: RefObject<HTMLDivElement | null>
+  gridColumns?: number
   onHide: (id: string) => void
   /** Local-only size change while the corner handle is being dragged. */
   onSizePreview: (id: string, span: HomeWidgetSpan, height: number | undefined) => void
@@ -22,13 +32,22 @@ export interface HomeWidgetFrameProps {
   children: ReactNode
 }
 
-interface ResizeOrigin {
+interface GridMeasurement {
   left: number
   top: number
-  startY: number
-  touchedHeight: boolean
+  columns: number
   track: number
   gap: number
+}
+
+interface ResizeOrigin extends GridMeasurement {
+  startX: number
+  startY: number
+  startSpan: HomeWidgetSpan
+  startRows: number
+  touchedHeight: boolean
+  nextSpan: HomeWidgetSpan
+  nextHeight: number | undefined
 }
 
 /**
@@ -52,6 +71,7 @@ export default function HomeWidgetFrame({
   height,
   editing,
   gridRef,
+  gridColumns = HOME_GRID_COLUMNS,
   onHide,
   onSizePreview,
   onSizeCommit,
@@ -65,6 +85,9 @@ export default function HomeWidgetFrame({
   const nodeRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
   const resizeRef = useRef<ResizeOrigin | null>(null)
+  const isLauncher = id === 'app-launcher'
+  const rows = launcherRowsForHeight(height)
+  const minHeight = isLauncher ? undefined : height
   // Masonry: the grid has 1px implicit rows and no row gap, so each card
   // spans as many rows as it is tall (plus the gap) and the next card in
   // its column packs straight up under it.
@@ -96,7 +119,7 @@ export default function HomeWidgetFrame({
 
   // The grid's *used* track sizes, straight from the computed style, so the
   // snap points are the real column edges rather than an assumed width.
-  const measure = useCallback((): Omit<ResizeOrigin, 'startY' | 'touchedHeight'> | null => {
+  const measure = useCallback((): GridMeasurement | null => {
     const grid = gridRef.current
     const node = nodeRef.current
     if (!grid || !node) return null
@@ -111,6 +134,7 @@ export default function HomeWidgetFrame({
     return {
       left: node.getBoundingClientRect().left,
       top: node.getBoundingClientRect().top,
+      columns: tracks.length,
       track: tracks[0],
       gap: Number.parseFloat(style.columnGap) || 0,
     }
@@ -123,11 +147,20 @@ export default function HomeWidgetFrame({
       // The origin is captured once and kept for the whole gesture: if a
       // widen pushes the card onto the next row its left edge moves, and
       // re-measuring mid-drag would make the span oscillate.
-      resizeRef.current = { ...origin, startY: event.clientY, touchedHeight: height !== undefined }
+      resizeRef.current = {
+        ...origin,
+        startX: event.clientX,
+        startY: event.clientY,
+        startSpan: span,
+        startRows: rows,
+        touchedHeight: height !== undefined,
+        nextSpan: span,
+        nextHeight: height,
+      }
       event.currentTarget.setPointerCapture(event.pointerId)
       event.preventDefault()
     },
-    [measure, height]
+    [measure, span, rows, height]
   )
 
   // In edit mode the card sits under a header bar (+ its 8px flex gap);
@@ -138,6 +171,19 @@ export default function HomeWidgetFrame({
     (event: ReactPointerEvent<HTMLButtonElement>) => {
       const origin = resizeRef.current
       if (!origin) return
+      if (isLauncher) {
+        // Use movement from the grab point so the card can be widened
+        // even if the grid has to move it to another column during the drag.
+        const columnStep = Math.round((event.clientX - origin.startX) / (origin.track + origin.gap))
+        const rowStep = Math.round((event.clientY - origin.startY) / LAUNCHER_ROW_STEP)
+        const nextSpan = stepLauncherSpan(origin.startSpan, columnStep, origin.columns)
+        const nextHeight = launcherHeightForRows(clampLauncherRows(origin.startRows + rowStep))
+        if (nextSpan === origin.nextSpan && nextHeight === origin.nextHeight) return
+        origin.nextSpan = nextSpan
+        origin.nextHeight = nextHeight
+        onSizePreview(id, nextSpan, nextHeight)
+        return
+      }
       // Height only becomes explicit once the pointer actually moves
       // vertically, so a purely horizontal drag keeps the card on auto.
       if (Math.abs(event.clientY - origin.startY) > 6) origin.touchedHeight = true
@@ -147,19 +193,29 @@ export default function HomeWidgetFrame({
         : height
       if (nextSpan !== span || nextHeight !== height) onSizePreview(id, nextSpan, nextHeight)
     },
-    [id, onSizePreview, span, height, headerOffset]
+    [id, isLauncher, onSizePreview, span, height, headerOffset]
   )
 
   const handleResizeEnd = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!resizeRef.current) return
+      const origin = resizeRef.current
+      if (!origin) return
       resizeRef.current = null
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId)
       }
-      onSizeCommit(id, span, height)
+      onSizeCommit(id, isLauncher ? origin.nextSpan : span, isLauncher ? origin.nextHeight : height)
     },
-    [id, onSizeCommit, span, height]
+    [id, isLauncher, onSizeCommit, span, height]
+  )
+
+  const resizeLauncherBy = useCallback(
+    (columnStep: number, rowStep: number) => {
+      const nextSpan = stepLauncherSpan(span, columnStep, gridColumns)
+      const nextRows = clampLauncherRows(rows + rowStep)
+      if (nextSpan !== span || nextRows !== rows) onSizeCommit(id, nextSpan, launcherHeightForRows(nextRows))
+    },
+    [id, onSizeCommit, span, gridColumns, rows]
   )
 
   const handleResizeKey = useCallback(
@@ -172,6 +228,10 @@ export default function HomeWidgetFrame({
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
+        if (isLauncher) {
+          resizeLauncherBy(0, event.key === 'ArrowDown' ? 1 : -1)
+          return
+        }
         const base = height ?? nodeRef.current?.getBoundingClientRect().height ?? 240
         const next = heightFromPointer(base + (event.key === 'ArrowDown' ? 40 : -40) + headerOffset(), 0, headerOffset())
         onSizeCommit(id, span, next)
@@ -180,11 +240,18 @@ export default function HomeWidgetFrame({
       const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
       if (step === 0) return
       event.preventDefault()
+      if (isLauncher) {
+        resizeLauncherBy(step, 0)
+        return
+      }
       const next = Math.min(4, Math.max(1, span + step)) as HomeWidgetSpan
       if (next !== span) onSizeCommit(id, next, height)
     },
-    [id, onSizeCommit, span, height, headerOffset]
+    [id, isLauncher, onSizeCommit, span, height, headerOffset, resizeLauncherBy]
   )
+
+  const width = Math.min(span, gridColumns)
+  const sizeText = isLauncher ? `${width}/${gridColumns} wide · ${rows} rows` : `${span}/4`
 
   return (
     <div
@@ -195,13 +262,10 @@ export default function HomeWidgetFrame({
           : undefined,
         transition: transition ?? undefined,
         gridRowEnd: rowSpan ? `span ${rowSpan}` : undefined,
-        minHeight: height !== undefined ? height + (editing ? headerOffset() : 0) : undefined,
       }}
       className={[
         spanClass(span),
         editing ? 'relative flex flex-col gap-2' : '',
-        // A set height stretches the card itself, not just this cell.
-        height !== undefined && !editing ? 'flex flex-col [&>*]:flex-1' : '',
         // A widget is allowed to render nothing (MorningRoutineCard does
         // once its setup offer is dismissed). Outside edit mode the empty
         // cell collapses instead of leaving a hole in the row; in edit mode
@@ -213,7 +277,7 @@ export default function HomeWidgetFrame({
         .join(' ')}
     >
       {editing ? (
-        <div ref={headerRef} className="flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-high px-1.5 py-1">
+        <div ref={headerRef} className={`flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-high px-1.5 py-1 ${isLauncher ? 'flex-wrap' : ''}`}>
           <button
             type="button"
             ref={setActivatorNodeRef}
@@ -226,7 +290,7 @@ export default function HomeWidgetFrame({
           </button>
           <span className="label-caps truncate text-on-surface-variant">{label}</span>
           <span className="ml-auto shrink-0 font-mono text-xs text-on-surface-variant/70" aria-hidden="true">
-            {span}/4
+            {sizeText}
           </span>
           <button
             type="button"
@@ -237,13 +301,42 @@ export default function HomeWidgetFrame({
           >
             <EyeOff className="h-3.5 w-3.5" />
           </button>
+          {isLauncher && (
+            <div role="group" aria-label="App Launcher size controls" className="flex w-full justify-end gap-1">
+              {[
+                { label: 'Narrower', Icon: ChevronLeft, dx: -1, dy: 0, disabled: width === 1 },
+                { label: 'Wider', Icon: ChevronRight, dx: 1, dy: 0, disabled: width === gridColumns },
+                { label: 'Fewer rows', Icon: ChevronUp, dx: 0, dy: -1, disabled: rows === MIN_LAUNCHER_ROWS },
+                { label: 'More rows', Icon: ChevronDown, dx: 0, dy: 1, disabled: rows === MAX_LAUNCHER_ROWS },
+              ].map(({ label, Icon, dx, dy, disabled }) => (
+                <button
+                  key={label}
+                  type="button"
+                  aria-label={label}
+                  title={label}
+                  disabled={disabled}
+                  onClick={() => resizeLauncherBy(dx, dy)}
+                  className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-30"
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
 
       {/* `contents` outside edit mode so this wrapper adds no layout of its
           own; in edit mode it swallows clicks so arranging the grid can't
           navigate away through a card's link. */}
-      <div className={editing ? 'pointer-events-none flex flex-1 select-none flex-col [&>*]:flex-1' : 'contents'}>{children}</div>
+      <div
+        className={editing
+          ? 'pointer-events-none flex flex-1 select-none flex-col [&>*]:flex-1'
+          : minHeight === undefined ? 'contents' : 'flex flex-col [&>*]:flex-1'}
+        style={{ minHeight }}
+      >
+        {children}
+      </div>
 
       {editing ? (
         <button
@@ -252,18 +345,16 @@ export default function HomeWidgetFrame({
           tabIndex={0}
           aria-label={`${label} size`}
           aria-valuemin={1}
-          aria-valuemax={4}
-          aria-valuenow={span}
-          aria-valuetext={`${span} of 4 columns`}
+          aria-valuemax={isLauncher ? gridColumns : 4}
+          aria-valuenow={isLauncher ? width : span}
+          aria-valuetext={isLauncher ? `${width} of ${gridColumns} columns wide, up to ${rows} app rows` : `${span} of 4 columns`}
           onPointerDown={handleResizeStart}
           onPointerMove={handleResizeMove}
           onPointerUp={handleResizeEnd}
           onPointerCancel={handleResizeEnd}
           onKeyDown={handleResizeKey}
           onDoubleClick={() => onSizeCommit(id, span, undefined)}
-          // Resizing only means something where the grid really has four
-          // columns; below xl it is two, and the span classes collapse.
-          className="absolute -right-2 -bottom-2 hidden h-6 w-6 cursor-nwse-resize touch-none items-center justify-center rounded-full border border-outline-variant bg-surface-container-highest text-on-surface-variant transition-colors hover:border-primary-container hover:text-primary-container xl:flex"
+          className={`absolute -right-2 -bottom-2 h-6 w-6 cursor-nwse-resize touch-none items-center justify-center rounded-full border border-outline-variant bg-surface-container-highest text-on-surface-variant transition-colors hover:border-primary-container hover:text-primary-container ${isLauncher ? 'flex' : 'hidden xl:flex'}`}
         >
           <MoveDiagonal2 className="h-3 w-3" />
         </button>

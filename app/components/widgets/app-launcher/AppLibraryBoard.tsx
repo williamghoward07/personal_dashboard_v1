@@ -31,8 +31,8 @@ import {
   moveLink,
 } from '@/lib/app-launcher/order'
 import { resolveLauncherIds, toggleLauncherLink } from '@/lib/app-launcher/launcher-selection'
-import { useSettings } from '@/lib/settings/use-settings'
 import { useStoredIdSet } from '@/lib/utils/use-stored-id-set'
+import { useAppSettings } from '../../settings/SettingsProvider'
 import ConfirmDialog from '../../ConfirmDialog'
 import FolderTile, { folderDragId, type FolderGroup } from './FolderTile'
 import LinkFolderFormModal, { type LinkFolderFormValues } from './LinkFolderFormModal'
@@ -83,7 +83,7 @@ export default function AppLibraryBoard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [collapsedIds, setCollapsedIds] = useStoredIdSet(COLLAPSED_STORAGE_KEY)
-  const { settings, error: settingsError, updateSettings } = useSettings()
+  const { settings, error: settingsError, updateSettings } = useAppSettings()
 
   const [isAddFolderOpen, setIsAddFolderOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState<LinkFolder | null>(null)

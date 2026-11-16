@@ -1,26 +1,26 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { ArrowUpRight, LayoutGrid, Plus } from 'lucide-react'
+import { ArrowUpRight, LayoutGrid } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import type { QuickLink } from '@/lib/types'
+import type { LauncherLink } from '@/lib/app-launcher/launcher-groups'
+import { groupLauncherLinks } from '@/lib/app-launcher/launcher-groups'
 import { ACCENT_TEXT } from '@/lib/theme'
-import type { HomeWidgetSpan } from '@/lib/settings/schema'
-import { useSettings } from '@/lib/settings/use-settings'
+import type { HomeWidgetProps } from '@/lib/home/layout'
 import { useStoredIdSet } from '@/lib/utils/use-stored-id-set'
+import { LAUNCHER_TILE_GAP, LAUNCHER_TILE_HEIGHT, launcherColumns, launcherRowsForHeight } from '@/lib/app-launcher/launcher-layout'
 import {
-  LAUNCHER_GRID_COLS_CLASS,
   reorderLauncherIds,
   resolveLauncherIds,
   seedLauncherIds,
-  tilesForSpan,
   toggleLauncherLink,
 } from '@/lib/app-launcher/launcher-selection'
+import { useAppSettings } from '../../settings/SettingsProvider'
 import WidgetCard from '../../WidgetCard'
 import FaviconTile from './FaviconTile'
 import LauncherMenu from './LauncherMenu'
-import { openQuickLink } from './shared'
+import LauncherDialog, { LauncherApp } from './LauncherDialog'
 
 // Per-browser "have we already tried the one-time is_pinned -> ordered
 // array seed" marker (see the effect below). A Set of size 0 or 1 is a
@@ -40,14 +40,24 @@ const SEED_MARKER_ID = 'done'
  * `launcher_link_ids` (lib/settings) is the single source of truth for
  * membership *and* order — `quick_links.is_pinned`/`sort_order` are only
  * read once, to seed it for an existing user (CLAUDE.md's App Library
- * section). `span` is P3's home-grid contract: a wider widget shows more
- * tiles (see lib/app-launcher/launcher-selection.ts's tilesForSpan).
+ * section).
  */
-export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan }) {
-  const [links, setLinks] = useState<QuickLink[]>([])
+export default function AppLauncherGlance({ span = 1, height }: HomeWidgetProps) {
+  const [links, setLinks] = useState<LauncherLink[]>([])
   const [loading, setLoading] = useState(true)
-  const { settings, loading: settingsLoading, updateSettings } = useSettings()
+  const { settings, loading: settingsLoading, updateSettings } = useAppSettings()
   const [seedMarker, setSeedMarker] = useStoredIdSet(SEED_MARKER_KEY)
+  const gridRef = useRef<HTMLDivElement | null>(null)
+  const [gridWidth, setGridWidth] = useState(0)
+  const [dialog, setDialog] = useState<{ title: string; links: LauncherLink[] } | null>(null)
+
+  useEffect(() => {
+    const grid = gridRef.current
+    if (!grid) return
+    const observer = new ResizeObserver(([entry]) => setGridWidth(entry.contentRect.width))
+    observer.observe(grid)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     supabase
@@ -58,8 +68,7 @@ export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan 
       .order('sort_order', { ascending: true })
       .then(({ data }) => {
         // A link in an archived folder is archived too.
-        type Row = QuickLink & { folder: { archived_at?: string | null } | null }
-        setLinks(((data ?? []) as Row[]).filter((row) => !row.archived_at && !row.folder?.archived_at))
+        setLinks(((data ?? []) as LauncherLink[]).filter((row) => !row.archived_at && !row.folder?.archived_at))
         setLoading(false)
       })
   }, [])
@@ -85,10 +94,14 @@ export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan 
   )
   const linksById = useMemo(() => new Map(links.map((link) => [link.id, link])), [links])
   const selectedLinks = useMemo(
-    () => selectedIds.map((id) => linksById.get(id)).filter((link): link is QuickLink => Boolean(link)),
+    () => selectedIds.map((id) => linksById.get(id)).filter((link): link is LauncherLink => Boolean(link)),
     [selectedIds, linksById]
   )
-  const visibleLinks = selectedLinks.slice(0, tilesForSpan(span))
+  const columns = launcherColumns(span, gridWidth)
+  const items = useMemo(() => groupLauncherLinks(selectedLinks), [selectedLinks])
+  const capacity = columns * launcherRowsForHeight(height)
+  const hasOverflow = items.length > capacity
+  const visibleItems = items.slice(0, hasOverflow ? capacity - 1 : capacity)
 
   const handleToggle = (linkId: string) => {
     updateSettings({ launcher_link_ids: toggleLauncherLink(selectedIds, linkId) })
@@ -102,7 +115,6 @@ export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan 
       title="App Launcher"
       icon={<LayoutGrid className="h-4 w-4" />}
       accent="neutral"
-      className="h-full"
       action={
         <div className="flex items-center gap-2">
           <LauncherMenu links={links} selectedIds={selectedIds} onToggle={handleToggle} onReorder={handleReorder} />
@@ -116,43 +128,43 @@ export default function AppLauncherGlance({ span = 1 }: { span?: HomeWidgetSpan 
         </div>
       }
     >
-      {loading ? (
-        <p>Loading...</p>
-      ) : visibleLinks.length === 0 ? (
-        <p>No apps selected yet — choose some from the menu above, or the App Library.</p>
-      ) : (
-        <div className={`grid gap-2 ${LAUNCHER_GRID_COLS_CLASS[span]}`}>
-          {visibleLinks.map((link) => (
-            <button
-              key={link.id}
-              type="button"
-              onClick={() => openQuickLink(link)}
-              title={link.title}
-              className="flex flex-col items-center gap-1 rounded-lg p-1.5 hover:bg-surface-container-high"
-            >
-              <FaviconTile
-                title={link.title}
-                url={link.url}
-                faviconPath={link.favicon_path}
-                faviconCustomUrl={link.favicon_custom_url}
-                size="sm"
-              />
-              <span className="w-full truncate text-center text-[10px] text-on-surface-variant">
-                {link.title}
-              </span>
-            </button>
-          ))}
-          <Link
-            href="/apps"
-            className="flex flex-col items-center gap-1 rounded-lg p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+      <div ref={gridRef}>
+        {loading || settingsLoading ? (
+          <p>Loading...</p>
+        ) : selectedLinks.length === 0 ? (
+          <p>No apps selected yet — choose some from the menu above, or the App Library.</p>
+        ) : (
+          <div
+            className="grid"
+            style={{
+              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+              gridAutoRows: LAUNCHER_TILE_HEIGHT,
+              gap: LAUNCHER_TILE_GAP,
+            }}
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-outline-variant">
-              <Plus className="h-4 w-4" />
-            </span>
-            <span className="text-[10px]">More</span>
-          </Link>
-        </div>
-      )}
+            {visibleItems.map((item) => item.type === 'link' ? (
+              <LauncherApp key={item.link.id} link={item.link} />
+            ) : (
+              <button key={item.folder.id} type="button" title={item.folder.name}
+                aria-label={`Open ${item.folder.name} folder`}
+                onClick={() => setDialog({ title: item.folder.name, links: item.links })}
+                className="flex min-h-11 min-w-0 flex-col items-center justify-start gap-1 rounded-lg p-1 hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                <span aria-hidden="true" className="grid h-8 w-8 grid-cols-2 grid-rows-2 gap-0.5 rounded-lg bg-surface-container-high p-px">
+                  {item.links.slice(0, 4).map((link) => <FaviconTile key={link.id} title={link.title} url={link.url} faviconPath={link.favicon_path} faviconCustomUrl={link.favicon_custom_url} size="xs" />)}
+                </span>
+                <span className="line-clamp-2 w-full break-words text-center text-xs leading-4 text-on-surface-variant">{item.folder.name}</span>
+              </button>
+            ))}
+            {hasOverflow && (
+              <button type="button" onClick={() => setDialog({ title: 'All selected apps', links: selectedLinks })}
+                className="min-h-11 rounded-lg px-1 text-center text-xs font-medium text-on-surface-variant hover:bg-surface-container-high">
+                Show all<br />{selectedLinks.length} apps
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {dialog && <LauncherDialog title={dialog.title} links={dialog.links} onClose={() => setDialog(null)} />}
     </WidgetCard>
   )
 }

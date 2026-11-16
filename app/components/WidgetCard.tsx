@@ -22,6 +22,7 @@ export default function WidgetCard({
 }) {
   return (
     <section
+      data-ui="widget-card"
       className={`group flex flex-col gap-3 rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-container-padding transition-all duration-300 ease-out hover:-translate-y-1 ${ACCENT_GLOW[accent]} ${className}`}
     >
       <div className="flex items-center justify-between gap-2">

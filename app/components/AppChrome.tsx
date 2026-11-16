@@ -6,6 +6,7 @@ import Sidebar from './Sidebar'
 import TopAppBar from './TopAppBar'
 import MobileBottomNav from './MobileBottomNav'
 import SettingsProvider from './settings/SettingsProvider'
+import styles from './WorkspaceShell.module.css'
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -16,16 +17,23 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
+  const isWorkspace = pathname === '/' ||
+    pathname === '/lectures' ||
+    pathname.startsWith('/lectures/') ||
+    pathname === '/calendar'
+
   return (
     <PageTitleProvider>
       <SettingsProvider>
         <PageTitleDocumentSync />
-        <Sidebar />
-        <div className="flex min-h-full flex-1 flex-col pt-16 pb-16 md:pl-20 md:pt-0 md:pb-0">
-          <TopAppBar />
-          {children}
+        <div className={isWorkspace ? `workspace-ui ${styles.shell}` : styles.shell}>
+          <Sidebar compact={isWorkspace} />
+          <div className={`${styles.content}${isWorkspace ? '' : ` ${styles.legacyContent}`}`}>
+            <TopAppBar compact={isWorkspace} />
+            {children}
+          </div>
+          <MobileBottomNav />
         </div>
-        <MobileBottomNav />
       </SettingsProvider>
     </PageTitleProvider>
   )

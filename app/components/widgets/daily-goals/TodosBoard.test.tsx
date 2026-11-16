@@ -72,6 +72,17 @@ describe('Tasks board', () => {
     act(() => onMediaChange?.())
     expect(show).toHaveBeenCalledTimes(2)
   })
+  it('combines the starred filter with a selected list', () => {
+    render(<TodosBoard />)
+    fireEvent.click(screen.getByRole('button', { name: 'Reading' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Starred only' }))
+    expect(screen.getByRole('button', { name: 'Starred only' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByLabelText('Choose a list or workspace')).toHaveProperty('value', 'list:reading')
+    expect(screen.queryByText('Read chapter')).toBeNull()
+    expect(screen.queryByText('Write essay')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Starred only' }))
+    expect(screen.getByText('Read chapter')).toBeTruthy()
+  })
   it('filters by workspace and search and calls existing completion and star mutations', () => {
     render(<TodosBoard />)
     fireEvent.change(screen.getByLabelText('Choose a list or workspace'), { target: { value: 'workspace:geo' } })

@@ -17,6 +17,7 @@
 .listItem > button:not(:first-child) { width:30px; padding:5px; justify-content:center; }
 .center { min-width:0; }
 .toolbar { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid #e3e4dd; }
+.starFilter { display:flex; align-items:center; gap:5px; min-height:36px; padding:6px 10px; border:1px solid #e1e2da; border-radius:7px; font-size:12px; font-weight:600; }
 .modes { display:flex; flex-wrap:wrap; border:1px solid #e1e2da; border-radius:7px; padding:2px; }
 .modes button { padding:6px 10px; border-radius:5px; font-size:12px; font-weight:600; }
 .mobilePicker { display:none; }

@@ -230,6 +230,14 @@ export default function TodosBoard({ tabs }: { tabs?: ReactNode }) {
               <button type="button" onClick={() => setIsAddListOpen(true)}>New list</button>
               {activeListId && lists.filter((list) => list.id === activeListId).map((list) => <span key={list.id}><button type="button" onClick={() => setEditingList(list)}>Rename</button><button type="button" onClick={() => setDeletingList(list)}>Delete list</button></span>)}
             </div>
+            <button
+              type="button"
+              className={`${styles.starFilter} ${starredOnly ? styles.active : ''}`}
+              aria-pressed={starredOnly}
+              onClick={() => setStarredOnly((current) => !current)}
+            >
+              <Star size={14} /> Starred only
+            </button>
             <div className={styles.modes} aria-label="Task view">{VIEW_MODES.map(({ id, label }) => <button key={id} type="button" aria-pressed={viewMode === id} className={viewMode === id ? styles.active : ''} onClick={() => setViewMode(id)}>{label}</button>)}</div>
           </div>
           <div className={styles.listBody}>

@@ -1,6 +1,25 @@
 # Study Copilot UI redesign — living handoff
 
-Updated: 15 November 2026, Europe/London.
+Updated: 16 November 2026, Europe/London.
+
+## Active follow-up — 16 November
+
+User requested larger launcher dimensions, folder grouping with iPhone-like opening motion, responsive text at all widget widths/mobile, larger widgets revealing more useful content (Calendar multiple upcoming days, Money recent transactions), assessment dates beyond seven days, and moving settings/account from top bar into the left navigation. Preserve current Calendar/Study priorities/Launcher placement and general visual direction. User explicitly requested new task branches.
+
+**16 Nov — completed by Claude Code (Opus coordinating, Sonnet subagents).** Codex stopped; its three task copies (`/private/tmp/study-ui-*`) and the main checkout's uncommitted work on `codex/home-widget-refinement` were combined into worktree `.claude/worktrees/dashboard-ui-redesign-452b5b` and pushed to `main`. The `/private/tmp` copies and the main checkout's uncommitted diff are now superseded; don't reapply them.
+
+Done and checked in signed-in Chrome (desktop 1440 and 390px phone frame):
+- Calendar widget shows today + upcoming days with events (3 days small, more when taller/wider); compact time-column rows on narrow cards.
+- Study priorities: assessments (formative/summative/tests) at any distance; prep extends past 7 days to balance columns; overflow "+N more this fortnight"; no empty half-card.
+- Money shows balances plus recent transactions.
+- Launcher: 1–4 columns × 2–12 rows; folders open iPhone-style from the tapped tile (reduced-motion fade); 12px single-line labels; 4 tiles per phone row.
+- Settings, account and capture in the bottom of the desktop rail; single-row 48px phone top bar with 44px buttons.
+- Phone bottom bar: 4 fixed tabs + More sheet (no horizontal scrolling).
+- Widget headers one row at every width; ≥44px touch targets.
+
+Known follow-ups: phone page is long (Study priorities ~1.5k px at 390px); real-device Safari check of the folder animation not done.
+
+Research used: Salesforce mobile accessible design (14px secondary/16px primary,44px actions, stack long labels, avoid gesture-only controls), Notion mobile navigation/views, Asana mobile quick actions, Meta rem-based scalable type, Apple reduced-motion guidance. Apply principles to this product rather than copying another app's branding.
 
 ## Read first: task and working instructions
 

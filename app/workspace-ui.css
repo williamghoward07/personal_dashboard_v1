@@ -116,3 +116,36 @@ body:has(.workspace-ui) .rainbow-ring::before,
 body:has(.workspace-ui) .rainbow-ring::after {
   display: none;
 }
+
+/* Widget content follows its own available width, including narrow desktop cards. */
+[data-home-widget] {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-home-widget] :is([data-ui="glass-card"], [data-ui="widget-card"]) {
+  min-width: 0;
+}
+
+@container home-widget (max-width: 380px) {
+  [data-ui="glass-card"] { padding: 16px; }
+}
+
+@media (pointer: coarse), (max-width: 639px) {
+  /* Launcher icon labels stay at 12px, like iOS home-screen labels. */
+  [data-home-widget] :is(.text-xs, .label-caps, .text-label-caps):not(.launcher-label) {
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+  [data-home-widget] .text-sm {
+    font-size: 1rem;
+    line-height: 1.45;
+  }
+  [data-home-widget] :is(button, a[aria-label]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  [data-home-widget] :is(input:not([type="checkbox"]), textarea, select) {
+    font-size: 1rem;
+  }
+}

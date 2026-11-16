@@ -20,6 +20,8 @@ export type { HomeLayoutEntry, HomeWidgetSpan }
  * grid always renders correctly at all four spans.
  */
 export interface HomeWidgetProps {
+  /** Actual rendered outer width in CSS pixels, independent of viewport breakpoints. */
+  width?: number
   span?: HomeWidgetSpan
   height?: number
 }

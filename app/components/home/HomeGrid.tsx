@@ -227,7 +227,7 @@ export default function HomeGrid({ heading, query }: { heading: ReactNode; query
                   onSizePreview={handleSizePreview}
                   onSizeCommit={handleSizeCommit}
                 >
-                  <Widget span={Math.min(entry.span, gridColumns) as HomeWidgetSpan} height={entry.height} />
+                  {(width) => <Widget width={width} span={Math.min(entry.span, gridColumns) as HomeWidgetSpan} height={entry.height} />}
                 </HomeWidgetFrame>
               )
             })}

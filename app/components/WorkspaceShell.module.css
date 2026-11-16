@@ -1,81 +1,76 @@
 .shell {
   --rail-width: 64px;
   --rail-expanded-width: 220px;
-  --compact-bar-height: 44px;
+  --mobile-bar-height: calc(48px + env(safe-area-inset-top));
   --legacy-rail-width: 80px;
 }
 
 .content {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
-  padding-bottom: 64px;
+  min-height: calc(100dvh - var(--mobile-bar-height));
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
 }
 
 .legacyContent {
+  min-height: 100dvh;
   padding-top: 64px;
 }
 
 .rail {
-  display: none;
-}
-
-.compactBar {
   position: sticky;
   top: 0;
   z-index: 30;
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  height: var(--compact-bar-height);
-  padding-inline: 12px;
-  background: var(--color-surface-container-low);
+  background: var(--color-surface-container-lowest);
   border-bottom: 1px solid var(--color-outline-variant);
 }
 
-.utilityButton {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 7px;
-  color: var(--color-on-surface-variant);
+.legacyRail {
+  display: none;
 }
 
-.utilityButton:hover,
-.utilityButton[aria-expanded="true"],
+.railLink:hover,
+.railLink[aria-expanded="true"],
 .accountAction:hover:not(:disabled) {
   background: var(--color-surface-container-high);
-  color: var(--color-on-surface);
+  color: var(--nav-accent, var(--color-on-surface));
 }
 
-.accountButton {
-  width: 30px;
-  height: 30px;
-  margin-inline: 4px;
+.accountAvatar {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
   border-radius: 50%;
   background: var(--color-surface-container-high);
   color: var(--color-primary);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
 }
 
-.accountButton:hover,
-.accountButton[aria-expanded="true"] {
+.railLink:hover .accountAvatar,
+.railLink[aria-expanded="true"] .accountAvatar {
   background: var(--color-surface-bright);
 }
 
-.compactBar [role="dialog"] {
-  max-width: min(18rem, calc(100vw - 4rem));
+.workspacePanel {
+  position: fixed;
+  inset: calc(var(--mobile-bar-height) + 8px) 12px auto auto;
+  width: 18rem;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - var(--mobile-bar-height) - 80px);
+  margin: 0;
+  overflow-y: auto;
   box-shadow: 0 8px 24px rgb(39 43 40 / 0.12);
 }
 
+.workspacePanel:focus-visible {
+  outline: 2px solid var(--color-primary-container);
+  outline-offset: -2px;
+}
+
 .accountPanel {
-  width: 18rem;
-  max-height: calc(100dvh - var(--compact-bar-height) - 16px);
-  overflow-y: auto;
   font-size: 13px;
 }
 
@@ -145,14 +140,61 @@
 }
 
 .railLink:focus-visible,
-.utilityButton:focus-visible,
 .accountAction:focus-visible {
   outline: 2px solid var(--color-primary-container);
   outline-offset: -2px;
 }
 
+@media (width < 48rem) {
+  /* One compact row: brand on the left, capture/settings/account on the right. */
+  .rail:not(.legacyRail) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: env(safe-area-inset-top) 8px 0;
+  }
+
+  .railList,
+  .railLabel {
+    display: none;
+  }
+
+  .railFooter {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 2px;
+    height: 48px;
+  }
+
+  .railLink {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border-radius: 7px;
+    color: var(--color-on-surface-variant);
+  }
+
+  .brand {
+    color: var(--color-primary);
+  }
+
+  .railLink > svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .accountAction,
+  .workspacePanel [role="switch"] {
+    min-height: 44px;
+  }
+}
+
 @media (min-width: 48rem) {
   .content {
+    min-height: 100dvh;
     padding-left: var(--rail-width);
     padding-bottom: 0;
   }
@@ -170,19 +212,19 @@
     flex-direction: column;
     gap: 12px;
     width: var(--rail-width);
-    overflow-x: hidden;
     padding: 8px;
     background: var(--color-surface-container-lowest);
     border-right: 1px solid var(--color-outline-variant);
+    border-bottom: 0;
     transition: width 160ms ease, box-shadow 160ms ease;
   }
 
-  .rail:not(.legacyRail):has(:focus-visible) {
+  .rail:not(.legacyRail):has(:focus-visible, [aria-expanded="true"]) {
     width: var(--rail-expanded-width);
     box-shadow: 6px 0 20px rgb(39 43 40 / 0.12);
   }
 
-  .rail:not(.legacyRail):has(:focus-visible) .railLabel {
+  .rail:not(.legacyRail):has(:focus-visible, [aria-expanded="true"]) .railLabel {
     opacity: 1;
   }
 
@@ -203,6 +245,9 @@
   }
 
   .railFooter {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     padding-top: 8px;
     border-top: 1px solid var(--color-outline-variant);
   }
@@ -211,6 +256,7 @@
     display: flex;
     align-items: center;
     gap: 14px;
+    width: 100%;
     height: 38px;
     overflow: hidden;
     padding-inline: 14px;
@@ -225,9 +271,8 @@
     height: 19px;
   }
 
-  .railLink:hover {
-    background: var(--color-surface-container-high);
-    color: var(--nav-accent, var(--color-on-surface));
+  .accountAvatar {
+    margin-inline: -1.5px;
   }
 
   .railLink[aria-current="page"] {
@@ -326,13 +371,10 @@
     background: var(--color-surface-bright);
   }
 
-  .compactBar {
-    gap: 6px;
-    padding-inline: 24px;
-  }
-
-  .mobileCapture {
-    display: none;
+  /* The links can scroll independently while the panel opens into the page. */
+  .workspacePanel {
+    inset: auto auto 8px calc(var(--rail-expanded-width) + 8px);
+    max-height: calc(100dvh - 16px);
   }
 }
 

@@ -4,9 +4,12 @@ import { launcherColumns, launcherHeightForRows, launcherRowsForHeight, stepLaun
 describe('launcher layout', () => {
   it('fits the available width without cramming desktop columns into a smaller card', () => {
     expect(launcherColumns(1, 240)).toBe(3)
+    expect(launcherColumns(1, 340)).toBe(4)
+    expect(launcherColumns(1, 1000)).toBe(4)
     expect(launcherColumns(2, 480)).toBe(6)
     expect(launcherColumns(4, 480)).toBe(6)
-    expect(launcherColumns(4, 150)).toBe(1)
+    expect(launcherColumns(4, 150)).toBe(2)
+    expect(launcherColumns(4, 60)).toBe(1)
   })
 
   it('maps legacy pixel heights to the nearest available row count and round-trips the new sizes', () => {

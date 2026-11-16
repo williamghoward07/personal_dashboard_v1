@@ -25,18 +25,22 @@ export default function WidgetCard({
       data-ui="widget-card"
       className={`group flex flex-col gap-3 rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-container-padding transition-all duration-300 ease-out hover:-translate-y-1 ${ACCENT_GLOW[accent]} ${className}`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
+      <div className="flex min-w-0 flex-nowrap items-center justify-between gap-2">
+        <h2 className="flex min-w-0 flex-1 items-center gap-2 font-display text-sm font-semibold text-on-surface">
           {icon && (
-            <span className={`transition-transform duration-300 group-hover:scale-[1.15] ${ACCENT_TEXT[accent]}`}>
+            <span className={`shrink-0 transition-transform duration-300 group-hover:scale-[1.15] ${ACCENT_TEXT[accent]}`}>
               {icon}
             </span>
           )}
-          {title}
+          <span className="min-w-0 truncate">{title}</span>
         </h2>
-        {action}
+        {action && (
+          <div className="flex shrink-0 items-center [@media(pointer:coarse)]:-my-3 [@media(pointer:coarse)]:[&_a]:min-h-11 [@media(pointer:coarse)]:[&_a]:min-w-11 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-w-11">
+            {action}
+          </div>
+        )}
       </div>
-      <div className="flex-1 text-sm text-on-surface-variant">
+      <div className="min-w-0 flex-1 text-sm text-on-surface-variant">
         {children ?? 'Coming soon'}
       </div>
     </section>

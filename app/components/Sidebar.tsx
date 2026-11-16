@@ -1,20 +1,24 @@
 'use client'
 
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Hexagon, Plus } from 'lucide-react'
 import { ACCENT_VAR, MODULE_ACCENT } from '@/lib/theme'
 import { isNavItemActive } from '@/lib/nav-items'
+import SettingsMenu from './settings/SettingsMenu'
 import { useVisibleNavItems } from './settings/use-visible-nav-items'
 import styles from './WorkspaceShell.module.css'
 
-export default function Sidebar({ compact }: { compact: boolean }) {
+export default function Sidebar({ compact, accountMenu }: { compact: boolean; accountMenu?: ReactNode }) {
   const pathname = usePathname()
   const items = useVisibleNavItems()
 
   return (
-    <nav aria-label="Main" className={compact ? styles.rail : `${styles.rail} ${styles.legacyRail}`}>
+    <nav
+      aria-label={compact ? 'Workspace' : 'Main'}
+      className={compact ? styles.rail : `${styles.rail} ${styles.legacyRail}`}
+    >
       <Link
         href="/"
         aria-label="Study Copilot home"
@@ -46,11 +50,26 @@ export default function Sidebar({ compact }: { compact: boolean }) {
       </ul>
 
       <div className={styles.railFooter}>
-        <Link href="/brain-dump" title={compact ? undefined : 'Quick capture'} className={styles.railLink}>
+        <Link
+          href="/brain-dump"
+          aria-label="Quick capture"
+          title={compact ? undefined : 'Quick capture'}
+          className={styles.railLink}
+        >
           <Plus aria-hidden strokeWidth={1.75} />
           <span className={styles.railLabel}>Quick capture</span>
         </Link>
-        {!compact && (
+        {compact ? (
+          <>
+            <SettingsMenu
+              triggerClassName={styles.railLink}
+              labelClassName={styles.railLabel}
+              panelClassName={styles.workspacePanel}
+              focusPanel
+            />
+            {accountMenu}
+          </>
+        ) : (
           <>
             <span aria-hidden className="h-px w-8 bg-outline-variant" />
             <span className="flex h-4 w-4 items-center justify-center" title="System live">

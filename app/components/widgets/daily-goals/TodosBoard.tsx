@@ -73,6 +73,7 @@ export default function TodosBoard({ tabs }: { tabs?: ReactNode }) {
   const [deletingTodo, setDeletingTodo] = useState<Todo | null>(null)
   const [viewingTodo, setViewingTodo] = useState<Todo | null>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const dialogModeRef = useRef<'modal' | 'inline' | null>(null)
   const openerRef = useRef<HTMLElement | null>(null)
   const openTodo = (todo: Todo) => {
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -84,9 +85,21 @@ export default function TodosBoard({ tabs }: { tabs?: ReactNode }) {
   }
 
   useEffect(() => {
-    if (viewingTodo && dialogRef.current && !dialogRef.current.open) {
-      dialogRef.current.showModal()
+    if (!viewingTodo) return
+    const media = window.matchMedia('(max-width: 640px)')
+    const updateDialog = () => {
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const mode = media.matches ? 'modal' : 'inline'
+      if (dialog.open && dialogModeRef.current === mode) return
+      if (dialog.open) dialog.close()
+      if (mode === 'modal') dialog.showModal()
+      else dialog.show()
+      dialogModeRef.current = mode
     }
+    updateDialog()
+    media.addEventListener('change', updateDialog)
+    return () => media.removeEventListener('change', updateDialog)
   }, [viewingTodo])
 
   const [isAddListOpen, setIsAddListOpen] = useState(false)
@@ -165,7 +178,8 @@ export default function TodosBoard({ tabs }: { tabs?: ReactNode }) {
   const sorted = useMemo(() => sortTodos(visibleIncomplete, todayDateKey), [visibleIncomplete, todayDateKey])
 
   const groups = [
-    { label: 'Today', todos: sorted.filter((todo) => todo.due_date !== null && todo.due_date <= todayDateKey) },
+    { label: 'Overdue', todos: sorted.filter((todo) => todo.due_date !== null && todo.due_date < todayDateKey) },
+    { label: 'Today', todos: sorted.filter((todo) => todo.due_date === todayDateKey) },
     { label: 'Later', todos: sorted.filter((todo) => todo.due_date === null || todo.due_date > todayDateKey) },
   ]
 

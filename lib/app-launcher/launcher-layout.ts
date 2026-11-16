@@ -1,8 +1,8 @@
 import type { HomeWidgetSpan } from '@/lib/settings/schema'
 
 export const MIN_LAUNCHER_ROWS = 2
-export const MAX_LAUNCHER_ROWS = 4
-export const LAUNCHER_TILE_HEIGHT = 64
+export const MAX_LAUNCHER_ROWS = 12
+export const LAUNCHER_TILE_HEIGHT = 80
 export const LAUNCHER_TILE_GAP = 8
 export const LAUNCHER_ROW_STEP = LAUNCHER_TILE_HEIGHT + LAUNCHER_TILE_GAP
 
@@ -26,7 +26,7 @@ export function launcherHeightForRows(rows: number): number | undefined {
 }
 
 export function launcherColumns(span: HomeWidgetSpan, width: number): number {
-  const tileWidth = 44
+  const tileWidth = 72
   const columnsThatFit = Math.floor((width + LAUNCHER_TILE_GAP) / (tileWidth + LAUNCHER_TILE_GAP))
   return Math.max(1, Math.min(span * 4, columnsThatFit))
 }

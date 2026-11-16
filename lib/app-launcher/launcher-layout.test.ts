@@ -3,18 +3,18 @@ import { launcherColumns, launcherHeightForRows, launcherRowsForHeight, stepLaun
 
 describe('launcher layout', () => {
   it('fits the available width without cramming desktop columns into a smaller card', () => {
-    expect(launcherColumns(1, 240)).toBe(4)
-    expect(launcherColumns(2, 480)).toBe(8)
-    expect(launcherColumns(4, 480)).toBe(9)
-    expect(launcherColumns(4, 150)).toBe(3)
+    expect(launcherColumns(1, 240)).toBe(3)
+    expect(launcherColumns(2, 480)).toBe(6)
+    expect(launcherColumns(4, 480)).toBe(6)
+    expect(launcherColumns(4, 150)).toBe(1)
   })
 
   it('maps legacy pixel heights to the nearest available row count and round-trips the new sizes', () => {
     expect(launcherRowsForHeight(undefined)).toBe(2)
-    expect(launcherRowsForHeight(253)).toBe(2)
-    expect(launcherRowsForHeight(254)).toBe(3)
-    expect(launcherRowsForHeight(900)).toBe(4)
-    for (const rows of [2, 3, 4]) {
+    expect(launcherRowsForHeight(293)).toBe(2)
+    expect(launcherRowsForHeight(294)).toBe(3)
+    expect(launcherRowsForHeight(1600)).toBe(12)
+    for (const rows of [2, 3, 4, 12]) {
       expect(launcherRowsForHeight(launcherHeightForRows(rows))).toBe(rows)
     }
   })

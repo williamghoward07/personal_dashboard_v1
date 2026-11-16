@@ -25,7 +25,7 @@ export default function WorkspacesHelp({ align = 'start' }: { align?: 'start' | 
         </p>
 
         <Section title="Browsing workspaces">
-          <p>Choose a folder to browse its workspaces. List shows a compact overview; Cards offers a larger view. Select a list row to preview its scoped tasks and sources, then choose Open workspace for the full desk.</p>
+          <p>Choose a folder to browse its workspaces. Search matches workspace titles and subtitles in the current folder. List shows a compact overview; Cards offers a larger view. Select a list row to preview its scoped tasks and sources, then choose Open workspace for the full desk.</p>
         </Section>
 
         <Section title="Folders & colours">

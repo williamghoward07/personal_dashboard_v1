@@ -19,7 +19,7 @@ vi.mock('@/lib/workspaces/use-workspace-folders', () => ({ useWorkspaceFolders: 
 vi.mock('@/lib/workspaces/use-study-progress', () => ({ useStudyProgress: () => new Map([['w1', { readings: { done: 2, total: 3, percent: 67 }, minutesThisWeek: 60 }]]) }))
 vi.mock('@/lib/workspaces/use-workspace-todos', () => ({ useWorkspaceTodos: () => ({ todos: [{ id: 't1', title: 'Read chapter', completed_at: null }], loading: false }) }))
 vi.mock('@/lib/workspaces/use-workspace-links', () => ({ useWorkspaceLinks: () => ({ links: [], loading: false }) }))
-vi.mock('./WorkspaceAppearanceMenu', () => ({ default: () => <button>Move menu</button> }))
+vi.mock('./WorkspaceAppearanceMenu', () => ({ default: ({ onArchive }: { onArchive?: () => void }) => <button onClick={onArchive}>Archive Coastal systems</button> }))
 vi.mock('./WorkspacesHelp', () => ({ default: () => null }))
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
@@ -28,11 +28,24 @@ describe('workspace browsing', () => {
   it('shows live list progress, opens and closes the scoped preview, and links to the desk', () => {
     render(<WorkspacesBoard folderId="f1" />)
     expect(screen.getByText(/Readings: 2 \/ 3/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Coastal systems.*Readings/ }))
+    const row = screen.getByRole('button', { name: /Coastal systems.*Readings/ })
+    row.focus()
+    fireEvent.click(row)
     expect(screen.getByText('○ Read chapter')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Open workspace' }).getAttribute('href')).toBe('/workspaces/w1')
-    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Back' }))
+    fireEvent(screen.getByRole('dialog', { name: 'Coastal systems preview' }), new Event('cancel', { bubbles: false, cancelable: true }))
     expect(screen.queryByText('○ Read chapter')).toBeNull()
+    expect(document.activeElement).toBe(row)
+    fireEvent.click(row)
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(document.activeElement).toBe(row)
+  })
+
+  it('distinguishes search misses from an empty folder', () => {
+    render(<WorkspacesBoard folderId="f1" />)
+    fireEvent.change(screen.getByLabelText('Search workspaces'), { target: { value: 'missing' } })
+    expect(screen.getByText('No workspaces match this search.')).toBeTruthy()
   })
 
   it('switches to cards, browses folders, and archives from the list', () => {

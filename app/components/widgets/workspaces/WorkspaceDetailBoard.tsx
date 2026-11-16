@@ -50,7 +50,7 @@ import WorkspaceAppearanceMenu from './WorkspaceAppearanceMenu'
 import { CollapseButton, CollapsedSectionBar } from './SectionChrome'
 import { accentVars, actionButtonClass, inputClass, logTimestamp, primaryButtonClass, relativeTime } from './shared'
 
-const pageClass = 'mx-auto flex w-full max-w-360 min-w-0 flex-1 flex-col gap-5 px-4 pt-6 pb-48 sm:px-8'
+const pageClass = 'mx-auto flex w-full max-w-360 min-w-0 flex-1 flex-col gap-4 px-4 pt-5 pb-48 sm:px-8'
 
 const BAR_GRID_CLASS: Record<number, string> = {
   1: '',
@@ -285,11 +285,8 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
 
   return (
     <main className={`${styles.surface} ${pageClass}`} style={accentVars(accent)}>
-      <Link href={moduleCode ? '/lectures' : workspace.folder_id ? `/workspaces?folder=${workspace.folder_id}` : '/workspaces'} className="flex min-h-11 w-fit items-center gap-2 text-sm font-semibold text-on-surface-variant hover:text-on-surface">
-        <ArrowLeft className="h-4 w-4" /> Back to {moduleCode ? 'Lectures' : 'Workspaces'}
-      </Link>
       <WorkspaceHeaderStrip
-        context={isArchived ? 'Archived Context' : 'Active Context'}
+        context={workspace.title}
         crumbs={moduleCode ? [] : crumbs}
         root={moduleCode ? { label: 'Lectures', href: '/lectures' } : undefined}
       />
@@ -303,7 +300,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <h1 className="break-words font-display text-headline-lg font-bold text-ws-accent">{workspace.title}</h1>
+            <h1 className="break-words text-2xl font-bold text-on-surface">{workspace.title}</h1>
             <WorkspaceAppearanceMenu
               workspace={workspace}
               folders={folders}

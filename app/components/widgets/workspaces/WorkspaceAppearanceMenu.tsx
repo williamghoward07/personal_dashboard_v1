@@ -17,12 +17,14 @@ export default function WorkspaceAppearanceMenu({
   onChange,
   open,
   onOpenChange,
+  onArchive,
 }: {
   workspace: Workspace
   folders: WorkspaceFolder[]
   onChange: (patch: { color?: string | null; folder_id?: string | null; module_code?: string | null }) => void
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  onArchive?: () => void
 }) {
   const inherited = resolveFolderAccent(folders, workspace.folder_id)
   const targets = moveTargets(folders)
@@ -56,6 +58,7 @@ export default function WorkspaceAppearanceMenu({
       )}
     >
       <div className="flex flex-col gap-3">
+        {onArchive && <button type="button" onClick={onArchive} className="min-h-11 text-left text-sm">Archive {workspace.title}</button>}
         <div className="flex flex-col gap-1">
           <span className={microLabelClass}>Colour</span>
           <AccentPicker

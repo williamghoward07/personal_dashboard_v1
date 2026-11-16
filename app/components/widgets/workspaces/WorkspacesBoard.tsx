@@ -103,6 +103,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
   const [title, setTitle] = useState('')
   const [view, setView] = useState<'list' | 'cards'>('list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selectedRowRef = useRef<HTMLButtonElement | null>(null)
   const [query, setQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [deletingFolder, setDeletingFolder] = useState<WorkspaceFolder | null>(null)
@@ -330,7 +331,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
               ) : (
                 <ul className={view === 'cards' ? gridClass : 'divide-y divide-outline-variant/60'}>
                   {active.map((w) => view === 'list' ? (
-                    <WorkspaceRow key={w.id} workspace={w} folders={folders} accent={accentOf(w)} study={studyProgress.get(w.id)} selected={selectedId === w.id} onSelect={() => setSelectedId(w.id)} onChange={(patch) => updateWorkspace(w.id, patch)} onArchive={() => archiveWorkspace(w.id)} />
+                    <WorkspaceRow key={w.id} workspace={w} folders={folders} accent={accentOf(w)} study={studyProgress.get(w.id)} selected={selectedId === w.id} onSelect={(button) => { selectedRowRef.current = button; setSelectedId(w.id) }} onChange={(patch) => updateWorkspace(w.id, patch)} onArchive={() => archiveWorkspace(w.id)} />
                   ) : (
                     <WorkspaceCard
                       key={w.id}
@@ -377,7 +378,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
         )}
 
           </div>
-          {selectedId && active.some((w) => w.id === selectedId) && <WorkspacePreview key={selectedId} workspace={active.find((w) => w.id === selectedId)!} study={studyProgress.get(selectedId)} onClose={() => setSelectedId(null)} />}
+          {selectedId && active.some((w) => w.id === selectedId) && <WorkspacePreview workspace={active.find((w) => w.id === selectedId)!} study={studyProgress.get(selectedId)} selectedRowRef={selectedRowRef} onClose={() => setSelectedId(null)} />}
         </div>
         <DragOverlay dropAnimation={null}>
           {draggedLabel ? (
@@ -588,13 +589,13 @@ function WorkspaceCard({
 
 function WorkspaceRow({ workspace, folders, accent, study, selected, onSelect, onChange, onArchive }: {
   workspace: Workspace; folders: WorkspaceFolder[]; accent: Accent; study?: StudyProgress; selected: boolean;
-  onSelect: () => void; onChange: (patch: { color?: string | null; folder_id?: string | null }) => void; onArchive: () => void
+  onSelect: (button: HTMLButtonElement) => void; onChange: (patch: { color?: string | null; folder_id?: string | null }) => void; onArchive: () => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `ws:${workspace.id}`, data: { type: 'workspace', id: workspace.id } })
   const hidden = workspace.hidden_sections ?? []
   return <li ref={setNodeRef} style={accentVars(accent)} className={`flex min-w-0 items-center gap-1 py-1 ${selected ? 'bg-ws-accent/10' : ''} ${isDragging ? 'opacity-40' : ''}`}>
     <button type="button" {...attributes} {...listeners} aria-label={`Move ${workspace.title}`} className="hidden min-h-11 w-8 shrink-0 touch-none items-center justify-center text-on-surface-variant sm:flex"><GripVertical className="h-4 w-4" /></button>
-    <button type="button" onClick={onSelect} aria-pressed={selected} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-2 text-left">
+    <button type="button" onClick={(event) => onSelect(event.currentTarget)} aria-pressed={selected} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-2 text-left">
       <span className="h-3 w-3 shrink-0 rounded-full bg-ws-accent" />
       <span className="min-w-0 flex-1"><span className="block break-words text-base font-semibold">{workspace.title}</span><span className="block text-sm text-on-surface-variant">{[!hidden.includes('readings') && `Readings: ${study?.readings.done ?? 0} / ${study?.readings.total ?? 0}`, !hidden.includes('time') && `${formatMinutes(study?.minutesThisWeek ?? 0)} this week`, workspace.subtitle].filter(Boolean).join(' · ')}</span></span>
     </button>
@@ -602,25 +603,49 @@ function WorkspaceRow({ workspace, folders, accent, study, selected, onSelect, o
   </li>
 }
 
-function WorkspacePreview({ workspace, study, onClose }: { workspace: Workspace; study?: StudyProgress; onClose: () => void }) {
+function WorkspacePreview({ workspace, study, selectedRowRef, onClose }: {
+  workspace: Workspace
+  study?: StudyProgress
+  selectedRowRef: React.RefObject<HTMLButtonElement | null>
+  onClose: () => void
+}) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   useEffect(() => {
     const dialog = dialogRef.current
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     if (!dialog) return
-    if (typeof dialog.showModal === 'function') dialog.showModal()
-    else dialog.setAttribute('open', '')
-    dialog.querySelector<HTMLButtonElement>('button')?.focus()
-    return () => {
-      if (dialog.open && typeof dialog.close === 'function') dialog.close()
-      previousFocus?.focus()
+    const media = window.matchMedia('(min-width: 1000px)')
+    const updateMode = () => {
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      if (dialog.open) {
+        if (typeof dialog.close === 'function') dialog.close()
+        else dialog.removeAttribute('open')
+      }
+      if (media.matches) {
+        if (typeof dialog.show === 'function') dialog.show()
+        else dialog.setAttribute('open', '')
+        // A nonmodal inline preview must not take focus away from the list.
+        focused?.focus()
+      } else {
+        if (typeof dialog.showModal === 'function') dialog.showModal()
+        else dialog.setAttribute('open', '')
+        dialog.querySelector<HTMLButtonElement>('button')?.focus()
+      }
     }
-  }, [])
+    updateMode()
+    media.addEventListener('change', updateMode)
+    return () => {
+      media.removeEventListener('change', updateMode)
+      if (dialog.open && typeof dialog.close === 'function') dialog.close()
+      // The selected row can change while the desktop pane stays mounted.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      selectedRowRef.current?.focus()
+    }
+  }, [selectedRowRef])
   const { todos, loading: todosLoading } = useWorkspaceTodos(workspace.id)
   const { links, loading: linksLoading } = useWorkspaceLinks(workspace.id)
   const { sources } = splitReadings(links)
   const hidden = workspace.hidden_sections ?? []
-  return <dialog ref={dialogRef} aria-label={`${workspace.title} preview`} onCancel={(event) => { event.preventDefault(); onClose() }} className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none overflow-y-auto border-0 bg-surface px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop:bg-black/30 sm:inset-y-0 sm:right-0 sm:left-auto sm:w-96 sm:border-l sm:border-outline-variant/60">
+  return <dialog ref={dialogRef} aria-label={`${workspace.title} preview`} onCancel={(event) => { event.preventDefault(); onClose() }} className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none overflow-y-auto border-0 bg-surface px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop:bg-black/30 min-[1000px]:static min-[1000px]:h-auto min-[1000px]:w-72 min-[1000px]:shrink-0 min-[1000px]:overflow-visible min-[1000px]:rounded-lg min-[1000px]:border min-[1000px]:border-outline-variant/60 min-[1000px]:p-4">
 
     <div className="flex items-start justify-between gap-3"><div><h2 className="break-words text-xl font-bold">{workspace.title}</h2><p className="mt-1 text-sm text-on-surface-variant">{[!hidden.includes('readings') && `Readings: ${study?.readings.done ?? 0} / ${study?.readings.total ?? 0}`, !hidden.includes('time') && `${formatMinutes(study?.minutesThisWeek ?? 0)} this week`].filter(Boolean).join(' · ')}</p></div><button type="button" onClick={onClose} className="min-h-11 min-w-11 text-sm">Back</button></div>
     {workspace.subtitle && <p className="mt-3 text-sm text-on-surface-variant">{workspace.subtitle}</p>}

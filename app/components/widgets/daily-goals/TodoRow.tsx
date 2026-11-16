@@ -40,8 +40,9 @@ export default function TodoRow({
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={onActivateKey(onOpen)}
-      className="flex cursor-pointer items-center gap-3 py-2.5"
+      className="flex min-h-12 cursor-pointer items-center gap-2 py-2"
     >
+      <label className="flex h-11 w-11 shrink-0 items-center justify-center" onClick={(e) => e.stopPropagation()}>
       <input
         type="checkbox"
         checked={completed}
@@ -50,13 +51,14 @@ export default function TodoRow({
         aria-label={`Mark "${todo.title}" ${completed ? 'incomplete' : 'complete'}`}
         className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border border-outline-variant bg-transparent checked:border-primary-container checked:bg-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-container/50"
       />
+      </label>
       <div className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
           {isSyncedTodo(todo) && (
             <Cloud className="h-3 w-3 shrink-0 text-on-surface-variant" aria-label="Synced with Microsoft To Do" />
           )}
           <span
-            className={`block truncate text-sm ${completed ? 'text-on-surface-variant line-through' : 'text-on-surface'}`}
+            className={`block whitespace-normal break-words text-sm ${completed ? 'text-on-surface-variant line-through' : 'text-on-surface'}`}
           >
             {todo.title}
           </span>
@@ -72,7 +74,7 @@ export default function TodoRow({
           {due.label}
         </span>
       )}
-      <StarButton starred={todo.starred} title={todo.title} onToggle={onToggleStar} alwaysShow />
+      <StarButton starred={todo.starred} title={todo.title} onToggle={onToggleStar} alwaysShow largeTarget />
       <button
         type="button"
         onClick={(e) => {
@@ -80,7 +82,7 @@ export default function TodoRow({
           onEdit()
         }}
         aria-label={`Edit ${todo.title}`}
-        className="shrink-0 rounded p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+        className="hidden shrink-0 rounded p-2 text-on-surface-variant sm:block hover:bg-surface-container-high hover:text-on-surface"
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>
@@ -91,7 +93,7 @@ export default function TodoRow({
           onDelete()
         }}
         aria-label={`Delete ${todo.title}`}
-        className="shrink-0 rounded p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-error"
+        className="hidden shrink-0 rounded p-2 text-on-surface-variant sm:block hover:bg-surface-container-high hover:text-error"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>

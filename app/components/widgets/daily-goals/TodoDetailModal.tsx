@@ -85,6 +85,7 @@ export default function TodoDetailModal({
               type="button"
               onClick={onClose}
               aria-label="Back to tasks"
+              autoFocus
               className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
             >
               <X className="h-4 w-4" /> <span className="text-sm">Back</span>

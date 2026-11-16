@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Folder, ListTodo, Pencil, Plus, Star, X } from 'lucide-react'
 import { useTodos } from '@/lib/daily-goals/use-todos'
 import { useTodoLists } from '@/lib/todos/use-todo-lists'
@@ -60,7 +60,7 @@ function sortTodos(todos: Todo[], todayDateKey: string): Todo[] {
   })
 }
 
-export default function TodosBoard() {
+export default function TodosBoard({ tabs }: { tabs?: ReactNode }) {
   const todayDateKey = useMemo(() => londonDayBoundsUTC().startDateKey, [])
   const { todos, loading, error, addTodo, toggleTodo, toggleStar, updateTodo, deleteTodo, syncTodos, syncStatus } =
     useTodos(todayDateKey, 'all')
@@ -72,6 +72,22 @@ export default function TodosBoard() {
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [deletingTodo, setDeletingTodo] = useState<Todo | null>(null)
   const [viewingTodo, setViewingTodo] = useState<Todo | null>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const openerRef = useRef<HTMLElement | null>(null)
+  const openTodo = (todo: Todo) => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    setViewingTodo(todo)
+  }
+  const closeTodo = () => {
+    setViewingTodo(null)
+    requestAnimationFrame(() => openerRef.current?.focus())
+  }
+
+  useEffect(() => {
+    if (viewingTodo && dialogRef.current && !dialogRef.current.open) {
+      dialogRef.current.showModal()
+    }
+  }, [viewingTodo])
 
   const [isAddListOpen, setIsAddListOpen] = useState(false)
   const [editingList, setEditingList] = useState<TodoList | null>(null)
@@ -148,6 +164,11 @@ export default function TodosBoard() {
 
   const sorted = useMemo(() => sortTodos(visibleIncomplete, todayDateKey), [visibleIncomplete, todayDateKey])
 
+  const groups = [
+    { label: 'Today', todos: sorted.filter((todo) => todo.due_date !== null && todo.due_date <= todayDateKey) },
+    { label: 'Later', todos: sorted.filter((todo) => todo.due_date === null || todo.due_date > todayDateKey) },
+  ]
+
   const completedTodos = useMemo(
     () => todos.filter((t) => t.completed_at !== null && matchesFilters(t)),
     [todos, matchesFilters]
@@ -169,6 +190,7 @@ export default function TodosBoard() {
     <div className={styles.board}>
       <header className={styles.header}>
         <h1><ListTodo size={22} /> Tasks</h1>
+        {tabs}
         <label className={styles.search}><span className="sr-only">Search tasks</span><input placeholder="Search tasks..." value={search} onChange={(e) => setSearch(e.target.value)} /></label>
         <button className={styles.primary} type="button" onClick={() => setIsAddOpen(true)}><Plus size={16} /> Add task</button>
       </header>
@@ -176,16 +198,16 @@ export default function TodosBoard() {
       <div className={styles.layout}>
         <nav className={styles.sidebar} aria-label="Task lists and workspaces">
           <h2>Lists</h2>
-          <button className={filterValue === 'all' ? styles.active : ''} onClick={() => chooseFilter('all')}><ListTodo size={16} /> All tasks</button>
-          <button className={filterValue === 'starred' ? styles.active : ''} onClick={() => chooseFilter('starred')}><Star size={16} /> Starred {starredCount > 0 && `(${starredCount})`}</button>
+          <button aria-pressed={filterValue === 'all'} className={filterValue === 'all' ? styles.active : ''} onClick={() => chooseFilter('all')}><ListTodo size={16} /> All tasks</button>
+          <button aria-pressed={filterValue === 'starred'} className={filterValue === 'starred' ? styles.active : ''} onClick={() => chooseFilter('starred')}><Star size={16} /> Starred {starredCount > 0 && `(${starredCount})`}</button>
           {lists.map((list) => <div className={styles.listItem} key={list.id}>
-            <button className={filterValue === `list:${list.id}` ? styles.active : ''} onClick={() => chooseFilter(`list:${list.id}`)}><Folder size={16} /> <span>{list.name}</span></button>
+            <button aria-pressed={filterValue === `list:${list.id}`} className={filterValue === `list:${list.id}` ? styles.active : ''} onClick={() => chooseFilter(`list:${list.id}`)}><Folder size={16} /> <span>{list.name}</span></button>
             <button aria-label={`Rename ${list.name}`} onClick={() => setEditingList(list)}><Pencil size={14} /></button>
             <button aria-label={`Delete ${list.name}`} onClick={() => setDeletingList(list)}><X size={14} /></button>
           </div>)}
           <button onClick={() => setIsAddListOpen(true)}><Plus size={16} /> New list</button>
           <h2>Workspaces</h2>
-          {workspaceOptions.map((workspace) => <button key={workspace.id} className={filterValue === `workspace:${workspace.id}` ? styles.active : ''} onClick={() => chooseFilter(`workspace:${workspace.id}`)}><Folder size={16} /> {workspace.title}</button>)}
+          {workspaceOptions.map((workspace) => <button key={workspace.id} aria-pressed={filterValue === `workspace:${workspace.id}`} className={filterValue === `workspace:${workspace.id}` ? styles.active : ''} onClick={() => chooseFilter(`workspace:${workspace.id}`)}><Folder size={16} /> {workspace.title}</button>)}
         </nav>
         <section className={`${styles.center} ${viewing ? styles.hasDetail : ''}`} aria-label="Tasks">
           <div className={styles.toolbar}>
@@ -199,15 +221,37 @@ export default function TodosBoard() {
           <div className={styles.listBody}>
             <h2>{loading ? 'Loading…' : viewMode === 'completed' ? `${completedTodos.length} completed` : `${sorted.length} task${sorted.length === 1 ? '' : 's'}`}</h2>
             {error && <p className="pb-2 text-xs text-academic-orange">{error}</p>}
-            {loading ? <p>Loading…</p> : viewMode === 'completed' ? <CompletedTodosList todos={completedTodos} todayDateKey={todayDateKey} workspaces={workspaces} onToggle={handleToggle} onToggleStar={toggleStar} onOpen={setViewingTodo} onEdit={setEditingTodo} onDelete={setDeletingTodo} /> : viewMode === 'extended' ? <TodosExtendedView todos={sorted} todayDateKey={todayDateKey} workspaces={workspaces} onToggle={handleToggle} onToggleStar={toggleStar} onOpen={setViewingTodo} onEdit={setEditingTodo} onDelete={setDeletingTodo} /> : sorted.length === 0 ? <p>No tasks found.</p> : <ul className={styles.rows}>{sorted.map((todo) => <TodoRow key={todo.id} todo={todo} todayDateKey={todayDateKey} subtaskCount={childrenByParent[todo.id]?.length ?? 0} workspace={workspaceFor(todo)} onToggle={() => handleToggle(todo.id)} onToggleStar={() => toggleStar(todo.id)} onOpen={() => setViewingTodo(todo)} onEdit={() => setEditingTodo(todo)} onDelete={() => setDeletingTodo(todo)} />)}</ul>}
+            {loading ? <p>Loading…</p> : viewMode === 'completed' ? <CompletedTodosList todos={completedTodos} todayDateKey={todayDateKey} workspaces={workspaces} onToggle={handleToggle} onToggleStar={toggleStar} onOpen={openTodo} onEdit={setEditingTodo} onDelete={setDeletingTodo} /> : viewMode === 'extended' ? <TodosExtendedView todos={sorted} todayDateKey={todayDateKey} workspaces={workspaces} onToggle={handleToggle} onToggleStar={toggleStar} onOpen={openTodo} onEdit={setEditingTodo} onDelete={setDeletingTodo} /> : sorted.length === 0 ? <p>No tasks found.</p> : <div>{groups.filter((group) => group.todos.length > 0).map((group) => (
+              <section key={group.label} aria-label={group.label}>
+                <h3 className={styles.groupTitle}>{group.label}</h3>
+                <ul className={styles.rows}>
+                  {group.todos.map((todo) => (
+                    <TodoRow
+                      key={todo.id}
+                      todo={todo}
+                      todayDateKey={todayDateKey}
+                      subtaskCount={childrenByParent[todo.id]?.length ?? 0}
+                      workspace={workspaceFor(todo)}
+                      listName={lists.find((list) => list.id === todo.list_id)?.name}
+                      selected={viewing?.id === todo.id}
+                      onToggle={() => handleToggle(todo.id)}
+                      onToggleStar={() => toggleStar(todo.id)}
+                      onOpen={() => openTodo(todo)}
+                      onEdit={() => setEditingTodo(todo)}
+                      onDelete={() => setDeletingTodo(todo)}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ))}</div>}
           </div>
         </section>
-        {viewing && <aside className={styles.detail} aria-label="Task details"><TodoDetailModal
+        {viewing && <dialog ref={dialogRef} className={styles.detail} aria-label="Task details" onCancel={(event) => { event.preventDefault(); closeTodo() }}><TodoDetailModal
           todo={viewing} todos={todos} lists={lists} workspace={workspaceFor(viewing)} onToggle={handleToggle} onToggleStar={() => toggleStar(viewing.id)}
           onAddSubtask={(title) => addTodo(title, { parent_id: viewing.id, list_id: viewing.list_id })}
           onEdit={() => { setEditingTodo(viewing); setViewingTodo(null) }}
-          onDelete={() => { setDeletingTodo(viewing); setViewingTodo(null) }} onClose={() => setViewingTodo(null)}
-        /></aside>}
+          onDelete={() => { setDeletingTodo(viewing); setViewingTodo(null) }} onClose={closeTodo}
+        /></dialog>}
       </div>
 
       <TodoFormModal

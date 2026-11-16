@@ -26,7 +26,12 @@ function AuthenticatedChrome({ pathname, children }: { pathname: string; childre
   const isWorkspace = pathname === '/' ||
     pathname === '/lectures' ||
     pathname.startsWith('/lectures/') ||
-    pathname === '/calendar'
+    pathname === '/calendar' ||
+    pathname === '/todos' ||
+    pathname === '/habits' ||
+    pathname === '/brain-dump' ||
+    pathname === '/workspaces' ||
+    pathname.startsWith('/workspaces/')
 
   return (
     <PageTitleProvider>

@@ -1,4 +1,4 @@
-/* Approved planning workspace: Home, Lectures and Calendar. Root scope also
+/* Approved planning workspace and action screens. Root scope also
    themes dialogs/popovers portalled to body, without changing other routes. */
 :root:has(.workspace-ui) {
   color-scheme: light;

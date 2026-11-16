@@ -1,5 +1,7 @@
 'use client'
 
+import styles from './workspace-surface.module.css'
+
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -36,6 +38,9 @@ import type { Workspace, WorkspaceFolder } from '@/lib/types'
 import { useWorkspaces } from '@/lib/workspaces/use-workspaces'
 import { isModuleWorkspace } from '@/lib/lectures/module-workspace'
 import { useWorkspaceFolders } from '@/lib/workspaces/use-workspace-folders'
+import { useWorkspaceTodos } from '@/lib/workspaces/use-workspace-todos'
+import { useWorkspaceLinks } from '@/lib/workspaces/use-workspace-links'
+import { splitReadings } from '@/lib/workspaces/readings'
 import { useStudyProgress } from '@/lib/workspaces/use-study-progress'
 import type { StudyProgress } from '@/lib/workspaces/study-progress'
 import { formatMinutes } from '@/lib/workspaces/time'
@@ -47,6 +52,7 @@ import {
   folderPath,
   resolveAccent,
   resolveFolderAccent,
+  moveTargets,
 } from '@/lib/workspaces/folders'
 import ConfirmDialog from '../../ConfirmDialog'
 import Popover from '../../Popover'
@@ -96,6 +102,9 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
   const moduleCount = allWorkspaces.length - workspaces.length
 
   const [title, setTitle] = useState('')
+  const [view, setView] = useState<'list' | 'cards'>('list')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [deletingFolder, setDeletingFolder] = useState<WorkspaceFolder | null>(null)
   const [dragItem, setDragItem] = useState<DragItem | null>(null)
@@ -113,7 +122,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
     () => workspaces.filter((w) => (w.folder_id ?? null) === folderId),
     [workspaces, folderId]
   )
-  const active = here.filter((w) => !w.archived_at)
+  const active = here.filter((w) => !w.archived_at && `${w.title} ${w.subtitle ?? ''}`.toLowerCase().includes(query.toLowerCase()))
   const archived = here.filter((w) => w.archived_at)
 
   const pageAccent: Accent = resolveFolderAccent(folders, folderId) ?? 'teal'
@@ -180,7 +189,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
 
   return (
     <main
-      className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 pt-6 pb-48"
+      className={`${styles.surface} mx-auto flex w-full max-w-360 min-w-0 flex-1 flex-col gap-5 px-4 pt-6 pb-48 sm:px-8`}
       style={accentVars(pageAccent)}
     >
       <WorkspaceHeaderStrip
@@ -247,13 +256,13 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
               )}
             </Popover>
 
-            <form onSubmit={handleCreate} className="flex items-center gap-2">
+            <form onSubmit={handleCreate} className="flex flex-wrap items-center gap-2">
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Coastal Erosion Essay"
                 aria-label="New workspace name"
-                className={`${inputClass} w-64`}
+                className={`${inputClass} min-w-0 w-48 max-w-full`}
               />
               <button type="submit" disabled={!title.trim()} className={primaryButtonClass}>
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
@@ -263,6 +272,27 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-3 border-y border-outline-variant/60 py-3">
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">Search workspaces</span>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search workspaces..." className={`${inputClass} w-full`} />
+          </label>
+          <label className="xl:hidden">
+            <span className="sr-only">Choose folder</span>
+            <select value={folderId ?? ''} onChange={(e) => router.push(e.target.value ? `/workspaces?folder=${e.target.value}` : '/workspaces')} className={`${inputClass} min-h-11 max-w-48`}>
+              {moveTargets(folders).map((target) => <option key={target.id ?? 'root'} value={target.id ?? ''}>{`${'  '.repeat(target.depth)}${target.label}`}</option>)}
+            </select>
+          </label>
+          <div role="group" aria-label="Workspace view" className="flex rounded-lg border border-outline-variant p-1">
+            {(['list', 'cards'] as const).map((option) => <button key={option} type="button" aria-pressed={view === option} onClick={() => setView(option)} className={`min-h-9 rounded-md px-3 text-sm capitalize ${view === option ? 'bg-ws-accent/15 font-semibold text-ws-accent' : 'text-on-surface-variant'}`}>{option}</button>)}
+          </div>
+        </div>
+        <div className="flex min-w-0 items-start gap-5">
+          <nav aria-label="Workspace folders" className="hidden w-48 shrink-0 flex-col gap-1 border-r border-outline-variant/60 pr-3 xl:flex">
+            <h2 className="px-2 pb-2 text-sm font-semibold">Folders</h2>
+            {moveTargets(folders).map((target) => <Link key={target.id ?? 'root'} href={target.id ? `/workspaces?folder=${target.id}` : '/workspaces'} aria-current={(target.id ?? null) === folderId ? 'page' : undefined} style={{ paddingLeft: `${8 + Math.max(0, target.depth - 1) * 12}px` }} className={`flex min-h-11 items-center gap-2 rounded-md pr-2 text-sm ${target.id === folderId ? 'bg-ws-accent/15 font-semibold text-ws-accent' : 'hover:bg-surface-container-high'}`}><Folder className="h-4 w-4 shrink-0" /> <span className="break-words">{target.id ? target.label : 'All workspaces'}</span></Link>)}
+          </nav>
+          <div className="flex min-w-0 flex-1 flex-col gap-5">
         {(error || foldersError) && (
           <p role="alert" className="text-sm text-error">
             {error || foldersError}
@@ -311,8 +341,10 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
                     : 'No active workspaces here yet — create one to get started.'}
                 </p>
               ) : (
-                <ul className={gridClass}>
-                  {active.map((w) => (
+                <ul className={view === 'cards' ? gridClass : 'divide-y divide-outline-variant/60'}>
+                  {active.map((w) => view === 'list' ? (
+                    <WorkspaceRow key={w.id} workspace={w} folders={folders} accent={accentOf(w)} study={studyProgress.get(w.id)} selected={selectedId === w.id} onSelect={() => setSelectedId(w.id)} onChange={(patch) => updateWorkspace(w.id, patch)} onArchive={() => archiveWorkspace(w.id)} />
+                  ) : (
                     <WorkspaceCard
                       key={w.id}
                       workspace={w}
@@ -357,6 +389,9 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
           </>
         )}
 
+          </div>
+          {selectedId && active.some((w) => w.id === selectedId) && <WorkspacePreview key={selectedId} workspace={active.find((w) => w.id === selectedId)!} study={studyProgress.get(selectedId)} onClose={() => setSelectedId(null)} />}
+        </div>
         <DragOverlay dropAnimation={null}>
           {draggedLabel ? (
             <div className="flex max-w-72 items-center gap-2 rounded-lg border border-outline bg-surface-container-high px-3 py-2 shadow-lg">
@@ -561,4 +596,37 @@ function WorkspaceCard({
       </ModuleGlassCard>
     </li>
   )
+}
+
+
+function WorkspaceRow({ workspace, folders, accent, study, selected, onSelect, onChange, onArchive }: {
+  workspace: Workspace; folders: WorkspaceFolder[]; accent: Accent; study?: StudyProgress; selected: boolean;
+  onSelect: () => void; onChange: (patch: { color?: string | null; folder_id?: string | null }) => void; onArchive: () => void
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `ws:${workspace.id}`, data: { type: 'workspace', id: workspace.id } })
+  const hidden = workspace.hidden_sections ?? []
+  return <li ref={setNodeRef} style={accentVars(accent)} className={`flex min-w-0 items-center gap-1 py-1 ${selected ? 'bg-ws-accent/10' : ''} ${isDragging ? 'opacity-40' : ''}`}>
+    <button type="button" {...attributes} {...listeners} aria-label={`Move ${workspace.title}`} className="hidden min-h-11 w-8 shrink-0 touch-none items-center justify-center text-on-surface-variant sm:flex"><GripVertical className="h-4 w-4" /></button>
+    <button type="button" onClick={onSelect} aria-pressed={selected} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-2 text-left">
+      <span className="h-3 w-3 shrink-0 rounded-full bg-ws-accent" />
+      <span className="min-w-0 flex-1"><span className="block break-words text-base font-semibold">{workspace.title}</span><span className="block text-sm text-on-surface-variant">{[!hidden.includes('readings') && `Readings: ${study?.readings.done ?? 0} / ${study?.readings.total ?? 0}`, !hidden.includes('time') && `${formatMinutes(study?.minutesThisWeek ?? 0)} this week`, workspace.subtitle].filter(Boolean).join(' · ')}</span></span>
+    </button>
+    <Link href={`/workspaces/${workspace.id}`} className="flex min-h-11 items-center rounded-md px-2 text-sm font-semibold text-ws-accent">Open</Link>
+    <WorkspaceAppearanceMenu workspace={workspace} folders={folders} onChange={onChange} />
+    <button type="button" onClick={onArchive} aria-label={`Archive ${workspace.title}`} className="flex min-h-11 min-w-11 items-center justify-center text-on-surface-variant"><Archive className="h-4 w-4" /></button>
+  </li>
+}
+
+function WorkspacePreview({ workspace, study, onClose }: { workspace: Workspace; study?: StudyProgress; onClose: () => void }) {
+  const { todos, loading: todosLoading } = useWorkspaceTodos(workspace.id)
+  const { links, loading: linksLoading } = useWorkspaceLinks(workspace.id)
+  const { sources } = splitReadings(links)
+  const hidden = workspace.hidden_sections ?? []
+  return <aside aria-label={`${workspace.title} preview`} className="fixed inset-0 z-40 overflow-y-auto bg-surface p-5 xl:static xl:z-auto xl:w-72 xl:shrink-0 xl:rounded-lg xl:border xl:border-outline-variant/60 xl:p-4">
+    <div className="flex items-start justify-between gap-3"><div><h2 className="break-words text-xl font-bold">{workspace.title}</h2><p className="mt-1 text-sm text-on-surface-variant">{[!hidden.includes('readings') && `Readings: ${study?.readings.done ?? 0} / ${study?.readings.total ?? 0}`, !hidden.includes('time') && `${formatMinutes(study?.minutesThisWeek ?? 0)} this week`].filter(Boolean).join(' · ')}</p></div><button type="button" onClick={onClose} className="min-h-11 min-w-11 text-sm">Back</button></div>
+    {workspace.subtitle && <p className="mt-3 text-sm text-on-surface-variant">{workspace.subtitle}</p>}
+    <Link href={`/workspaces/${workspace.id}`} className={`${primaryButtonClass} mt-4 flex min-h-11 justify-center`}>Open workspace</Link>
+    <section className="mt-5 border-t border-outline-variant/60 pt-4"><h3 className="font-semibold">Tasks ({todos.length})</h3>{todosLoading ? <p>Loading...</p> : todos.length ? <ul className="mt-2 space-y-2">{todos.slice(0, 5).map((todo) => <li key={todo.id} className="break-words text-sm">{todo.completed_at ? '✓' : '○'} {todo.title}</li>)}</ul> : <p className="mt-2 text-sm text-on-surface-variant">No scoped tasks yet.</p>}</section>
+    <section className="mt-5 border-t border-outline-variant/60 pt-4"><h3 className="font-semibold">Sources ({sources.length})</h3>{linksLoading ? <p>Loading...</p> : sources.length ? <ul className="mt-2 space-y-2">{sources.slice(0, 5).map((link) => <li key={link.id} className="break-words text-sm">{link.title}</li>)}</ul> : <p className="mt-2 text-sm text-on-surface-variant">No sources yet.</p>}</section>
+  </aside>
 }

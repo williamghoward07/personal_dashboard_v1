@@ -6,7 +6,7 @@ export interface Crumb {
   href: string
 }
 
-const crumbClass = 'font-display text-[11px] font-semibold uppercase tracking-[0.16em]'
+const crumbClass = 'text-sm font-medium'
 
 // Page-local recreation of the mockup's breadcrumb strip. The app's real
 // TopAppBar sits above this and is deliberately left untouched — restyling
@@ -23,7 +23,7 @@ export default function WorkspaceHeaderStrip({
   crumbs?: Crumb[]
   root?: Crumb
 }) {
-  const separator = <span className={`${crumbClass} text-on-surface-variant/50`}>{'//'}</span>
+  const separator = <span className={`${crumbClass} text-on-surface-variant/50`}>{'/'}</span>
 
   return (
     <div className="flex items-center gap-3 border-b border-outline-variant/60 pb-3">
@@ -43,16 +43,6 @@ export default function WorkspaceHeaderStrip({
         <span className={`${crumbClass} text-on-surface-variant`}>{context}</span>
       </nav>
 
-      <span className="ml-auto flex shrink-0 items-center gap-2">
-        <span
-          className="led-dot"
-          style={{ '--led-color': 'var(--color-ws-accent)' } as React.CSSProperties}
-          aria-hidden
-        />
-        <span className="font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-on-surface-variant/70">
-          System Nominal
-        </span>
-      </span>
     </div>
   )
 }

@@ -181,23 +181,23 @@
 
 .readyBadge,
 .kind {
-  background: #e7ecdf;
-  color: #37472e;
+  background: color-mix(in srgb, var(--color-primary-container) 15%, var(--color-surface-container-low));
+  color: var(--color-primary);
 }
 
 .reviewBadge {
-  background: #f9e8dc;
-  color: #743e24;
+  background: color-mix(in srgb, var(--color-academic-orange) 12%, var(--color-surface-container-low));
+  color: var(--color-on-tertiary-container);
 }
 
 .kind:is([data-kind="new_person"], [data-kind="update_person"], [data-kind="log_interaction"]) {
-  background: #eee6f4;
-  color: #533967;
+  background: color-mix(in srgb, var(--color-habit-purple) 14%, var(--color-surface-container-low));
+  color: color-mix(in srgb, var(--color-habit-purple) 60%, var(--color-on-surface));
 }
 
 .kind[data-kind="calendar_event"] {
-  background: #e6edf2;
-  color: #37576a;
+  background: color-mix(in srgb, var(--color-secondary) 12%, var(--color-surface-container-low));
+  color: color-mix(in srgb, var(--color-secondary) 75%, var(--color-on-surface));
 }
 
 .error {
@@ -293,15 +293,15 @@
 }
 
 .draftActions .confirmButton {
-  background: #edf1e6;
-  border-color: #9ba88e;
-  color: #37472e;
+  background: color-mix(in srgb, var(--color-primary-container) 12%, var(--color-surface-container-low));
+  border-color: color-mix(in srgb, var(--color-primary-container) 60%, var(--color-surface-container-low));
+  color: var(--color-primary);
 }
 
 .draftActions .reviewButton {
-  background: #f0e9f5;
-  border-color: #cfbfd9;
-  color: #533967;
+  background: color-mix(in srgb, var(--color-habit-purple) 13%, var(--color-surface-container-low));
+  border-color: color-mix(in srgb, var(--color-habit-purple) 40%, var(--color-surface-container-low));
+  color: color-mix(in srgb, var(--color-habit-purple) 60%, var(--color-on-surface));
 }
 
 .problem {
@@ -357,9 +357,9 @@ textarea.editorInput {
   }
 
   .steps button[aria-current="step"] {
-    border-color: #aebba4;
-    background: #e7ecdf;
-    color: #37472e;
+    border-color: color-mix(in srgb, var(--color-primary-container) 50%, var(--color-surface-container-low));
+    background: color-mix(in srgb, var(--color-primary-container) 15%, var(--color-surface-container-low));
+    color: var(--color-primary);
     font-weight: 650;
   }
 

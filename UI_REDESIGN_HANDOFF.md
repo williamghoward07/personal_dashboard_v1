@@ -1,5 +1,25 @@
 # Study Copilot UI redesign — living handoff
 
+## RESUME HERE — checkpoint 16 Nov 2026, ~15:30 (Claude Code took over from Codex)
+
+Codex stopped mid-task. All its work is now in ONE place: worktree `.claude/worktrees/continue-gpt-task-89671c`, branch `claude/continue-gpt-task-89671c`. The `/private/tmp/study-*` worktrees and the main checkout's dirty diff are superseded — don't work there or reapply them.
+
+Branch contents (on top of main `b92e2db`): fast-forward of `codex/remaining-screens` (shell, Tasks, Workspaces) + Brain dump from `codex/capture-ui` (was uncommitted) + Claude review fixes:
+- Hex colours in BrainDump/TodosBoard/TodoRow CSS modules → design tokens.
+- Tasks rows denser on desktop (32px check target; 44px on phones / coarse pointers).
+- Workspaces: one header row (title · search · List/Cards · New folder · New workspace), stacks on phones; compact 44px rows; empty readings/time line hidden (those sections are off for non-module workspaces, by design).
+- Brain dump: zero-count badges hidden; redundant "Counts on Daily Goals." removed.
+- CLAUDE.md light-workspace scope now includes Tasks, Brain dump, Workspaces.
+
+Verified: full vitest 1231/1231, tsc clean, eslint clean on changed files, `next build` OK. Signed-in Chrome on `npm run dev` (localhost:3000): Tasks list + inline detail panel, Workspaces list + preview, Brain dump extract → review → dismiss (one AI call, nothing saved) at 1460px; all three at 400px phone width; Home renders unchanged.
+
+Not yet done / not verified:
+1. Tasks rows still show edit + delete icons where preview 04 has a single overflow (…) menu — left as is (faster actions); ask the user if they want the overflow menu.
+2. Not checked: Habits tab, Workspaces Cards view, workspace detail route, phone Tasks full-screen detail + Back, Brain dump phone Review step with drafts, People page add/edit modals (shared modal code changed), Home capture box confirm flow.
+3. Not checked in Safari.
+4. Not pushed, no PR. Don't merge `2c0671f`.
+
+
 Updated: 16 November 2026, Europe/London.
 
 ## Active follow-up — 16 November

@@ -42,7 +42,7 @@ export default function TodoRow({
       aria-current={selected ? 'true' : undefined}
       className={`${styles.row} ${selected ? styles.selected : ''}`}
     >
-      <label className="flex h-11 w-11 shrink-0 items-center justify-center" onClick={(e) => e.stopPropagation()}>
+      <label className={styles.check} onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           checked={completed}

@@ -10,10 +10,11 @@ Commits: shell + Tasks + Workspaces (from `codex/remaining-screens`), `39a76d4` 
 
 Verified in signed-in Comet (17 Nov): Habits tab (desktop), Workspaces Cards view, workspace detail route + browser Back, phone Tasks full-screen detail + Back (focus returns to the row, row stays in view), Brain dump phone Capture → Review → back to Capture keeps text → dismiss (nothing saved), People Add person modal (dark default route, cancelled), Home capture draft (unchanged presentation, dismissed). Earlier (16 Nov): Tasks list/detail, Workspaces list/preview, Brain dump desktop at 1460px; all three at 400px; Home unchanged. vitest 1231/1231, tsc clean, eslint clean on changed files except a pre-existing `set-state-in-effect` error in `HabitBoard.tsx` (exists on main).
 
+Decided: Tasks rows keep separate edit + delete icons (user chose this over preview 04's overflow menu, 17 Nov).
+
 Not done:
-1. Tasks rows show edit + delete icons; preview 04 has one overflow (…) menu. Ask the user.
-2. Not checked in Safari.
-3. Not pushed, no PR. Don't merge `2c0671f`.
+1. Not checked in Safari.
+2. Not pushed, no PR. Don't merge `2c0671f`.
 
 Updated: 16 November 2026, Europe/London.
 

@@ -73,7 +73,7 @@ describe('AppChrome', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(cleanup)
 
-  it.each(['/', '/lectures', '/lectures/session', '/calendar'])('uses the workspace shell for %s', async (path) => {
+  it.each(['/', '/lectures', '/lectures/session', '/calendar', '/todos', '/habits', '/brain-dump', '/workspaces', '/workspaces/example'])('uses the workspace shell for %s', async (path) => {
     await renderRoute(path)
     expect(screen.getByRole('main').closest('.workspace-ui')).not.toBeNull()
     const rail = within(screen.getByRole('navigation', { name: 'Workspace' }))

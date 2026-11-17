@@ -10,11 +10,13 @@ export default function StarButton({
   title,
   onToggle,
   alwaysShow = false,
+  largeTarget = false,
 }: {
   starred: boolean
   title: string
   onToggle: () => void
   alwaysShow?: boolean
+  largeTarget?: boolean
 }) {
   return (
     <button
@@ -27,7 +29,7 @@ export default function StarButton({
       aria-pressed={starred}
       aria-label={starred ? `Unstar ${title}` : `Star ${title}`}
       title={starred ? 'Starred' : 'Star'}
-      className={`shrink-0 rounded p-1.5 transition-opacity hover:bg-surface-container-high focus-visible:opacity-100 ${
+      className={`shrink-0 rounded p-1.5 ${largeTarget ? 'min-h-11 min-w-11' : ''} transition-opacity hover:bg-surface-container-high focus-visible:opacity-100 ${
         starred
           ? 'text-people-amber'
           : `text-on-surface-variant hover:text-people-amber ${alwaysShow ? '' : 'opacity-0 group-hover:opacity-100'}`

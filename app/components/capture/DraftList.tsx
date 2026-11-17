@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { CheckCheck } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Interaction, Person, Place } from '@/lib/types'
@@ -16,6 +16,7 @@ import type { InteractionFormValues } from '../widgets/people/InteractionFormMod
 import type { PlaceFormValues } from '../widgets/people/PlaceFormModal'
 import { insertFollowUpsForInteraction } from '../widgets/people/shared'
 import DraftCard, { DRAFT_TONES, draftProblem, type DraftTone } from './DraftCard'
+import styles from '../widgets/braindump/BrainDump.module.css'
 
 // Same threshold QuickAddBar uses — below this, a candidate match is
 // treated as no match at all rather than guessing wrong.
@@ -87,6 +88,9 @@ async function saveActDraft(draft: LocalDraft): Promise<string | null> {
   }
 }
 
+const canConfirm = (draft: LocalDraft) =>
+  draft.status === 'pending' && isActKind(draft.kind) && !draftProblem(draft)
+
 const needsPeopleData = (d: LocalDraft) => d.status === 'pending' && !isActKind(d.kind)
 
 // Review list for extracted drafts (Brain Dump page and the home query
@@ -96,18 +100,24 @@ const needsPeopleData = (d: LocalDraft) => d.status === 'pending' && !isActKind(
 export default function DraftList({
   store,
   tone,
+  reviewHeadingId,
   gridClassName = 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3',
   onSaved,
 }: {
   store: DraftStore
   tone: DraftTone
+  reviewHeadingId?: string
   gridClassName?: string
   onSaved?: () => void
 }) {
-  const { drafts } = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
-  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set())
-  const [confirmingAll, setConfirmingAll] = useState(false)
+  const { drafts, confirming } = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+  const brainDump = Boolean(reviewHeadingId)
+  const confirmingAll = confirming === 'all'
+  const isSaving = confirming !== null
   const [pending, setPending] = useState<PendingReview | null>(null)
+  const [reviewError, setReviewError] = useState<string | null>(null)
+  const reviewTrigger = useRef<HTMLButtonElement>(null)
+  const reviewHeading = useRef<HTMLHeadingElement>(null)
   const [people, setPeople] = useState<Person[]>([])
   const [places, setPlaces] = useState<Place[]>([])
 
@@ -126,49 +136,60 @@ export default function DraftList({
     if (wantsPeople) refreshPeople()
   }, [wantsPeople])
 
-  const setBusy = (clientId: string, busy: boolean) =>
-    setBusyIds((prev) => {
-      const next = new Set(prev)
-      if (busy) next.add(clientId)
-      else next.delete(clientId)
-      return next
-    })
+  useEffect(() => {
+    const trigger = reviewTrigger.current
+    if (pending || !trigger) return
+    reviewTrigger.current = null
+    if (trigger.isConnected) trigger.focus()
+    else reviewHeading.current?.focus()
+  }, [pending])
 
   const findMatch = (draft: BrainDumpDraft): Person | null => {
     if (!draft.person_match || draft.person_match.confidence < MATCH_CONFIDENCE_THRESHOLD) return null
     return people.find((p) => p.id === draft.person_match!.id) ?? null
   }
 
-  const confirmOne = async (draft: LocalDraft): Promise<boolean> => {
-    if (draftProblem(draft)) return false
-    setBusy(draft.clientId, true)
-    const failure = await saveActDraft(draft)
-    setBusy(draft.clientId, false)
-    if (failure) {
-      store.setError(failure)
-      return false
+  const confirmDraft = async (draft: LocalDraft, focusFrom?: HTMLButtonElement) => {
+    const error = await saveActDraft(draft)
+    if (!error) {
+      if (focusFrom && (document.activeElement === focusFrom || document.activeElement === document.body)) {
+        reviewHeading.current?.focus()
+      }
+      store.setDraftStatus(draft.clientId, 'accepted')
+      onSaved?.()
     }
-    store.setDraftStatus(draft.clientId, 'accepted')
-    onSaved?.()
-    return true
+    return error
   }
 
-  const quickDrafts = drafts.filter((d) => d.status === 'pending' && isActKind(d.kind) && !draftProblem(d))
+  const confirmOne = (draft: LocalDraft, trigger: HTMLButtonElement) => store.runConfirmation(draft.clientId, async () => {
+    const current = store.getSnapshot().drafts.find((item) => item.clientId === draft.clientId)
+    if (!current || !canConfirm(current)) return
+    const failure = await confirmDraft(current, trigger)
+    if (failure) store.setError(failure)
+  })
 
-  const confirmAll = async () => {
-    setConfirmingAll(true)
-    store.setError(null)
-    let failed = 0
-    // One at a time: calendar writes share a Google token refresh, and a
-    // failure should leave the rest untouched and visible.
-    for (const draft of quickDrafts) {
-      if (!(await confirmOne(draft))) failed++
+  const pendingCount = drafts.filter((draft) => draft.status === 'pending').length
+  const finishedCount = drafts.length - pendingCount
+  const quickDrafts = drafts.filter(canConfirm)
+  const reviewCount = pendingCount - quickDrafts.length
+
+  const confirmAll = () => store.runConfirmation('all', async () => {
+    const failures: string[] = []
+    // Calendar writes share a Google token refresh. Keep the batch sequential.
+    for (const draft of store.getSnapshot().drafts.filter(canConfirm)) {
+      const failure = await confirmDraft(draft)
+      if (failure) failures.push(failure)
     }
-    if (failed > 0) store.setError(`${failed} item${failed === 1 ? '' : 's'} couldn't be added — see the cards still open.`)
-    setConfirmingAll(false)
-  }
+    if (failures.length) {
+      const label = failures.length === 1 ? '1 item' : `${failures.length} items`
+      store.setError(`${label} couldn’t be added. ${failures[0]}`)
+    }
+  })
 
-  const openReview = (draft: LocalDraft) => {
+  const openReview = (draft: LocalDraft, trigger: HTMLButtonElement) => {
+    if (store.getSnapshot().confirming !== null) return
+    if (brainDump) reviewTrigger.current = trigger
+    setReviewError(null)
     if (draft.kind === 'log_interaction') {
       const matched = findMatch(draft)
       setPending({
@@ -206,63 +227,71 @@ export default function DraftList({
     }
   }
 
-  const savePerson = async (values: PersonFormValues) => {
-    if (pending?.kind !== 'person') return
-    const { error: dbError } = pending.matchedPerson
-      ? await supabase
-          .from('people')
-          .update({ ...values, updated_at: new Date().toISOString() })
-          .eq('id', pending.matchedPerson.id)
-      : await supabase.from('people').insert(values)
-
-    if (dbError) {
-      store.setError(`Couldn't save: ${dbError.message}`)
-      return
-    }
-    store.setDraftStatus(pending.clientId, 'accepted')
+  const closeReview = () => {
+    if (store.getSnapshot().confirming !== null) return
     setPending(null)
-    refreshPeople()
-    onSaved?.()
+    setReviewError(null)
   }
 
-  const saveInteraction = async (values: InteractionFormValues) => {
-    if (pending?.kind !== 'interaction') return
-    const { data, error: insertError } = await supabase
-      .from('interactions')
-      .insert({
-        occurred_at: values.occurred_at,
-        title: values.title,
-        summary: values.summary,
-        channel: values.channel,
-        place_id: values.place_id,
-      })
-      .select('id')
-      .single()
-
-    if (insertError || !data) {
-      store.setError(`Couldn't save: ${insertError?.message ?? 'unknown error'}`)
-      return
-    }
-
-    if (values.personIds.length > 0) {
-      const { error: linkError } = await supabase
-        .from('interaction_people')
-        .insert(values.personIds.map((personId) => ({ interaction_id: data.id, person_id: personId })))
-      if (linkError) {
-        store.setError(`Couldn't link attendees: ${linkError.message}`)
-        return
+  const saveReview = (clientId: string, save: () => Promise<string | null>) =>
+    store.runConfirmation(clientId, async () => {
+      setReviewError(null)
+      try {
+        const error = await save()
+        if (error) {
+          setReviewError(error)
+          return
+        }
+        store.setDraftStatus(clientId, 'accepted')
+        setPending(null)
+        onSaved?.()
+      } catch {
+        setReviewError("Couldn't reach the server. Try again in a moment.")
       }
-    }
+    })
 
-    const { error: followUpError } = await insertFollowUpsForInteraction(data.id, values.personIds, values.follow_up)
-    if (followUpError) {
-      store.setError(`Couldn't save follow-up: ${followUpError.message}`)
-      return
-    }
+  const savePerson = (values: PersonFormValues) => {
+    if (pending?.kind !== 'person') return
+    return saveReview(pending.clientId, async () => {
+      const { error } = pending.matchedPerson
+        ? await supabase
+            .from('people')
+            .update({ ...values, updated_at: new Date().toISOString() })
+            .eq('id', pending.matchedPerson.id)
+        : await supabase.from('people').insert(values)
+      if (error) return `Couldn't save: ${error.message}`
+      refreshPeople()
+      return null
+    })
+  }
 
-    store.setDraftStatus(pending.clientId, 'accepted')
-    setPending(null)
-    onSaved?.()
+  const saveInteraction = (values: InteractionFormValues) => {
+    if (pending?.kind !== 'interaction') return
+    return saveReview(pending.clientId, async () => {
+      const { data, error: insertError } = await supabase
+        .from('interactions')
+        .insert({
+          occurred_at: values.occurred_at,
+          title: values.title,
+          summary: values.summary,
+          channel: values.channel,
+          place_id: values.place_id,
+        })
+        .select('id')
+        .single()
+      if (insertError || !data) return `Couldn't save: ${insertError?.message ?? 'unknown error'}`
+
+      if (values.personIds.length > 0) {
+        const { error: linkError } = await supabase
+          .from('interaction_people')
+          .insert(values.personIds.map((personId) => ({ interaction_id: data.id, person_id: personId })))
+        if (linkError) return `Couldn't link attendees: ${linkError.message}`
+      }
+
+      const { error: followUpError } = await insertFollowUpsForInteraction(data.id, values.personIds, values.follow_up)
+      if (followUpError) return `Couldn't save follow-up: ${followUpError.message}`
+      return null
+    })
   }
 
   const createPlace = async (values: PlaceFormValues) => {
@@ -275,11 +304,103 @@ export default function DraftList({
     return data
   }
 
-  if (drafts.length === 0) return null
+  if (!brainDump && drafts.length === 0) return null
 
-  const pendingCount = drafts.filter((d) => d.status === 'pending').length
-  const finishedCount = drafts.length - pendingCount
   const t = DRAFT_TONES[tone]
+  const cards = drafts.map((draft) => (
+    <DraftCard
+      key={draft.clientId}
+      draft={draft}
+      tone={tone}
+      brainDump={brainDump}
+      matchedPersonName={findMatch(draft)?.full_name ?? null}
+      busy={isSaving}
+      saving={confirming === draft.clientId || (confirmingAll && isActKind(draft.kind) && !draftProblem(draft))}
+      onConfirm={(event) => void confirmOne(draft, event.currentTarget)}
+      onReview={(event) => openReview(draft, event.currentTarget)}
+      onDismiss={() => {
+        if (store.getSnapshot().confirming !== null) return
+        reviewHeading.current?.focus()
+        store.setDraftStatus(draft.clientId, 'rejected')
+      }}
+      onEdit={(patch) => store.updateDraftAct(draft.clientId, patch)}
+    />
+  ))
+  const dialogs = (
+    <>
+      <PersonFormModal
+        isOpen={pending?.kind === 'person'}
+        heading={
+          pending?.kind === 'person' && pending.matchedPerson ? `Update ${pending.matchedPerson.full_name}` : 'New person'
+        }
+        initialValues={pending?.kind === 'person' ? pending.initialValues : null}
+        saving={isSaving}
+        saveError={reviewError}
+        captureReview={brainDump}
+        onClose={closeReview}
+        onSave={savePerson}
+      />
+
+      <InteractionFormModal
+        isOpen={pending?.kind === 'interaction'}
+        heading="Log a conversation"
+        people={people}
+        places={places}
+        initialValues={pending?.kind === 'interaction' ? pending.initialValues : null}
+        initialPersonIds={pending?.kind === 'interaction' ? pending.initialPersonIds : undefined}
+        saving={isSaving}
+        saveError={reviewError}
+        captureReview={brainDump}
+        onCreatePlace={createPlace}
+        onClose={closeReview}
+        onSave={saveInteraction}
+      />
+    </>
+  )
+
+  if (brainDump) {
+    return (
+      <section className={styles.review} aria-labelledby={reviewHeadingId}>
+        <header className={styles.reviewHeader}>
+          <h2 ref={reviewHeading} id={reviewHeadingId} tabIndex={-1}>Review drafts</h2>
+          <div className={styles.counts} role="status">
+            {pendingCount > 0 ? (
+              <>
+                {quickDrafts.length > 0 && <span className={styles.readyBadge}>{quickDrafts.length} ready</span>}
+                {reviewCount > 0 && <span className={styles.reviewBadge}>{reviewCount} {reviewCount === 1 ? 'needs' : 'need'} review</span>}
+              </>
+            ) : drafts.length > 0 && 'All reviewed'}
+          </div>
+        </header>
+        {drafts.length > 0 ? (
+          <ul className={styles.drafts} aria-label="Extracted drafts">{cards}</ul>
+        ) : (
+          <p className={styles.empty}>Extract items from your capture to review them here.</p>
+        )}
+        {(confirmingAll || quickDrafts.length > 1 || finishedCount > 0) && (
+          <footer className={styles.reviewFooter}>
+            {(confirmingAll || quickDrafts.length > 1) && (
+              <button type="button" className={styles.primaryButton} disabled={isSaving} onClick={() => {
+                reviewHeading.current?.focus()
+                void confirmAll()
+              }}>
+                {confirmingAll ? 'Adding…' : `Confirm ${quickDrafts.length} ready items`}
+              </button>
+            )}
+            {finishedCount > 0 && (
+              <button type="button" className={styles.secondaryButton} onClick={() => {
+                reviewHeading.current?.focus()
+                store.clearFinished()
+              }}>
+                Clear done
+              </button>
+            )}
+          </footer>
+        )}
+        {dialogs}
+      </section>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-2">
@@ -302,7 +423,7 @@ export default function DraftList({
           {quickDrafts.length > 1 && (
             <button
               type="button"
-              disabled={confirmingAll}
+              disabled={isSaving}
               onClick={confirmAll}
               className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold text-surface disabled:opacity-60 ${t.solid}`}
             >
@@ -313,43 +434,8 @@ export default function DraftList({
         </div>
       </div>
 
-      <div className={gridClassName}>
-        {drafts.map((draft) => (
-          <DraftCard
-            key={draft.clientId}
-            draft={draft}
-            tone={tone}
-            matchedPersonName={findMatch(draft)?.full_name ?? null}
-            busy={busyIds.has(draft.clientId) || confirmingAll}
-            onConfirm={() => void confirmOne(draft)}
-            onReview={() => openReview(draft)}
-            onDismiss={() => store.setDraftStatus(draft.clientId, 'rejected')}
-            onEdit={(patch) => store.updateDraftAct(draft.clientId, patch)}
-          />
-        ))}
-      </div>
-
-      <PersonFormModal
-        isOpen={pending?.kind === 'person'}
-        heading={
-          pending?.kind === 'person' && pending.matchedPerson ? `Update ${pending.matchedPerson.full_name}` : 'New person'
-        }
-        initialValues={pending?.kind === 'person' ? pending.initialValues : null}
-        onClose={() => setPending(null)}
-        onSave={savePerson}
-      />
-
-      <InteractionFormModal
-        isOpen={pending?.kind === 'interaction'}
-        heading="Log a conversation"
-        people={people}
-        places={places}
-        initialValues={pending?.kind === 'interaction' ? pending.initialValues : null}
-        initialPersonIds={pending?.kind === 'interaction' ? pending.initialPersonIds : []}
-        onCreatePlace={createPlace}
-        onClose={() => setPending(null)}
-        onSave={saveInteraction}
-      />
+      <div className={gridClassName}>{cards}</div>
+      {dialogs}
     </div>
   )
 }

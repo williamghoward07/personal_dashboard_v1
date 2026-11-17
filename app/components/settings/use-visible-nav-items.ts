@@ -12,5 +12,13 @@ import { useAppSettings } from './SettingsProvider'
 export function useVisibleNavItems(): NavItem[] {
   const { settings } = useAppSettings()
   const hidden = settings.hidden_nav_items
-  return useMemo(() => visibleNavItems(hidden), [hidden])
+  return useMemo(() => {
+    const items = visibleNavItems(hidden)
+    // Todos is a tab inside Tasks unless the user explicitly promotes its
+    // standalone navigation entry. Keep the active marker on that section.
+    if (items.some((item) => item.href === '/todos')) return items
+    return items.map((item) => item.href === '/habits'
+      ? { ...item, matchPrefixes: ['/habits', '/todos'] }
+      : item)
+  }, [hidden])
 }

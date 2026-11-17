@@ -1,5 +1,21 @@
 # Study Copilot UI redesign — living handoff
 
+## RESUME HERE — checkpoint 17 Nov 2026 (Claude Code)
+
+All work is in worktree `.claude/worktrees/continue-gpt-task-89671c`, branch `claude/continue-gpt-task-89671c` (on top of main `b92e2db`). The `/private/tmp/study-*` Codex worktrees and the main checkout's dirty diff are superseded.
+
+Commits: shell + Tasks + Workspaces (from `codex/remaining-screens`), `39a76d4` Brain dump, `a7ab64a` review fixes (tokens not hex, denser Tasks rows, one-row Workspaces header, Brain dump badge tidy, CLAUDE.md scope), `2359e08` Habits uses the shared Tasks header (title · Todos/Habits switch · Morning routine · Add habit), switch colours tokenised, task detail Back button inline.
+
+**Browser: verify in Comet via Claude in Chrome, never the in-app pane (no login there).** Comet's window can't be resized, so phone checks load the route in a same-origin 400px iframe (keeps the session).
+
+Verified in signed-in Comet (17 Nov): Habits tab (desktop), Workspaces Cards view, workspace detail route + browser Back, phone Tasks full-screen detail + Back (focus returns to the row, row stays in view), Brain dump phone Capture → Review → back to Capture keeps text → dismiss (nothing saved), People Add person modal (dark default route, cancelled), Home capture draft (unchanged presentation, dismissed). Earlier (16 Nov): Tasks list/detail, Workspaces list/preview, Brain dump desktop at 1460px; all three at 400px; Home unchanged. vitest 1231/1231, tsc clean, eslint clean on changed files except a pre-existing `set-state-in-effect` error in `HabitBoard.tsx` (exists on main).
+
+Decided: Tasks rows keep separate edit + delete icons (user chose this over preview 04's overflow menu, 17 Nov).
+
+Not done:
+1. Not checked in Safari.
+2. Not pushed, no PR. Don't merge `2c0671f`.
+
 Updated: 16 November 2026, Europe/London.
 
 ## Active follow-up — 16 November

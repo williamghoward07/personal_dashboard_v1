@@ -10,6 +10,7 @@ import { useVisibleNavItems } from './settings/use-visible-nav-items'
 import MobileMoreSheet from './MobileMoreSheet'
 
 const BAR_SLOTS = 5
+const PRIMARY_ROUTES = ['/', '/calendar', '/lectures', '/habits']
 
 const SLOT_CLASS =
   'relative flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 transition-colors duration-200'
@@ -21,8 +22,12 @@ export default function MobileBottomNav() {
   const moreRef = useRef<HTMLButtonElement | null>(null)
 
   const hasOverflow = items.length > BAR_SLOTS
-  const barItems = hasOverflow ? items.slice(0, BAR_SLOTS - 1) : items
-  const overflow = hasOverflow ? items.slice(BAR_SLOTS - 1) : []
+  // Keep the main daily actions in the same places across screens. Respect
+  // hidden routes, filling a vacant slot from the remaining visible items.
+  const preferred = PRIMARY_ROUTES.flatMap((href) => items.filter((item) => item.href === href))
+  const ordered = [...preferred, ...items.filter((item) => !PRIMARY_ROUTES.includes(item.href))]
+  const barItems = hasOverflow ? ordered.slice(0, BAR_SLOTS - 1) : items
+  const overflow = hasOverflow ? items.filter((item) => !barItems.includes(item)) : []
   const moreActive = overflow.some((item) => isNavItemActive(item, pathname))
 
   const closeSheet = () => {

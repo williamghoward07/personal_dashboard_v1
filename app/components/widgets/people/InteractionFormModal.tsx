@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useId, useState } from 'react'
 import { Plus } from 'lucide-react'
 import Modal from '../../Modal'
+import captureStyles from '../braindump/BrainDump.module.css'
 import type { Interaction, InteractionChannel, Person, Place } from '@/lib/types'
 import PlaceFormModal from './PlaceFormModal'
 import type { PlaceFormValues } from './PlaceFormModal'
@@ -10,6 +11,7 @@ import {
   CHANNELS,
   cancelButtonClass,
   inputClass,
+  keepReviewFocus,
   labelClass,
   saveButtonClass,
   toLocalInputValue,
@@ -32,6 +34,9 @@ export default function InteractionFormModal({
   places,
   initialValues,
   initialPersonIds,
+  saving = false,
+  saveError,
+  captureReview = false,
   onSave,
   onClose,
   onCreatePlace,
@@ -45,11 +50,15 @@ export default function InteractionFormModal({
   // callers thread the current note in here separately.
   initialValues?: (Partial<Interaction> & { follow_up?: string | null }) | null
   initialPersonIds?: string[]
+  saving?: boolean
+  saveError?: string | null
+  captureReview?: boolean
   onSave: (values: InteractionFormValues) => void
   onClose: () => void
   /** Inline "new place" escape hatch — creates the place and returns it so it can be selected immediately. */
   onCreatePlace: (values: PlaceFormValues) => Promise<Place | null>
 }) {
+  const headingId = useId()
   const [occurredAt, setOccurredAt] = useState('')
   const [title, setTitle] = useState('')
   const [summary, setSummary] = useState('')
@@ -59,7 +68,13 @@ export default function InteractionFormModal({
   const [personIds, setPersonIds] = useState<string[]>([])
   const [isAddingPlace, setIsAddingPlace] = useState(false)
 
-  useEffect(() => {
+  const [previousOpen, setPreviousOpen] = useState(false)
+  const [previousValues, setPreviousValues] = useState(initialValues)
+  const [previousPersonIds, setPreviousPersonIds] = useState(initialPersonIds)
+  if (isOpen !== previousOpen || initialValues !== previousValues || initialPersonIds !== previousPersonIds) {
+    setPreviousOpen(isOpen)
+    setPreviousValues(initialValues)
+    setPreviousPersonIds(initialPersonIds)
     if (isOpen) {
       setOccurredAt(
         toLocalInputValue(initialValues?.occurred_at ?? new Date().toISOString()),
@@ -71,7 +86,7 @@ export default function InteractionFormModal({
       setFollowUp(initialValues?.follow_up ?? '')
       setPersonIds(initialPersonIds ?? [])
     }
-  }, [isOpen, initialValues, initialPersonIds])
+  }
 
   if (!isOpen) return null
 
@@ -81,11 +96,11 @@ export default function InteractionFormModal({
     )
 
   return (
-    <Modal onClose={onClose}>
+    <Modal onClose={() => { if (!saving && !isAddingPlace) onClose() }}>
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          if (!occurredAt) return
+          if (saving || !occurredAt) return
           onSave({
             // datetime-local has no zone; treat it as local and store UTC.
             occurred_at: new Date(occurredAt).toISOString(),
@@ -97,130 +112,137 @@ export default function InteractionFormModal({
             personIds,
           })
         }}
-        className="flex max-h-[80vh] flex-col gap-4 overflow-y-auto"
+        role={captureReview ? 'dialog' : undefined}
+        aria-modal={captureReview || undefined}
+        aria-labelledby={captureReview ? headingId : undefined}
+        onKeyDown={captureReview ? keepReviewFocus : undefined}
+        className={`flex max-h-[80dvh] flex-col gap-4 overflow-y-auto ${captureReview ? captureStyles.reviewForm : ''}`}
       >
-        <h2 className="font-display text-sm font-semibold text-on-surface">{heading}</h2>
+        <h2 id={headingId} className="font-display text-sm font-semibold text-on-surface">{heading}</h2>
 
-        <div className="grid grid-cols-2 gap-3">
+        <fieldset className="contents" disabled={saving}>
+          <div className="grid grid-cols-2 gap-3">
+            <label className={labelClass}>
+              When
+              <input
+                autoFocus
+                type="datetime-local"
+                value={occurredAt}
+                onChange={(e) => setOccurredAt(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <label className={labelClass}>
+              Channel
+              <select
+                value={channel}
+                onChange={(e) => setChannel(e.target.value as InteractionChannel)}
+                className={inputClass}
+              >
+                {CHANNELS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <label className={labelClass}>
-            When
+            Title
             <input
-              autoFocus
-              type="datetime-local"
-              value={occurredAt}
-              onChange={(e) => setOccurredAt(e.target.value)}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Coffee after the fieldwork lecture"
               className={inputClass}
             />
           </label>
+
           <label className={labelClass}>
-            Channel
+            What you talked about
+            <textarea
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              rows={4}
+              placeholder="The details worth remembering next time you speak"
+              className={inputClass}
+            />
+          </label>
+
+          <fieldset className="flex flex-col gap-1">
+            <legend className="text-xs text-on-surface-variant">Who was there</legend>
+            {people.length === 0 ? (
+              <p className="text-xs text-on-surface-variant">
+                No people yet — add someone in the Directory first.
+              </p>
+            ) : (
+              <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto pt-1">
+                {people.map((person) => {
+                  const selected = personIds.includes(person.id)
+                  return (
+                    <button
+                      key={person.id}
+                      type="button"
+                      onClick={() => togglePerson(person.id)}
+                      aria-pressed={selected}
+                      className={`rounded-full border px-2 py-0.5 text-xs ${
+                        selected
+                          ? 'border-people-amber/50 bg-people-amber/10 text-people-amber'
+                          : 'border-outline-variant text-on-surface-variant hover:border-outline'
+                      }`}
+                    >
+                      {person.full_name}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </fieldset>
+
+          <label className={labelClass}>
+            <span className="flex items-center justify-between">
+              Where
+              <button
+                type="button"
+                onClick={() => setIsAddingPlace(true)}
+                className="flex items-center gap-0.5 text-people-amber hover:brightness-110"
+              >
+                <Plus className="h-3 w-3" />
+                New place
+              </button>
+            </span>
             <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value as InteractionChannel)}
+              value={placeId}
+              onChange={(e) => setPlaceId(e.target.value)}
               className={inputClass}
             >
-              {CHANNELS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
+              <option value="">No place</option>
+              {places.map((place) => (
+                <option key={place.id} value={place.id}>
+                  {place.name}
                 </option>
               ))}
             </select>
           </label>
-        </div>
 
-        <label className={labelClass}>
-          Title
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Coffee after the fieldwork lecture"
-            className={inputClass}
-          />
-        </label>
-
-        <label className={labelClass}>
-          What you talked about
-          <textarea
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            rows={4}
-            placeholder="The details worth remembering next time you speak"
-            className={inputClass}
-          />
-        </label>
-
-        <fieldset className="flex flex-col gap-1">
-          <legend className="text-xs text-on-surface-variant">Who was there</legend>
-          {people.length === 0 ? (
-            <p className="text-xs text-on-surface-variant">
-              No people yet — add someone in the Directory first.
-            </p>
-          ) : (
-            <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto pt-1">
-              {people.map((person) => {
-                const selected = personIds.includes(person.id)
-                return (
-                  <button
-                    key={person.id}
-                    type="button"
-                    onClick={() => togglePerson(person.id)}
-                    aria-pressed={selected}
-                    className={`rounded-full border px-2 py-0.5 text-xs ${
-                      selected
-                        ? 'border-people-amber/50 bg-people-amber/10 text-people-amber'
-                        : 'border-outline-variant text-on-surface-variant hover:border-outline'
-                    }`}
-                  >
-                    {person.full_name}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          <label className={labelClass}>
+            Bring up next time
+            <input
+              value={followUp}
+              onChange={(e) => setFollowUp(e.target.value)}
+              placeholder="e.g. Ask how her dissertation proposal went"
+              className={inputClass}
+            />
+          </label>
         </fieldset>
 
-        <label className={labelClass}>
-          <span className="flex items-center justify-between">
-            Where
-            <button
-              type="button"
-              onClick={() => setIsAddingPlace(true)}
-              className="flex items-center gap-0.5 text-people-amber hover:brightness-110"
-            >
-              <Plus className="h-3 w-3" />
-              New place
-            </button>
-          </span>
-          <select
-            value={placeId}
-            onChange={(e) => setPlaceId(e.target.value)}
-            className={inputClass}
-          >
-            <option value="">No place</option>
-            {places.map((place) => (
-              <option key={place.id} value={place.id}>
-                {place.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className={labelClass}>
-          Bring up next time
-          <input
-            value={followUp}
-            onChange={(e) => setFollowUp(e.target.value)}
-            placeholder="e.g. Ask how her dissertation proposal went"
-            className={inputClass}
-          />
-        </label>
-
+        {saveError && <p role="alert" className="text-sm text-error">{saveError}</p>}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={cancelButtonClass}>
+          <button type="button" onClick={onClose} disabled={saving} className={cancelButtonClass}>
             Cancel
           </button>
-          <button type="submit" className={saveButtonClass}>
-            Save
+          <button type="submit" disabled={saving} className={saveButtonClass}>
+            {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </form>

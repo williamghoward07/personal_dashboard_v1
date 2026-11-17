@@ -37,7 +37,7 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
 - Every AI call goes through `lib/ai/gemini.ts`. Don't import a provider SDK anywhere else.
 - Every call is logged to `ai_usage` (append-only, one row per call, with a feature key). The daily cap is set in `lib/ai/constants.ts`.
 - Blackboard AI (`lib/blackboard/ai/`) has its own cap (`BB_DAILY_CALL_CAP`) and `bb_*` feature keys. Its dates are kept only when grounded in a verbatim quote, and the user confirms or dismisses them.
-- Find mode: AI only extracts keywords. The queries themselves are hand-written `ilike` lookups, with no AI in query execution.
+- Find and Ask: AI only extracts keywords, target modules and one time window picked from a fixed list (`TIME_WINDOWS`, `lib/search/time-window.ts`). Queries (`ilike` lookups), date maths, ranking and totals are hand-written code, with no AI in query execution. Short queries skip the AI, and a failed AI call falls back to the local parser.
 - Capture and Brain Dump only produce drafts. Nothing is written until the user confirms it (`/api/capture/confirm`).
 
 ## Data (Supabase)

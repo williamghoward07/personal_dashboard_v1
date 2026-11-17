@@ -34,6 +34,35 @@ describe('resolveQueryMode (auto)', () => {
     expect(auto('newcastle trip')).toBe('find')
   })
 
+  it('captures obvious tasks without an action verb up front or a date word', () => {
+    expect(auto('dentist friday')).toBe('capture')
+    expect(auto('essay plan by fri')).toBe('capture')
+    expect(auto('dentist fri')).toBe('capture')
+    // short weekday forms that are also words only count after by/on/next…
+    expect(auto('the sun')).toBe('find')
+    expect(auto('where we sat')).toBe('ask')
+    expect(auto('rugby by sat')).toBe('capture')
+    expect(auto('need to email Sam')).toBe('capture')
+    expect(auto("don't forget passport")).toBe('capture')
+    expect(auto('gym today')).toBe('capture')
+    expect(auto('haircut in 2 weeks')).toBe('capture')
+    expect(auto('call back next month')).toBe('capture')
+    expect(auto('revise statistics')).toBe('capture')
+  })
+
+  it('keeps ambiguous searches as find or ask', () => {
+    expect(auto('sunday service notes')).toBe('find')
+    expect(auto('who did I meet on friday')).toBe('ask')
+    expect(auto('reading list')).toBe('find')
+    expect(auto('notebook')).toBe('find')
+    expect(auto('ordering system')).toBe('find')
+  })
+
+  it('treats a bare action verb as a command', () => {
+    expect(looksLikeCommand('read')).toBe(true)
+    expect(looksLikeCommand('reading list')).toBe(false)
+  })
+
   it('never second-guesses an explicit mode', () => {
     expect(resolveQueryMode('find', 'add milk')).toBe('find')
     expect(resolveQueryMode('ask', 'Sam')).toBe('ask')

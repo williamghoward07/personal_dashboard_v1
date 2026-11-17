@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const { data: people } = await supabase.from('people').select('id, full_name').eq('archived', false)
 
   try {
-    const result = await extractBrainDump(text, people ?? [], new Date().toISOString())
+    const result = await extractBrainDump(text, people ?? [], new Date())
     return NextResponse.json(result)
   } catch (err) {
     console.error('Brain dump extraction failed:', err)

@@ -235,18 +235,32 @@ widgets actually get used. Don't add home widgets casually.
 - **System Query** (`app/components/AiQueryBar.tsx`) — one input with four
   explicit modes (`LiquidSwitch`, one-line hint under the box explaining the
   current mode; logic in `lib/search/query-mode.ts`):
-  - **Find** — Gemini extracts keywords + modules only; the queries
-    themselves are hand-written `ilike` lookups (`app/api/search`). No AI in
-    query execution.
-  - **Ask** — Find, then a smart-tier call answers from those results only.
+  - **Find** — Gemini extracts keywords, modules and one enum time window
+    (`lib/search/time-window.ts`); short plain queries ("Sam", "food last
+    month") skip the AI call entirely (`lib/search/local-query.ts`), and a
+    failed call (budget, AI off) falls back to the same local path. The
+    queries are hand-written `ilike` lookups (`app/api/search`): 25
+    candidates per table, ranked in TypeScript (`lib/search/rank.ts`: all
+    keywords > title > notes, recent first, done/inactive last) to the top
+    5 per module. No AI in query execution, date maths or ranking.
+  - **Ask** — Find, then a smart-tier call answers from those results. The
+    answer prompt gets today's London date, the resolved time window, and
+    facts computed in code over every matching row (`lib/search/facts.ts`:
+    spending / income totals, open todo and task counts), so the model
+    never adds anything up.
   - **Capture** — same extractor as Brain Dump (`/api/brain-dump/extract`,
-    smart tier with thinking, so pricier). Produces drafts; **nothing is
-    written until the user confirms** each draft (or "Confirm all" for
-    todos / education tasks / calendar events). People drafts always open
-    their form for review. Writes go through `/api/capture/confirm`.
+    smart tier with thinking, so pricier). The prompt carries the London
+    date, weekday and a 14-day date lookup table
+    (`lib/braindump/date-context.ts`); model output is cleaned by
+    `lib/braindump/normalise.ts` before it reaches the UI. Produces drafts;
+    **nothing is written until the user confirms** each draft (or "Confirm
+    all" for todos / education tasks / calendar events). People drafts
+    always open their form for review. Writes go through
+    `/api/capture/confirm`.
   - **Auto** (default) — local, zero-cost routing: ends in "?" → Ask;
-    multi-line / ";" / reads as an instruction (add, remind me, book, met…,
-    or has a date/time hint) → Capture; question word → Ask; else Find.
+    multi-line / ";" / reads as an instruction (add, remind me, need to,
+    book, met…, or has a date/time hint such as "today", "by fri", a
+    trailing weekday) → Capture; question word → Ask; else Find.
   - The input is an auto-growing textarea (Enter submits, Shift+Enter adds a
     line). Draft lists live in module-scope stores (`lib/braindump/store.ts`
     `createDraftStore`) so an extraction survives navigating away; the home

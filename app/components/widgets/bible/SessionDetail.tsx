@@ -63,7 +63,7 @@ export default function SessionDetail({ sessionId }: { sessionId: string }) {
 
   if (loading) {
     return (
-      <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
+      <main className="workspace-page">
         <p className="text-sm text-on-surface-variant">Loading…</p>
       </main>
     )
@@ -71,7 +71,7 @@ export default function SessionDetail({ sessionId }: { sessionId: string }) {
 
   if (!session) {
     return (
-      <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
+      <main className="workspace-page">
         <Link href="/bible" className="w-fit text-sm text-on-surface-variant hover:text-on-surface hover:underline">
           ← Back to Bible
         </Link>
@@ -83,7 +83,7 @@ export default function SessionDetail({ sessionId }: { sessionId: string }) {
   const answeredCount = questions.filter((q) => q.answered_at !== null).length
 
   return (
-    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
+    <main className="workspace-page">
       <div className="flex flex-col gap-1">
         <Link
           href="/bible"
@@ -93,7 +93,7 @@ export default function SessionDetail({ sessionId }: { sessionId: string }) {
           Bible
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="flex items-center gap-2 font-display text-headline-lg font-bold text-on-surface">
+          <h1 className="flex items-center gap-2 workspace-page-title text-on-surface">
             <BookOpen className="h-6 w-6" aria-hidden="true" />
             Session {session.session_number}
             {session.title ? `: ${session.title}` : ''}

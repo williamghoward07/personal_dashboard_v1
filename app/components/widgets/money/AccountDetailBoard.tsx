@@ -48,7 +48,7 @@ export default function AccountDetailBoard({ accountId }: { accountId: string })
 
   if (accountsLoading) {
     return (
-      <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
+      <main className="workspace-page">
         <p className="text-sm text-on-surface-variant">Loading…</p>
       </main>
     )
@@ -56,7 +56,7 @@ export default function AccountDetailBoard({ accountId }: { accountId: string })
 
   if (!account) {
     return (
-      <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
+      <main className="workspace-page">
         <Link href="/money" className="w-fit text-sm text-on-surface-variant hover:text-on-surface hover:underline">
           ← Back to Money
         </Link>
@@ -77,7 +77,7 @@ export default function AccountDetailBoard({ accountId }: { accountId: string })
   const isPositive = changeMinorUnits >= 0
 
   return (
-    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
+    <main className="workspace-page">
       <div className="flex flex-col gap-1">
         <Link
           href="/money"
@@ -87,11 +87,11 @@ export default function AccountDetailBoard({ accountId }: { accountId: string })
           Money
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="flex items-center gap-2 font-display text-headline-lg font-bold text-on-surface">
+          <h1 className="flex items-center gap-2 workspace-page-title text-on-surface">
             <Landmark className="h-6 w-6" aria-hidden="true" />
             {account.name}
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => toggleHidden(account.id)}

@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useMemo, useState, type ReactNode } from 'react'
 import { CalendarClock, BookOpen, Check, EyeOff, ExternalLink, FileText, Megaphone, Pin, Presentation, Sparkles, Video, X } from 'lucide-react'
 import ConfirmDialog from '../ConfirmDialog'
@@ -325,7 +326,7 @@ export default function SessionBlackboardBlock({
 
   const announcements = useMemo(() => match?.keyDates.filter((kd) => !!kd.announcement_id) ?? [], [match])
 
-  if (loading) return <p className="text-xs text-on-surface-variant">Loading…</p>
+  if (loading) return <LoadingSkeleton label="Loading…" />
   if (error) {
     return (
       <p role="alert" className="text-xs text-error">

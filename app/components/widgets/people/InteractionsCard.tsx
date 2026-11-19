@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useState } from 'react'
 import type { ComponentProps } from 'react'
 import { MapPin, MessagesSquare, Pencil, Plus, Trash2 } from 'lucide-react'
@@ -126,7 +127,7 @@ export default function InteractionsCard({
         }
       >
         {loading ? (
-          <p>Loading...</p>
+          <LoadingSkeleton label="Loading..." />
         ) : interactions.length === 0 ? (
           <p>No conversations logged yet — add one to start building the history.</p>
         ) : (

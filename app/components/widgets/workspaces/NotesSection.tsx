@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useMemo, useState } from 'react'
 import { Brain, Hash, Send, X } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
@@ -229,7 +230,7 @@ export default function NotesSection({
       )}
 
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : notes.length === 0 ? (
         <p className="text-sm text-on-surface-variant">Nothing logged yet — record your first observation above.</p>
       ) : (

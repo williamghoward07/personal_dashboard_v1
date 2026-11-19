@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -49,7 +50,7 @@ export default function AccountDetailBoard({ accountId }: { accountId: string })
   if (accountsLoading) {
     return (
       <main className="workspace-page">
-        <p className="text-sm text-on-surface-variant">Loading…</p>
+        <LoadingSkeleton shape="cards" label="Loading…" />
       </main>
     )
   }

@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronRight, Sparkles } from 'lucide-react'
 import { addDays, londonToday } from '@/lib/blackboard/dates'
@@ -327,7 +328,7 @@ export default function WorkList({
           )
       )}
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading…</p>
+        <LoadingSkeleton label="Loading…" />
       ) : (
         <>
           {!hasBlackboard && tabList.length > 0 && <p className="text-sm text-on-surface-variant">{FIRST_RUN}</p>}

@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useMemo, useState, type ReactNode } from 'react'
 import { BookOpenCheck } from 'lucide-react'
 import { useWorkItems } from '@/lib/blackboard/use-work-items'
@@ -72,7 +73,7 @@ export default function DueSoonGlance(dimensions: HomeWidgetDimensions) {
 
   return (
     <HomeSectionCard href="/lectures" title="Study priorities" icon={<BookOpenCheck className="h-4 w-4" />} accent="orange">
-      {loading ? <p>Loading study priorities…</p> : (
+      {loading ? <LoadingSkeleton label="Loading study priorities…" /> : (
         <div className="space-y-4">
           <div className={layout.twoColumn ? 'grid grid-cols-2 items-start gap-4' : 'grid gap-4'}>
             {deadlines.length > 0 && <PriorityList title="Upcoming deadlines" items={deadlines} limit={layout.deadlines} today={today} names={names} />}

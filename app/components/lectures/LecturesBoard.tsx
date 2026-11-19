@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -165,7 +166,7 @@ export default function LecturesBoard() {
             <StatusCounts counts={countByStatus(nextWeek)} />
           </div>
           {loading ? (
-            <p className="text-sm text-on-surface-variant">Loading…</p>
+            <LoadingSkeleton label="Loading…" />
           ) : nextWeek.length === 0 ? (
             <p className="text-sm text-on-surface-variant">Nothing on the timetable this week.</p>
           ) : (

@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight, BookOpen, GraduationCap, ListChecks, Lock, NotebookPen, Sparkles } from 'lucide-react'
@@ -212,7 +213,7 @@ function AssignmentBody({ session }: { session: SessionWithPrep }) {
             count={readings.length > 0 ? `${ratio(readings)} read` : undefined}
           >
             {loading ? (
-              <p className="text-xs text-on-surface-variant">Loading…</p>
+              <LoadingSkeleton label="Loading…" />
             ) : readings.length > 0 ? (
               <ul className="flex flex-col">{readings.map(renderItem)}</ul>
             ) : (
@@ -227,7 +228,7 @@ function AssignmentBody({ session }: { session: SessionWithPrep }) {
             count={todo.length > 0 ? `${ratio(todo)} done` : undefined}
           >
             {loading ? (
-              <p className="text-xs text-on-surface-variant">Loading…</p>
+              <LoadingSkeleton label="Loading…" />
             ) : todo.length > 0 ? (
               <ul className="flex flex-col">{todo.map(renderItem)}</ul>
             ) : (

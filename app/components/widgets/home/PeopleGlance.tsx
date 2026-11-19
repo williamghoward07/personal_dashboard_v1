@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowUpRight, Contact } from 'lucide-react'
@@ -56,7 +57,7 @@ export default function PeopleGlance(dimensions: HomeWidgetDimensions) {
       }
     >
       {loading ? (
-        <p>Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : shown.length === 0 ? (
         <p>Nothing to follow up.</p>
       ) : (

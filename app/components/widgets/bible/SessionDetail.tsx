@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, BookOpen } from 'lucide-react'
@@ -64,7 +65,7 @@ export default function SessionDetail({ sessionId }: { sessionId: string }) {
   if (loading) {
     return (
       <main className="workspace-page">
-        <p className="text-sm text-on-surface-variant">Loading…</p>
+        <LoadingSkeleton shape="cards" label="Loading…" />
       </main>
     )
   }

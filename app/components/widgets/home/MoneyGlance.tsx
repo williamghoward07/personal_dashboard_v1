@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { DollarSign } from 'lucide-react'
 import HomeSectionCard from './HomeSectionCard'
 import { useAccounts } from '@/lib/money/use-accounts'
@@ -85,7 +86,7 @@ export default function MoneyGlance(dimensions: HomeWidgetDimensions) {
   return (
     <HomeSectionCard href="/money" title="Money" icon={<DollarSign className="h-4 w-4" />} accent="blue">
       {accountsLoading || transactionsLoading ? (
-        <p>Loading money…</p>
+        <LoadingSkeleton shape="metric" label="Loading money…" />
       ) : (
         <div className="space-y-3">
           {accounts.length === 0 ? (

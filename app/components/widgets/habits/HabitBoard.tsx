@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, ListChecks, Sunrise } from 'lucide-react'
 import {
@@ -248,7 +249,7 @@ export default function HabitBoard() {
       )}
 
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : habits.length === 0 ? (
         <p className="text-sm text-on-surface-variant">No habits yet — add one to get started.</p>
       ) : (

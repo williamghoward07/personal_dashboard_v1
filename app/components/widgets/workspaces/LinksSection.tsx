@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
@@ -140,7 +141,7 @@ export default function LinksSection({
       </div>
 
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : (
         <>
           <LinksGrid

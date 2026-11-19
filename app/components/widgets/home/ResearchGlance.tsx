@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { FileSearch } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -20,7 +21,7 @@ export default function ResearchGlance() {
   return (
     <HomeSectionCard href="/research" title="Research" icon={<FileSearch className="h-4 w-4" />} accent="pink">
       {counts === null ? (
-        <p>Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : (
         <p className="text-on-surface">
           {counts.prompts} prompt{counts.prompts === 1 ? '' : 's'} · {counts.links} saved chat

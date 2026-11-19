@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useMemo, useState } from 'react'
 import { CheckCircle2, Link2, ListChecks, Pencil, Plus, Trash2, Unlink, X } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
@@ -155,7 +156,7 @@ export default function TodosSection({
       </div>
 
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : todos.length === 0 ? (
         <p className="text-sm text-on-surface-variant">No scoped actions yet — add one above.</p>
       ) : visibleTodos.length === 0 ? (

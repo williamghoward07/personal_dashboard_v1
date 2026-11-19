@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import styles from './workspace-surface.module.css'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -294,7 +295,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
             </Link>
           </p>
         ) : loading || foldersLoading ? (
-          <p className="text-sm text-on-surface-variant">Loading...</p>
+          <LoadingSkeleton label="Loading..." />
         ) : (
           <>
             {subfolders.length > 0 && (
@@ -650,7 +651,7 @@ function WorkspacePreview({ workspace, study, selectedRowRef, onClose }: {
     <div className="flex items-start justify-between gap-3"><div><h2 className="break-words text-xl font-bold">{workspace.title}</h2><p className="mt-1 text-sm text-on-surface-variant">{[!hidden.includes('readings') && `Readings: ${study?.readings.done ?? 0} / ${study?.readings.total ?? 0}`, !hidden.includes('time') && `${formatMinutes(study?.minutesThisWeek ?? 0)} this week`].filter(Boolean).join(' · ')}</p></div><button type="button" onClick={onClose} className="min-h-11 min-w-11 text-sm">Back</button></div>
     {workspace.subtitle && <p className="mt-3 text-sm text-on-surface-variant">{workspace.subtitle}</p>}
     <Link href={`/workspaces/${workspace.id}`} className={`${primaryButtonClass} mt-4 flex min-h-11 justify-center`}>Open workspace</Link>
-    <section className="mt-5 border-t border-outline-variant/60 pt-4"><h3 className="font-semibold">Tasks ({todos.length})</h3>{todosLoading ? <p>Loading...</p> : todos.length ? <ul className="mt-2 space-y-2">{todos.slice(0, 5).map((todo) => <li key={todo.id} className="break-words text-sm">{todo.completed_at ? '✓' : '○'} {todo.title}</li>)}</ul> : <p className="mt-2 text-sm text-on-surface-variant">No scoped tasks yet.</p>}</section>
-    <section className="mt-5 border-t border-outline-variant/60 pt-4"><h3 className="font-semibold">Sources ({sources.length})</h3>{linksLoading ? <p>Loading...</p> : sources.length ? <ul className="mt-2 space-y-2">{sources.slice(0, 5).map((link) => <li key={link.id} className="break-words text-sm">{link.title}</li>)}</ul> : <p className="mt-2 text-sm text-on-surface-variant">No sources yet.</p>}</section>
+    <section className="mt-5 border-t border-outline-variant/60 pt-4"><h3 className="font-semibold">Tasks ({todos.length})</h3>{todosLoading ? <LoadingSkeleton label="Loading..." /> : todos.length ? <ul className="mt-2 space-y-2">{todos.slice(0, 5).map((todo) => <li key={todo.id} className="break-words text-sm">{todo.completed_at ? '✓' : '○'} {todo.title}</li>)}</ul> : <p className="mt-2 text-sm text-on-surface-variant">No scoped tasks yet.</p>}</section>
+    <section className="mt-5 border-t border-outline-variant/60 pt-4"><h3 className="font-semibold">Sources ({sources.length})</h3>{linksLoading ? <LoadingSkeleton label="Loading..." /> : sources.length ? <ul className="mt-2 space-y-2">{sources.slice(0, 5).map((link) => <li key={link.id} className="break-words text-sm">{link.title}</li>)}</ul> : <p className="mt-2 text-sm text-on-surface-variant">No sources yet.</p>}</section>
   </dialog>
 }

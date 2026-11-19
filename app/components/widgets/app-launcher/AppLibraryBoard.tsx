@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArchiveRestore, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, LayoutGrid, Plus, Trash2 } from 'lucide-react'
 import {
@@ -455,7 +456,7 @@ export default function AppLibraryBoard() {
       )}
 
       {loading && links.length === 0 && folders.length === 0 ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton shape="cards" label="Loading..." />
       ) : folderGroups.length === 0 ? (
         <div className="flex flex-col items-start gap-3">
           <p className="text-sm text-on-surface-variant">

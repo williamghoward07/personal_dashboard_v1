@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useState } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -53,7 +54,7 @@ export default function TransactionsList({
         </GlassCardHeader>
         <GlassCardContent>
           {loading ? (
-            <p className="text-sm text-on-surface-variant">Loading...</p>
+            <LoadingSkeleton label="Loading..." />
           ) : sorted.length === 0 ? (
             <p className="text-sm text-on-surface-variant">No transactions logged yet — add one to get started.</p>
           ) : (

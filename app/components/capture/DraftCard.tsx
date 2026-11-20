@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState, type MouseEvent } from 'react'
 import { Check, Pencil, SquarePen, X } from 'lucide-react'
 import type { BrainDumpActFields, BrainDumpDraftKind, LocalDraft } from '@/lib/braindump/types'
 import { isActKind } from '@/lib/braindump/types'
+import BrainDumpDraftRow from '../widgets/braindump/BrainDumpDraftRow'
+import styles from '../widgets/braindump/BrainDump.module.css'
 
 // Static class sets so Tailwind can see every class name.
 export const DRAFT_TONES = {
@@ -53,8 +55,8 @@ function summaryText(draft: LocalDraft, matchedPersonName: string | null): strin
 
 /** Why a one-click draft can't be saved as it stands, if it can't. */
 export function draftProblem(draft: LocalDraft): string | null {
-  if (!isActKind(draft.kind) || !draft.act) return null
-  if (!draft.act.title.trim()) return 'Needs a title.'
+  if (!isActKind(draft.kind)) return null
+  if (!draft.act?.title.trim()) return 'Needs a title.'
   if (draft.kind === 'calendar_event' && !draft.act.due_date) return 'A calendar event needs a date.'
   return null
 }
@@ -65,8 +67,10 @@ export function draftProblem(draft: LocalDraft): string | null {
 export default function DraftCard({
   draft,
   tone,
+  brainDump = false,
   matchedPersonName,
   busy,
+  saving = busy,
   onConfirm,
   onReview,
   onDismiss,
@@ -74,18 +78,115 @@ export default function DraftCard({
 }: {
   draft: LocalDraft
   tone: DraftTone
+  brainDump?: boolean
   matchedPersonName: string | null
   busy: boolean
-  onConfirm: () => void
-  onReview: () => void
+  saving?: boolean
+  onConfirm: (event: MouseEvent<HTMLButtonElement>) => void
+  onReview: (event: MouseEvent<HTMLButtonElement>) => void
   onDismiss: () => void
   onEdit: (patch: Partial<BrainDumpActFields>) => void
 }) {
   const [editing, setEditing] = useState(false)
+  const editButton = useRef<HTMLButtonElement>(null)
   const t = DRAFT_TONES[tone]
   const isAct = isActKind(draft.kind)
   const problem = draftProblem(draft)
   const summary = summaryText(draft, matchedPersonName)
+
+  const inputClass = brainDump ? styles.editorInput : `w-full rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1 text-sm text-on-surface outline-none ${t.focus}`
+  const editor = editing && draft.act ? (
+    <div className={brainDump ? styles.editor : 'flex flex-col gap-1.5'}>
+      <input
+        value={draft.act.title}
+        onChange={(e) => onEdit({ title: e.target.value })}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || (brainDump && e.key === 'Escape')) {
+            setEditing(false)
+            editButton.current?.focus()
+          }
+        }}
+        aria-label="Title"
+        placeholder={brainDump ? 'Title' : undefined}
+        autoFocus
+        disabled={brainDump && busy}
+        className={inputClass}
+      />
+      <div className={brainDump ? styles.editorDates : 'flex gap-1.5'}>
+        <input
+          type="date"
+          value={draft.act.due_date ?? ''}
+          onChange={(e) => onEdit({ due_date: e.target.value || null })}
+          aria-label="Date"
+          disabled={brainDump && busy}
+          className={inputClass}
+        />
+        {draft.kind !== 'education_task' && (
+          <input
+            type="time"
+            value={draft.act.due_time ?? ''}
+            onChange={(e) => onEdit({ due_time: e.target.value || null })}
+            aria-label="Time"
+            disabled={brainDump && busy}
+            className={inputClass}
+          />
+        )}
+      </div>
+      {brainDump && (
+        <textarea
+          value={draft.act.notes ?? ''}
+          onChange={(e) => onEdit({ notes: e.target.value || null })}
+          aria-label="Notes"
+          placeholder="Notes"
+          rows={2}
+          disabled={busy}
+          className={inputClass}
+        />
+      )}
+    </div>
+  ) : null
+
+  if (brainDump) {
+    return (
+      <BrainDumpDraftRow
+        draft={draft}
+        kindLabel={KIND_LABEL[draft.kind]}
+        summary={summary}
+        problem={problem}
+        editor={editor}
+        actions={
+          <>
+            {isAct ? (
+              <>
+                <button
+                  type="button"
+                  className={styles.confirmButton}
+                  disabled={busy || !!problem}
+                  onClick={onConfirm}
+                >
+                  {saving ? 'Adding…' : 'Confirm'}
+                </button>
+                <button
+                  ref={editButton}
+                  type="button"
+                  disabled={busy || !draft.act}
+                  aria-expanded={editing}
+                  onClick={() => setEditing((value) => !value)}
+                >
+                  {editing ? 'Done' : 'Edit'}
+                </button>
+              </>
+            ) : (
+              <button type="button" className={styles.reviewButton} disabled={busy} onClick={onReview}>
+                Review
+              </button>
+            )}
+            <button type="button" disabled={busy} onClick={onDismiss}>Dismiss</button>
+          </>
+        }
+      />
+    )
+  }
 
   if (draft.status === 'accepted') {
     return (
@@ -104,8 +205,6 @@ export default function DraftCard({
     )
   }
 
-  const inputClass = `w-full rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1 text-sm text-on-surface outline-none ${t.focus}`
-
   return (
     <div className={`flex flex-col gap-2 rounded-lg border p-3 ${t.card}`}>
       <div className="flex items-center justify-between gap-2">
@@ -123,38 +222,7 @@ export default function DraftCard({
         )}
       </div>
 
-      {editing && draft.act ? (
-        <div className="flex flex-col gap-1.5">
-          <input
-            value={draft.act.title}
-            onChange={(e) => onEdit({ title: e.target.value })}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') setEditing(false)
-            }}
-            aria-label="Title"
-            autoFocus
-            className={inputClass}
-          />
-          <div className="flex gap-1.5">
-            <input
-              type="date"
-              value={draft.act.due_date ?? ''}
-              onChange={(e) => onEdit({ due_date: e.target.value || null })}
-              aria-label="Date"
-              className={inputClass}
-            />
-            {draft.kind !== 'education_task' && (
-              <input
-                type="time"
-                value={draft.act.due_time ?? ''}
-                onChange={(e) => onEdit({ due_time: e.target.value || null })}
-                aria-label="Time"
-                className={inputClass}
-              />
-            )}
-          </div>
-        </div>
-      ) : (
+      {editor ?? (
         <>
           <p className="text-sm text-on-surface">{summary}</p>
           {draft.act && (draft.act.due_date || draft.act.due_time) && (
@@ -180,12 +248,13 @@ export default function DraftCard({
             className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-surface disabled:opacity-50 ${t.solid}`}
           >
             <Check className="h-3 w-3" />
-            {busy ? 'Adding…' : 'Confirm'}
+            {saving ? 'Adding…' : 'Confirm'}
           </button>
         ) : (
           <button
             type="button"
             onClick={onReview}
+            disabled={busy}
             className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold text-surface ${t.solid}`}
           >
             <Pencil className="h-3 w-3" />

@@ -7,6 +7,8 @@ export interface DraftStoreState {
   loading: boolean
   error: string | null
   drafts: LocalDraft[]
+  lastExtractedText?: string
+  confirming: string | null
 }
 
 export interface DraftStore {
@@ -14,6 +16,7 @@ export interface DraftStore {
   getSnapshot: () => DraftStoreState
   setText: (text: string) => void
   setError: (error: string | null) => void
+  runConfirmation: (target: string, save: () => Promise<void>) => Promise<void>
   setDraftStatus: (clientId: string, status: LocalDraft['status']) => void
   updateDraftAct: (clientId: string, patch: Partial<BrainDumpActFields>) => void
   /** Drops accepted/dismissed drafts. */
@@ -29,8 +32,8 @@ export interface DraftStore {
 // landed in component state that had been unmounted and thrown away.
 // One store per surface (Brain Dump page, home query box) so their
 // drafts never mix.
-export function createDraftStore(): DraftStore {
-  let state: DraftStoreState = { text: '', loading: false, error: null, drafts: [] }
+export function createDraftStore({ keepTextOnSuccess = false } = {}): DraftStore {
+  let state: DraftStoreState = { text: '', loading: false, error: null, drafts: [], confirming: null }
   let abortController: AbortController | null = null
   let nextId = 0
   const listeners = new Set<() => void>()
@@ -48,14 +51,27 @@ export function createDraftStore(): DraftStore {
       }
     },
     getSnapshot: () => state,
-    setText: (text) => setState({ text }),
+    setText: (text) => setState(!text.trim() ? { text, lastExtractedText: undefined } : { text }),
     setError: (error) => setState({ error }),
+    async runConfirmation(target, save) {
+      if (state.confirming !== null) return
+      if (target !== 'all' && !state.drafts.some((draft) => draft.clientId === target && draft.status === 'pending')) return
+      // The lock outlives a list that unmounts while its write is in flight.
+      setState({ confirming: target, error: null })
+      try {
+        await save()
+      } finally {
+        setState({ confirming: null })
+      }
+    },
     setDraftStatus(clientId, status) {
       setState({ drafts: state.drafts.map((d) => (d.clientId === clientId ? { ...d, status } : d)) })
     },
     updateDraftAct(clientId, patch) {
       setState({
-        drafts: state.drafts.map((d) => (d.clientId === clientId && d.act ? { ...d, act: { ...d.act, ...patch } } : d)),
+        drafts: state.drafts.map((draft) => draft.clientId === clientId && draft.act
+          ? { ...draft, act: { ...draft.act, ...patch } }
+          : draft),
       })
     },
     clearFinished() {
@@ -66,7 +82,7 @@ export function createDraftStore(): DraftStore {
     },
     async submit(rawText) {
       const trimmed = rawText.trim()
-      if (!trimmed || state.loading) return false
+      if (!trimmed || state.loading || trimmed === state.lastExtractedText) return false
 
       const controller = new AbortController()
       abortController = controller
@@ -97,7 +113,10 @@ export function createDraftStore(): DraftStore {
           clientId: `${Date.now()}-${nextId++}`,
           status: 'pending',
         }))
-        setState({ drafts: [...newDrafts, ...state.drafts], text: '' })
+        setState({
+          drafts: [...newDrafts, ...state.drafts],
+          ...(keepTextOnSuccess ? { lastExtractedText: trimmed } : { text: '' }),
+        })
         return true
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return false
@@ -111,5 +130,5 @@ export function createDraftStore(): DraftStore {
   }
 }
 
-export const brainDumpStore = createDraftStore()
+export const brainDumpStore = createDraftStore({ keepTextOnSuccess: true })
 export const captureStore = createDraftStore()

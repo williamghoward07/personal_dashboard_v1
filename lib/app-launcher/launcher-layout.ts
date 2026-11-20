@@ -26,7 +26,8 @@ export function launcherHeightForRows(rows: number): number | undefined {
 }
 
 export function launcherColumns(span: HomeWidgetSpan, width: number): number {
-  const tileWidth = 72
+  // 64px tiles (labels ellipsise) fit four across a ~340px phone card.
+  const tileWidth = 64
   const columnsThatFit = Math.floor((width + LAUNCHER_TILE_GAP) / (tileWidth + LAUNCHER_TILE_GAP))
   return Math.max(1, Math.min(span * 4, columnsThatFit))
 }

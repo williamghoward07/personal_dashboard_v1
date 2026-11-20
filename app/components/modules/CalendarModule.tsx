@@ -1,361 +1,237 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { CalendarDays, RefreshCw } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { ArrowUpRight, CalendarDays, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Task, ActivitySession } from '@/lib/types'
 import { connectGoogleCalendar } from '@/lib/google/connect'
-import { londonDayBoundsUTC } from '@/lib/google/london-day'
-import { pickNextUpcoming, type UpcomingCandidate } from '@/lib/calendar/next-upcoming'
-import HomeSectionCard from '../widgets/home/HomeSectionCard'
+import { londonToday } from '@/lib/blackboard/dates'
+import { calendarAgendaLayout, calendarDateRange, pickAgendaDays, widgetDensity, type HomeWidgetDimensions } from '@/lib/home/widget-content'
+import { useTimetable } from '@/lib/lectures/use-timetable'
+import { formatDueDay, londonTime } from '../lectures/work-format'
+import { dotClassFor, groupItemsByDate, type CalendarEvent, type DayItem } from '../calendar/calendarItems'
+import WidgetCard from '../WidgetCard'
 import TaskDetailModal from '../widgets/academic/TaskDetailModal'
 
-interface CalendarEvent {
-  id: string
-  title: string
-  allDay: boolean
-  start: string
-  end: string | null
-}
-
-type DayItem =
-  | { kind: 'calendar'; id: string; title: string; allDay: boolean; start: string | null }
-  | { kind: 'task'; id: string; title: string; task: Task }
-  | { kind: 'activity'; id: string; title: string }
-
-type UpcomingItem = UpcomingCandidate & { task?: Task }
-
-const DOT_CLASS: Record<DayItem['kind'], string> = {
-  calendar: 'bg-on-surface-variant',
-  task: 'bg-academic-orange',
-  activity: 'bg-primary-container',
-}
-
-// How far ahead to look for a next-upcoming item once today and tomorrow
-// are both confirmed empty. A personal calendar rarely has a gap this long,
-// so this is a generous ceiling rather than a tuned value — going further
-// adds cost without meaningfully improving what a "what's next" glance shows.
+const AGENDA_DAYS = 14
 const UPCOMING_LOOKAHEAD_DAYS = 90
 
-// Caps per day-section so a busy day can't blow out the bento card's height
-// — mirrors the "+N more" truncation WeekRow.tsx uses on the full calendar.
-const TODAY_CAP = 4
-const TOMORROW_CAP = 3
-
-function buildDayItems(events: CalendarEvent[], tasks: Task[], sessions: ActivitySession[]): DayItem[] {
-  const allDayItems: DayItem[] = [
-    ...events
-      .filter((e) => e.allDay)
-      .map((e): DayItem => ({ kind: 'calendar', id: e.id, title: e.title, allDay: true, start: null })),
-    ...tasks.map((t): DayItem => ({ kind: 'task', id: t.id, title: t.title, task: t })),
-    ...sessions.map(
-      (s): DayItem => ({
-        kind: 'activity',
-        id: s.id,
-        title: `${s.activity_type}${s.duration_minutes ? ` — ${s.duration_minutes}m` : ''}`,
-      })
-    ),
-  ]
-
-  const timedItems: DayItem[] = events
-    .filter((e) => !e.allDay)
-    .sort((a, b) => a.start.localeCompare(b.start))
-    .map((e) => ({ kind: 'calendar', id: e.id, title: e.title, allDay: false, start: e.start }))
-
-  return [...allDayItems, ...timedItems]
+interface CalendarRows {
+  events: CalendarEvent[]
+  tasks: Task[]
+  sessions: ActivitySession[]
+  needsReconnect: boolean
+  failed: boolean
 }
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Europe/London',
-  })
-}
+type DateGroup = [date: string, items: DayItem[]]
 
-// sortKey is either a plain 'YYYY-MM-DD' (all-day/task/manual activity) or a full
-// ISO datetime (timed calendar event) — see UpcomingCandidate.
-function formatUpcomingWhen(sortKey: string, allDay: boolean) {
-  const instant = allDay ? `${sortKey}T00:00:00Z` : sortKey
-  const datePart = new Date(instant).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'Europe/London',
-  })
-  return allDay ? datePart : `${datePart} · ${formatTime(sortKey)}`
-}
-
-export default function CalendarModule() {
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [sessions, setSessions] = useState<ActivitySession[]>([])
-  const [events, setEvents] = useState<CalendarEvent[]>([])
-  const [tomorrowTasks, setTomorrowTasks] = useState<Task[]>([])
-  const [tomorrowSessions, setTomorrowSessions] = useState<ActivitySession[]>([])
-  const [tomorrowEvents, setTomorrowEvents] = useState<CalendarEvent[]>([])
-  const [needsReconnect, setNeedsReconnect] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
-
-  const [upcoming, setUpcoming] = useState<UpcomingItem | null>(null)
-  const [upcomingLoading, setUpcomingLoading] = useState(false)
-
-  useEffect(() => {
-    const todayRange = londonDayBoundsUTC()
-    const tomorrowRange = londonDayBoundsUTC(new Date(Date.now() + 86_400_000))
-
-    Promise.all([
-      supabase.from('tasks').select('*').eq('due_date', todayRange.startDateKey),
-      supabase
-        .from('activity_sessions')
-        .select('*')
-        .gte('occurred_at', todayRange.timeMin)
-        .lt('occurred_at', todayRange.timeMax),
-      fetch('/api/calendar/today')
-        .then(async (res) => {
-          if (res.status === 409) {
-            setNeedsReconnect(true)
-            return []
-          }
-          if (!res.ok) return []
-          const json = await res.json()
-          return (json.events ?? []) as CalendarEvent[]
-        })
-        .catch(() => []),
-      supabase.from('tasks').select('*').eq('due_date', tomorrowRange.startDateKey),
-      supabase
-        .from('activity_sessions')
-        .select('*')
-        .gte('occurred_at', tomorrowRange.timeMin)
-        .lt('occurred_at', tomorrowRange.timeMax),
-      fetch(
-        `/api/calendar/range?${new URLSearchParams({
-          timeMin: tomorrowRange.timeMin,
-          timeMax: tomorrowRange.timeMax,
-        }).toString()}`
-      )
-        .then(async (res) => {
-          if (!res.ok) return []
-          const json = await res.json()
-          return (json.events ?? []) as CalendarEvent[]
-        })
-        .catch(() => []),
-    ]).then(([t, s, e, tt, ts, te]) => {
-      setTasks(t.data ?? [])
-      setSessions(s.data ?? [])
-      setEvents(e)
-      setTomorrowTasks(tt.data ?? [])
-      setTomorrowSessions(ts.data ?? [])
-      setTomorrowEvents(te)
-      setLoading(false)
-    })
-  }, [])
-
-  // Calendar all-day events, tasks due that day, and activity sessions sort
-  // before timed calendar events, which are then ordered by start time.
-  const items = buildDayItems(events, tasks, sessions)
-  const tomorrowItems = buildDayItems(tomorrowEvents, tomorrowTasks, tomorrowSessions)
-  const isEmpty = !loading && !needsReconnect && items.length === 0
-  const isTomorrowEmpty = !loading && !needsReconnect && tomorrowItems.length === 0
-
-  // Only fetch "what's next" once today AND tomorrow are confirmed empty —
-  // the common case (something's on in the next two days) never needs this
-  // second round trip.
-  useEffect(() => {
-    if (!isEmpty || !isTomorrowEmpty) {
-      setUpcoming(null)
-      return
-    }
-
-    let cancelled = false
-    setUpcomingLoading(true)
-
-    const tomorrowRange = londonDayBoundsUTC(new Date(Date.now() + 86_400_000))
-    const windowEnd = londonDayBoundsUTC(new Date(Date.now() + UPCOMING_LOOKAHEAD_DAYS * 86_400_000))
-    const rangeParams = new URLSearchParams({
-      timeMin: tomorrowRange.timeMax, // tomorrow's exclusive end == day-after-tomorrow's start
-      timeMax: windowEnd.timeMax,
-    })
-
-    Promise.all([
-      supabase
-        .from('tasks')
-        .select('*')
-        .gt('due_date', tomorrowRange.startDateKey)
-        .order('due_date', { ascending: true })
-        .limit(1),
-      supabase
-        .from('activity_sessions')
-        .select('*')
-        .gt('occurred_at', tomorrowRange.timeMax)
-        .order('occurred_at', { ascending: true })
-        .limit(1),
-      fetch(`/api/calendar/range?${rangeParams.toString()}`)
-        .then(async (res) => {
-          if (!res.ok) return []
-          const json = await res.json()
-          return (json.events ?? []) as CalendarEvent[]
-        })
-        .catch(() => []),
-    ]).then(([taskRes, activityRes, rangeEvents]) => {
-      if (cancelled) return
-
-      const candidates: UpcomingItem[] = [
-        ...(taskRes.data ?? []).map(
-          (t): UpcomingItem => ({
-            kind: 'task',
-            id: t.id,
-            title: t.title,
-            allDay: true,
-            sortKey: t.due_date as string,
-            task: t,
-          })
-        ),
-        ...(activityRes.data ?? []).map(
-          (s): UpcomingItem => ({
-            kind: 'activity',
-            id: s.id,
-            title: `${s.activity_type}${s.duration_minutes ? ` — ${s.duration_minutes}m` : ''}`,
-            // Manual entries have no real time (the form is date-only);
-            // a Strava import's occurred_at does, so it's worth showing.
-            allDay: s.source === 'manual',
-            sortKey: s.occurred_at,
-          })
-        ),
-        ...rangeEvents.map(
-          (e): UpcomingItem => ({
-            kind: 'calendar',
-            id: e.id,
-            title: e.title,
-            allDay: e.allDay,
-            sortKey: e.start,
-          })
-        ),
-      ]
-
-      setUpcoming(pickNextUpcoming(candidates))
-      setUpcomingLoading(false)
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [isEmpty, isTomorrowEmpty])
-
-  function renderDayItem(item: DayItem) {
-    return (
-      <li key={`${item.kind}-${item.id}`} className="flex items-center gap-2">
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT_CLASS[item.kind]}`} />
-        {item.kind === 'calendar' && !item.allDay && item.start && (
-          <span className="shrink-0 text-xs tabular-nums text-on-surface-variant">{formatTime(item.start)}</span>
-        )}
-        {item.kind === 'task' ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              setSelectedTask(item.task)
-            }}
-            className="truncate text-left text-on-surface hover:underline"
-          >
-            {item.title}
-          </button>
-        ) : (
-          <span className="truncate text-on-surface">{item.title}</span>
-        )}
-      </li>
-    )
+async function fetchEvents(timeMin: string, timeMax: string) {
+  try {
+    const res = await fetch(`/api/calendar/range?${new URLSearchParams({ timeMin, timeMax })}`)
+    if (!res.ok) return { events: [], needsReconnect: res.status === 409, failed: res.status !== 409 }
+    const { events = [] } = await res.json() as { events?: CalendarEvent[] }
+    return { events, needsReconnect: false, failed: false }
+  } catch {
+    return { events: [], needsReconnect: false, failed: true }
   }
+}
 
+function CalendarDay({
+  heading,
+  items,
+  limit,
+  showLocation,
+  compact,
+  onTask,
+}: {
+  heading: string
+  items: DayItem[]
+  limit: number
+  showLocation: boolean
+  compact: boolean
+  onTask: (task: Task) => void
+}) {
   return (
-    <HomeSectionCard href="/calendar" title="Calendar" icon={<CalendarDays className="h-4 w-4" />} accent="neutral">
-      {loading ? (
-        <p>Loading...</p>
-      ) : needsReconnect ? (
-        <div className="flex flex-col items-start gap-2">
-          <p>Google Calendar isn&apos;t connected.</p>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              connectGoogleCalendar()
-            }}
-            className="flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-1.5 text-xs font-semibold text-on-surface hover:bg-surface-container-high"
-          >
-            <RefreshCw className="h-3 w-3" />
-            Reconnect Google Calendar
-          </button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Today</p>
-            {isEmpty ? (
-              <p>Nothing on today.</p>
-            ) : (
-              <ul className="flex flex-col gap-2 text-sm">
-                {items.slice(0, TODAY_CAP).map(renderDayItem)}
-                {items.length > TODAY_CAP && (
-                  <li className="text-xs text-on-surface-variant">+{items.length - TODAY_CAP} more</li>
+    <section className="min-w-0 border-t border-outline-variant/50 pt-2">
+      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{heading}</h3>
+      {items.length === 0 ? <p className="text-xs">Nothing scheduled.</p> : (
+        <ul className="space-y-1">
+          {items.slice(0, limit).map((item) => {
+            const time = item.kind === 'calendar' || item.kind === 'session' ? item.start : null
+            const location = showLocation && item.kind === 'session' ? item.session.location : null
+            const meta = [time && londonTime(time), location].filter(Boolean).join(' · ')
+            return (
+              <li key={`${item.kind}-${item.id}`} className={compact ? 'grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2' : 'flex min-w-0 items-start gap-2'}>
+                {compact ? (
+                  <span className="pt-0.5 text-xs tabular-nums text-on-surface-variant">{time ? londonTime(time) : ''}</span>
+                ) : (
+                  <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${dotClassFor(item)}`} aria-hidden="true" />
                 )}
-              </ul>
-            )}
-          </div>
-
-          <div className="border-t border-outline-variant/50" />
-
-          <div className="flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Tomorrow</p>
-            {isTomorrowEmpty ? (
-              <p>Nothing tomorrow.</p>
-            ) : (
-              <ul className="flex flex-col gap-2 text-sm">
-                {tomorrowItems.slice(0, TOMORROW_CAP).map(renderDayItem)}
-                {tomorrowItems.length > TOMORROW_CAP && (
-                  <li className="text-xs text-on-surface-variant">+{tomorrowItems.length - TOMORROW_CAP} more</li>
-                )}
-              </ul>
-            )}
-          </div>
-
-          {isEmpty && isTomorrowEmpty && (
-            <>
-              <div className="border-t border-outline-variant/50" />
-              {upcomingLoading ? (
-                <p className="text-xs text-on-surface-variant">Loading next event…</p>
-              ) : upcoming ? (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${DOT_CLASS[upcoming.kind]}`} />
-                  <span className="shrink-0 text-xs tabular-nums text-on-surface-variant">
-                    {formatUpcomingWhen(upcoming.sortKey, upcoming.allDay)}
-                  </span>
-                  {upcoming.kind === 'task' && upcoming.task ? (
+                <div className="min-w-0">
+                  {item.kind === 'task' ? (
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setSelectedTask(upcoming.task ?? null)
-                      }}
-                      className="truncate text-left text-on-surface hover:underline"
+                      onClick={() => onTask(item.task)}
+                      className={`relative z-10 inline-flex min-h-11 min-w-11 max-w-full items-center rounded text-left break-words text-on-surface hover:underline [@media(pointer:fine)]:min-h-6 ${compact ? 'line-clamp-2' : ''}`}
                     >
-                      {upcoming.title}
+                      {item.title}
                     </button>
-                  ) : (
-                    <span className="truncate text-on-surface">{upcoming.title}</span>
-                  )}
+                  ) : <p className={`break-words text-on-surface ${compact ? 'line-clamp-2' : ''}`}>{item.title}</p>}
+                  {!compact && meta && <p className="break-words text-xs tabular-nums text-on-surface-variant">{meta}</p>}
                 </div>
-              ) : (
-                <p className="text-xs text-on-surface-variant">Nothing upcoming either.</p>
-              )}
-            </>
-          )}
-        </div>
+              </li>
+            )
+          })}
+          {items.length > limit && <li className="text-xs">+{items.length - limit} more</li>}
+        </ul>
       )}
+    </section>
+  )
+}
 
+export default function CalendarModule(dimensions: HomeWidgetDimensions) {
+  const [today] = useState(() => londonToday(new Date()))
+  const [rows, setRows] = useState<CalendarRows | null>(null)
+  const [laterRows, setLaterRows] = useState<CalendarRows | null>(null)
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const agendaRange = useMemo(() => calendarDateRange(today, AGENDA_DAYS), [today])
+  const lookaheadRange = useMemo(() => calendarDateRange(today, UPCOMING_LOOKAHEAD_DAYS), [today])
+  const timetable = useTimetable(lookaheadRange)
+  const { startDateKey, endDateKey, timeMin, timeMax } = agendaRange
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      fetchEvents(timeMin, timeMax),
+      supabase.from('tasks').select('*').gte('due_date', startDateKey).lt('due_date', endDateKey),
+      supabase.from('activity_sessions').select('*').gte('occurred_at', timeMin).lt('occurred_at', timeMax),
+    ]).then(([calendar, tasks, sessions]) => {
+      if (cancelled) return
+      setRows({
+        ...calendar,
+        tasks: tasks.data ?? [],
+        sessions: sessions.data ?? [],
+        failed: calendar.failed || !!tasks.error || !!sessions.error,
+      })
+    })
+    return () => { cancelled = true }
+  }, [startDateKey, endDateKey, timeMin, timeMax])
+
+  const days = useMemo(() => {
+    if (!rows) return []
+    const groups = groupItemsByDate({
+      ...rows,
+      routineInstances: [],
+      timetable: timetable.sessions,
+      tracked: timetable.tracked,
+    })
+    return [...groups].filter(([date]) => date >= startDateKey && date < endDateKey).sort(([a], [b]) => a.localeCompare(b))
+  }, [rows, timetable.sessions, timetable.tracked, startDateKey, endDateKey])
+
+  // Only look beyond the agenda when both sources are ready and it contains no events.
+  const shouldFetchLater = !!rows && !timetable.loading && days.length === 0
+  const needsReconnect = rows?.needsReconnect ?? false
+  useEffect(() => {
+    if (!shouldFetchLater) return
+    let cancelled = false
+    const laterEnd = lookaheadRange.endDateKey
+    const laterTimeMax = lookaheadRange.timeMax
+    const events = needsReconnect
+      ? Promise.resolve({ events: [], needsReconnect, failed: false })
+      : fetchEvents(timeMax, laterTimeMax)
+    Promise.all([
+      events,
+      supabase.from('tasks').select('*').gte('due_date', endDateKey).lt('due_date', laterEnd).order('due_date').limit(1),
+      supabase.from('activity_sessions').select('*').gte('occurred_at', timeMax).lt('occurred_at', laterTimeMax).order('occurred_at').limit(1),
+    ]).then(([calendar, tasks, sessions]) => {
+      if (cancelled) return
+      setLaterRows({
+        ...calendar,
+        tasks: tasks.data ?? [],
+        sessions: sessions.data ?? [],
+        failed: calendar.failed || !!tasks.error || !!sessions.error,
+      })
+    })
+    return () => { cancelled = true }
+  }, [shouldFetchLater, needsReconnect, endDateKey, timeMax, lookaheadRange])
+
+  const density = widgetDensity(dimensions)
+  const layout = calendarAgendaLayout(dimensions)
+  const tomorrow = calendarDateRange(today, 1).endDateKey
+  const later = laterRows && [...groupItemsByDate({
+    ...laterRows,
+    routineInstances: [],
+    timetable: timetable.sessions,
+    tracked: timetable.tracked,
+  })].filter(([date]) => date >= endDateKey && date < lookaheadRange.endDateKey).sort(([a], [b]) => a.localeCompare(b))[0]
+  const next = later
+
+  const shown: DateGroup[] = days.some(([, items]) => items.length > 0)
+    ? pickAgendaDays(days, today, layout.maxDays)
+    : []
+  const loading = !rows || timetable.loading
+  const failed = rows?.failed || (timetable.error && timetable.error !== 'not_configured')
+  const nextFailed = laterRows?.failed
+
+  return (
+    <>
+      <WidgetCard
+        title="Calendar"
+        icon={<CalendarDays className="h-4 w-4" />}
+        className="relative h-full min-w-0"
+        action={
+          <Link
+            href="/calendar"
+            aria-label="Open Calendar"
+            className="grid min-h-11 min-w-11 place-items-center rounded text-on-surface-variant after:absolute after:inset-0 after:rounded-xl hover:text-on-surface [@media(pointer:fine)]:min-h-6 [@media(pointer:fine)]:min-w-6"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
+        }
+      >
+        {loading ? <p>Loading calendar…</p> : (
+          <div className="space-y-3">
+            {(needsReconnect || laterRows?.needsReconnect) && (
+              <div className="space-y-1">
+                <p>Google Calendar isn&apos;t connected.</p>
+                <button
+                  type="button"
+                  onClick={() => connectGoogleCalendar()}
+                  className="relative z-10 inline-flex min-h-11 max-w-full items-center gap-2 rounded-md border border-outline-variant px-2.5 text-left text-xs font-semibold text-on-surface hover:bg-surface-container-high"
+                >
+                  <RefreshCw className="h-3 w-3 shrink-0" />
+                  Reconnect Google Calendar
+                </button>
+              </div>
+            )}
+            {shown.length > 0 ? (
+              <div className="grid grid-cols-1 items-start gap-3 @min-[620px]/home-widget:grid-cols-2 @min-[980px]/home-widget:grid-cols-3">
+                {shown.map(([date, items]) => (
+                  <CalendarDay
+                    key={date}
+                    heading={date === today ? 'Today' : date === tomorrow ? 'Tomorrow' : formatDueDay(date)}
+                    items={items}
+                    limit={date === today ? layout.todayLimit : layout.dayLimit}
+                    showLocation={density > 0} compact={density === 0}
+                    onTask={setSelectedTask}
+                  />
+                ))}
+              </div>
+            ) : (
+              <>
+                <p>Nothing scheduled in the next {AGENDA_DAYS} days.</p>
+                {next ? (
+                  <CalendarDay heading={`Next up · ${formatDueDay(next[0])}`} items={next[1]} limit={1} showLocation={density > 0} compact={density === 0} onTask={setSelectedTask} />
+                ) : !laterRows ? <p className="text-xs">Looking for the next event…</p> : null}
+              </>
+            )}
+            {(failed || nextFailed) && <p className="text-xs text-error">Some calendar data could not be loaded.</p>}
+          </div>
+        )}
+      </WidgetCard>
       {selectedTask && <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} />}
-    </HomeSectionCard>
+    </>
   )
 }

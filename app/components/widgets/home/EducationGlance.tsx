@@ -4,23 +4,14 @@ import { useEffect, useState } from 'react'
 import { GraduationCap } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { Task } from '@/lib/types'
-import type { HomeWidgetProps } from '@/lib/home/layout'
+import { widgetDensity, type HomeWidgetDimensions } from '@/lib/home/widget-content'
+import { londonDayBoundsUTC } from '@/lib/google/london-day'
+import { formatDueDay } from '../../lectures/work-format'
 import HomeSectionCard from './HomeSectionCard'
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10)
-}
+const MAX_ROWS = 10
 
-// A wider card can afford more deadlines. Fetched once at the ceiling and
-// sliced in render, so dragging the card wider never refetches.
-const MAX_ROWS = 8
-function rowsForSpan(span: number) {
-  if (span >= 3) return MAX_ROWS
-  if (span === 2) return 5
-  return 3
-}
-
-export default function EducationGlance({ span = 1 }: HomeWidgetProps) {
+export default function EducationGlance(dimensions: HomeWidgetDimensions) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -28,7 +19,7 @@ export default function EducationGlance({ span = 1 }: HomeWidgetProps) {
     supabase
       .from('tasks')
       .select('*')
-      .gte('due_date', todayISO())
+      .gte('due_date', londonDayBoundsUTC().startDateKey)
       .order('due_date', { ascending: true })
       .limit(MAX_ROWS)
       .then(({ data }) => {
@@ -37,7 +28,8 @@ export default function EducationGlance({ span = 1 }: HomeWidgetProps) {
       })
   }, [])
 
-  const shown = tasks.slice(0, rowsForSpan(span))
+  const density = widgetDensity(dimensions)
+  const shown = tasks.slice(0, [3, 6, MAX_ROWS][density])
 
   return (
     <HomeSectionCard href="/education" title="Education" icon={<GraduationCap className="h-4 w-4" />} accent="orange">
@@ -46,11 +38,13 @@ export default function EducationGlance({ span = 1 }: HomeWidgetProps) {
       ) : shown.length === 0 ? (
         <p>Nothing due soon.</p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
+        <ul className="grid gap-x-5 gap-y-2 @min-[680px]/home-widget:grid-cols-2">
           {shown.map((t) => (
-            <li key={t.id} className="flex items-center justify-between gap-2 text-on-surface">
-              <span className="truncate">{t.title}</span>
-              <span className="shrink-0 text-xs text-on-surface-variant">{t.due_date}</span>
+            <li key={t.id} className="min-w-0">
+              <p className="wrap-anywhere text-on-surface">{t.title}</p>
+              <p className="wrap-anywhere text-xs text-on-surface-variant">
+                {[t.due_date && formatDueDay(t.due_date), density > 0 && t.type].filter(Boolean).join(' · ')}
+              </p>
             </li>
           ))}
         </ul>

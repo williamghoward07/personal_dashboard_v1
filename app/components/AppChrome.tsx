@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import { PageTitleDocumentSync, PageTitleProvider } from '@/lib/page-title'
+import AccountMenu, { useChromeAccount } from './AccountMenu'
 import Sidebar from './Sidebar'
 import TopAppBar from './TopAppBar'
 import MobileBottomNav from './MobileBottomNav'
@@ -17,6 +18,11 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
+  return <AuthenticatedChrome pathname={pathname}>{children}</AuthenticatedChrome>
+}
+
+function AuthenticatedChrome({ pathname, children }: { pathname: string; children: React.ReactNode }) {
+  const account = useChromeAccount()
   const isWorkspace = pathname === '/' ||
     pathname === '/lectures' ||
     pathname.startsWith('/lectures/') ||
@@ -27,9 +33,12 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
       <SettingsProvider>
         <PageTitleDocumentSync />
         <div className={isWorkspace ? `workspace-ui ${styles.shell}` : styles.shell}>
-          <Sidebar compact={isWorkspace} />
+          <Sidebar
+            compact={isWorkspace}
+            accountMenu={isWorkspace ? <AccountMenu account={account} /> : undefined}
+          />
           <div className={`${styles.content}${isWorkspace ? '' : ` ${styles.legacyContent}`}`}>
-            <TopAppBar compact={isWorkspace} />
+            {!isWorkspace && <TopAppBar account={account} />}
             {children}
           </div>
           <MobileBottomNav />

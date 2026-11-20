@@ -1,5 +1,6 @@
 'use client'
 
+import type { MouseEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowUpRight, LayoutGrid } from 'lucide-react'
@@ -20,7 +21,7 @@ import { useAppSettings } from '../../settings/SettingsProvider'
 import WidgetCard from '../../WidgetCard'
 import FaviconTile from './FaviconTile'
 import LauncherMenu from './LauncherMenu'
-import LauncherDialog, { LauncherApp } from './LauncherDialog'
+import LauncherDialog, { LAUNCHER_LABEL_CLASS, LAUNCHER_TILE_CLASS, LauncherApp } from './LauncherDialog'
 
 // Per-browser "have we already tried the one-time is_pinned -> ordered
 // array seed" marker (see the effect below). A Set of size 0 or 1 is a
@@ -49,7 +50,13 @@ export default function AppLauncherGlance({ span = 1, height }: HomeWidgetProps)
   const [seedMarker, setSeedMarker] = useStoredIdSet(SEED_MARKER_KEY)
   const gridRef = useRef<HTMLDivElement | null>(null)
   const [gridWidth, setGridWidth] = useState(0)
-  const [dialog, setDialog] = useState<{ title: string; links: LauncherLink[] } | null>(null)
+  const [dialog, setDialog] = useState<{ title: string; links: LauncherLink[]; origin: DOMRect; trigger: HTMLElement } | null>(null)
+  const [dimmed, setDimmed] = useState(false)
+  const openDialog = (event: MouseEvent<HTMLElement>, title: string, dialogLinks: LauncherLink[]) => {
+    const trigger = event.currentTarget
+    setDialog({ title, links: dialogLinks, origin: trigger.getBoundingClientRect(), trigger })
+    setDimmed(true)
+  }
 
   useEffect(() => {
     const grid = gridRef.current
@@ -135,11 +142,13 @@ export default function AppLauncherGlance({ span = 1, height }: HomeWidgetProps)
           <p>No apps selected yet — choose some from the menu above, or the App Library.</p>
         ) : (
           <div
-            className="grid"
+            className="grid origin-center transition-[transform,opacity] duration-300 motion-reduce:transition-none"
+            data-dimmed={dimmed || undefined}
             style={{
               gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
               gridAutoRows: LAUNCHER_TILE_HEIGHT,
               gap: LAUNCHER_TILE_GAP,
+              ...(dimmed ? { transform: 'scale(0.97)', opacity: 0.6 } : null),
             }}
           >
             {visibleItems.map((item) => item.type === 'link' ? (
@@ -147,16 +156,16 @@ export default function AppLauncherGlance({ span = 1, height }: HomeWidgetProps)
             ) : (
               <button key={item.folder.id} type="button" title={item.folder.name}
                 aria-label={`Open ${item.folder.name} folder`}
-                onClick={() => setDialog({ title: item.folder.name, links: item.links })}
-                className="flex min-h-11 min-w-0 flex-col items-center justify-start gap-1 rounded-lg p-1 hover:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                onClick={(event) => openDialog(event, item.folder.name, item.links)}
+                className={LAUNCHER_TILE_CLASS}>
                 <span aria-hidden="true" className="grid h-8 w-8 grid-cols-2 grid-rows-2 gap-0.5 rounded-lg bg-surface-container-high p-px">
                   {item.links.slice(0, 4).map((link) => <FaviconTile key={link.id} title={link.title} url={link.url} faviconPath={link.favicon_path} faviconCustomUrl={link.favicon_custom_url} size="xs" />)}
                 </span>
-                <span className="line-clamp-2 w-full break-words text-center text-xs leading-4 text-on-surface-variant">{item.folder.name}</span>
+                <span className={LAUNCHER_LABEL_CLASS}>{item.folder.name}</span>
               </button>
             ))}
             {hasOverflow && (
-              <button type="button" onClick={() => setDialog({ title: 'All selected apps', links: selectedLinks })}
+              <button type="button" onClick={(event) => openDialog(event, 'All selected apps', selectedLinks)}
                 className="min-h-11 rounded-lg px-1 text-center text-xs font-medium text-on-surface-variant hover:bg-surface-container-high">
                 Show all<br />{selectedLinks.length} apps
               </button>
@@ -164,7 +173,8 @@ export default function AppLauncherGlance({ span = 1, height }: HomeWidgetProps)
           </div>
         )}
       </div>
-      {dialog && <LauncherDialog title={dialog.title} links={dialog.links} onClose={() => setDialog(null)} />}
+      {dialog && <LauncherDialog title={dialog.title} links={dialog.links} origin={dialog.origin} returnFocusTo={dialog.trigger}
+        onClosing={() => setDimmed(false)} onClose={() => { setDialog(null); setDimmed(false) }} />}
     </WidgetCard>
   )
 }

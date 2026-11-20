@@ -169,14 +169,14 @@ export default function DailyGoals() {
       </div>
 
       <GlassCardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-foreground">
+        <div className="-my-2.5 flex items-center justify-between gap-2 [@media(pointer:fine)]:my-0">
+          <h2 className="flex min-w-0 items-center gap-2 font-display text-sm font-semibold text-foreground">
             <Target className="h-4 w-4 text-on-surface-variant" aria-hidden="true" />
             Personal todos
           </h2>
           <Link
             href="/todos"
-            className="shrink-0 text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline"
+            className="inline-flex min-h-11 shrink-0 items-center text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline [@media(pointer:fine)]:min-h-6"
           >
             All todos →
           </Link>
@@ -227,7 +227,7 @@ export default function DailyGoals() {
                     />
                     <label
                       htmlFor={inputId}
-                      className={`cursor-pointer wrap-anywhere text-sm ${
+                      className={`cursor-pointer break-words text-sm ${
                         completed ? 'text-on-surface-variant line-through' : 'text-on-surface'
                       }`}
                     >
@@ -264,7 +264,7 @@ export default function DailyGoals() {
           {!todosLoading && !todosError && moreParts.length > 0 && (
             <Link
               href="/todos"
-              className="w-fit text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline"
+              className="inline-flex min-h-11 w-fit items-center text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline [@media(pointer:fine)]:min-h-6"
             >
               {moreParts.join(' · ')} →
             </Link>

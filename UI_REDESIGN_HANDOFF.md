@@ -1,130 +1,93 @@
-# Study Copilot UI redesign — living handoff
+# Study Copilot UI — living handoff
 
-Updated: 15 November 2026, Europe/London.
+Updated: 16 November 2026, Europe/London. This file is maintained by the working agent, not a background automation.
 
-## Read first: task and working instructions
+## Current task — read this first
 
-The user-approved Home/sidebar, Lectures and Calendar redesign is implemented. The first signed-in desktop review in **Comet** captured Home, Lectures and Calendar Week and identified corrections now in the checkout. The server is running at `http://localhost:3001`. The remaining work is post-fix visual verification and the interaction checks below when the signed-in Comet window is available for automation again.
+Build the approved Tasks, Brain dump and Workspaces redesigns. User selected **preview 04 for Tasks and Workspaces**, and **preview 02A for Brain dump**. Keep them separate screens and data models. The earlier request to mix 01 and 03 was superseded by the explicit final selection of 04. Do not ask for design approval again. Preserve existing features and live data. Prioritise useful information density, fast actions, consistency and mobile/tablet/desktop usability.
 
-The user explicitly selected:
-- Review localhost against the approved images, then fix clear mismatches.
-- Use **Sol/Terra** for focused edits and tests. Reserve a stronger model for difficult decisions.
-- Keep this plan current at the start, after every major task, after verification, and before handing off or reaching a usage/context limit.
-- Ask material design questions using clickable options in chat. Do not repeatedly request permission for already-approved implementation.
-- Open a fresh continuation chat with a concise handoff when context becomes unwieldy. A new chat cannot be assumed to reset account usage limits.
+Implementation is running in isolated branches based on verified remote main `b92e2db`. Do NOT implement against or reset the original dirty checkout. Claude already shipped the earlier Home/widget/sidebar work to main. Its newer optional phone compact/tap-expand commit `2c0671f` is only on `claude/inspiring-hermann-4a677b`; do not silently merge it.
 
-**This file is updated by the working agent; it is not a background automation.** Mark claims as verified, failed, or not checked. A passing test is not proof of visual fidelity. Review outputs critically against the user's request after each major task, adjust the next steps based on the evidence, and preserve unresolved problems here.
+The user explicitly requested separate task branches, Sol/Terra for focused edits/tests, and a new chat handoff when appropriate. Plan: finish integration and automated validation in this chat; start a fresh Sol/Terra chat for signed-in Comet visual review and fixes with this document and exact server state. Do not hand off active file ownership without recording it.
 
-## Original brief and decisions
+## Worktrees and ownership
 
-The old Home looked generic/AI-generated: excessive blank space, oversized query panel and progress ring, repeated headers, neon/glass decoration, and redundant service/account information. The user asked for a full critical UI pass, online visual references and generated wireframes before implementation. They preferred Sunsama's restrained visual style and chose the **second concept, B**, a compact widget Home. They then approved refined Home, Lectures and Calendar previews.
+- Integration: `/private/tmp/study-next-screens`, branch `codex/remaining-screens`, starts at `b92e2db`. Root owns AppChrome, mobile navigation, shared scope and integration.
+- Tasks: `/private/tmp/study-tasks-ui`, `codex/tasks-ui`, Terra agent `tasks_refinement_resume`. Owns task components in `widgets/daily-goals`, HabitsTodosBoard, Tasks route wrappers and local styles/tests. Preserve shared Home component defaults.
+- Brain dump: `/private/tmp/study-capture-ui`, `codex/capture-ui`, Sol agent `capture_resume`. Owns Brain dump page/widget, opt-in shared DraftList/DraftCard presentation and opt-in store text retention. Preserve Home capture semantics.
+- Workspaces: `/private/tmp/study-workspaces-ui`, `codex/workspaces-ui`, Terra agent `workspaces_refinement_resume`. Owns workspace index/detail components, routes and local styles/tests.
+- Original repo: `/Users/williamhoward/local_projects_1/personal_dashboard_v1`, branch `codex/home-widget-refinement`, HEAD `913cf6f`, has superseded uncommitted changes. **Preserve them; do not reset or cherry-pick them.**
+- Dependencies are symlinked from original repo into new worktrees. Preview worktree has local environment symlinks; never print or commit secret values.
 
-Approved direction:
-- Warm ivory page, white flat cards, neutral borders, muted sage and module accents, readable compact typography. Reduce decoration and wasted space while retaining functionality.
-- Home is **study first**: academic deadlines and lecture preparation take priority; personal todos below. Preserve all widgets, launcher features, resizing, hiding and saved arrangements.
-- Desktop sidebar collapses to icons and expands as a whole on hover. Expansion overlays rather than shifts content. Keyboard focus must also reveal labels.
-- Lectures uses a **work list plus detail panel**, with responsive mobile details. Preserve module/type filters, upcoming/past-due/completed, Blackboard sync/source actions, session prep and follow-up.
-- **Deadline certainty/confirmation is separate from preparation/follow-up completion.** A generated preview confused these; do not reproduce that error.
-- Calendar retains **Month, Week, Day, Routines**, **Grid/Agenda**, zoom, Fit day, auto time-block, reconnect, event/session/deadline details and routine scheduling. All three proposed calendar layouts should remain options.
-- Tighten spare space under the launcher. Avoid duplicate headings, fake checkboxes and hardcoded demonstration data.
+## Approved behaviour
 
-Originally code edits were blocked while another task edited widgets. The user explicitly confirmed that task finished and approved: “Yes—build Home/sidebar first, then Lectures and Calendar.” That authorization remains valid. They now request visual review and correction, plus a localhost preview.
+### Shared shell
 
-## Workspace and preservation constraints
+Extend existing light Home shell to `/todos`, `/habits`, `/brain-dump`, `/workspaces` and nested workspace routes. Retain collapsible global icon rail, expanding on hover/focus without shifting content, with settings/account at bottom. Local list/folder navigation is separate from the global rail. Same mobile navigation across these screens; prefer Home, Calendar, Lectures, Tasks + More while respecting user-hidden items. Do not remove access to other screens.
 
-- Repository: `/Users/williamhoward/local_projects_1/personal_dashboard_v1`
-- Current branch: `codex/study-ui-redesign`; HEAD `ad87d27` at handoff.
-- All redesign changes are **uncommitted**, including new files. Do not reset/clean/stash away working changes or assume HEAD represents the implementation.
-- Another completed widget task's changes are mixed into the working tree. Preserve HomeWidgetFrame resizing/masonry and app-launcher layout/selection changes and tests.
-- This checkout originally lagged behind the site used for screenshots. The clean branch `claude/blackboard-sync-dashboard-44560c` was fast-forwarded into this new branch, then the prior widget edits restored. This retained live Blackboard and calendar functionality.
-- Separate old worktree: `.claude/worktrees/blackboard-sync-dashboard-44560c`. Do not edit it or stop its server without a reason. Port 3000 previously served that worktree, not this checkout.
-- Backup of prior edits: `/private/tmp/study-ui-preexisting.patch`; preservation stash was retained. These are fallback references, not instructions to reapply anything.
-- AGENTS.md requires reading relevant Next 16 guides in `node_modules/next/dist/docs/` before writing code. CSS guide has been read previously; new agents should read relevant guidance.
-- DESIGN.md and CLAUDE.md now record the approved light planning workspace override. Original dark-only/equal-bento rules do not override the user's approved design for these routes. Other routes retain the old theme.
+Style: Sunsama-inspired warm ivory `#f6f5f1`, white flat panels, thin `#dddeda` borders, charcoal `#272b28`, muted sage `#62774f`. Compact headers and controls, no neon/glass/giant status banners. Titles wrap without colliding with actions. Mobile primary text around 16px, secondary readable, touch targets around 44px, safe areas, no horizontal page overflow or hover/drag-only essential actions. Root-scoped `workspace-ui` already themes portalled dialogs.
 
-## Approved reference images — actually view them
+### Tasks — preview 04 top
 
-Directory: `/Users/williamhoward/.codex/generated_images/01a1d4c5-0bf1-7251-b60d-da7004a1e539/`
+Local navigation uses existing task lists and linked workspace filters; **no new nested task-folder database feature**. Dense central task list with completion, date, list/workspace context, star and overflow. Optional right detail panel with separate list/workspace fields, notes/subtasks/edit/complete. Mobile picker + full-screen detail, Back restores place. Todos and Habits remain accessible. Preserve MS To Do connect/status/sync, list CRUD, task CRUD/star/complete, subtasks, extended sort/group, completed history and workspace links. Avoid changing Home task behaviour via shared components.
 
-1. Initial preferred concept B: `exec-b771573d-3194-447f-acdb-bb598d30e794.png`
-2. Refined approved Home: `exec-5cf723bb-279e-47f0-aeb7-eade0d7aa51f.png`
-3. Refined approved Lectures: `exec-6f98115f-010c-490b-8106-60384007996c.png`
-4. Approved Calendar comparison: `exec-fb333221-88b5-4166-ad1f-72a87bdb8e71.png`
+### Brain dump — preview 02A
 
-These are concept illustrations, not screenshots proving implementation. Inspect the **current Home screen** in Comet for real content, layout and interactions, then compare with these references. Do not infer visual success from this document alone. Use actual data; preserve semantic corrections noted above.
+Desktop capture left / review right. Mobile Capture → Review steps; going back retains original text. Extract creates drafts only. Keep extract cancellation/errors, draft editing, per-item confirm/dismiss, eligible bulk confirm, and additional person/interaction review dialogs. Ready vs needs-review stays explicit. **Remove the generated image's redundant top search/customise header and use the shared mobile nav, not its invented different tabs.**
 
-## Implemented changes
+### Workspaces — preview 04 bottom
 
-| Area | Current implementation | Status |
-| --- | --- | --- |
-| Theme | Runtime Tailwind tokens; `app/workspace-ui.css` overrides via `:root:has(.workspace-ui)`, including portalled dialogs. Warm neutral surfaces and flat shared cards. Query mode control flattened. | Build/type checked; visual review pending |
-| Shell | `WorkspaceShell.module.css`, AppChrome, Sidebar, TopAppBar. 64px rail expands to 220px on hover/focus without moving content; 44px workspace header; account/settings/integrations/fullscreen/signout retained. | Seven shell tests passed; hover visual review pending |
-| Home | Compact heading/date/query. Study priorities uses real Blackboard deadlines plus upcoming prep. Personal todos replaces large progress ring, overall rollup honestly labelled. Live London date refresh. | Automated checks passed; visual comparison pending |
-| Layout | New study-first defaults and explicit **Customise → Study layout** preset. Saved orders, sizes, hidden flags and heights preserved. | Tests passed; preview may show old saved arrangement until preset selected |
-| Lectures | Compact header/filter controls, grouped selectable work list, desktop detail panel, mobile focus moves to details. Existing WorkRow/ConnectedSessionPrep actions reused. Removed misleading checkbox and duplicate detail title. | Tests passed; real browser review pending |
-| Calendar | Compact consolidated toolbar; Month selected-day rail (mobile dialog); Day tasks/deadlines rail; calmer month/time-grid styles. All existing views and tools retained. Disconnected Google displays banner while local data remains visible. | 261 targeted tests passed; real browser review pending |
+Keep existing nested folders, compact list default, Cards alternate, optional right selected-workspace preview with Open workspace. Full workspace remains a separate detail route. Mobile folder picker/rows and full-screen detail/back. Preserve folder CRUD/nesting/URL, keyboard and drag/drop/move options, archive/restore, weekly reading/time progress. Detail retains sibling navigation, breadcrumbs, title/subtitle/tags/status, appearance/layout persistence, archive/export, timer/stats, sources/launch set/links, readings, scoped tasks, thinking log and module Lectures linkage. Do not invent new deadline metrics or remove custom layout features.
 
-Key files: `app/page.tsx`, `app/components/home/*`, `app/components/widgets/home/DueSoonGlance.tsx`, `DailyGoals.tsx`, `app/components/lectures/{LecturesBoard,WorkList,WorkRow}.tsx`, `app/components/calendar/*`, `app/components/{AppChrome,Sidebar,TopAppBar,WorkspaceShell.module.css}`, `app/{globals,workspace-ui}.css`, `lib/home/layout.ts`.
+## References — actually view them
 
-## Verified results and limitations
+Directory: `/Users/williamhoward/.codex/generated_images/01a1d4c5-0bf1-7251-b60d-da7004a1e539/`.
 
-- Post-correction whole-checkout test run: **105 files / 1,184 tests passed**, including the new Study layout preview and save regression test.
-  Command: `npx vitest run --exclude '**/.claude/**' --reporter=dot`
-  Log: `/private/tmp/study-ui-review-tests.log`.
-- Post-correction `npm run build`: passed, exit 0, including TypeScript. Log: `/private/tmp/study-ui-review-build.log`.
-- TypeScript: passed, including final Calendar source. `npx tsc --noEmit --incremental false`.
-- Changed-file ESLint checks passed. Full Calendar directory lint still has three existing `set-state-in-effect` errors in unchanged RoutineInstanceModal, RoutineSidebar and TimeBlockWizardModal. Do not claim global lint is clean.
-- `git diff --check`: passed.
-- Duplicate generated `.next/types/* 2.ts` caused an earlier type failure. Those generated duplicates were moved to `/private/tmp/study-ui-generated-type-backup`; application code did not require changes for this.
-- Vitest otherwise discovers nested `.claude` worktrees, so keep the exclusion above when checking this checkout.
-- The dev server is listening on **http://localhost:3001** on loopback. A fresh unauthenticated request followed the login redirect and returned 200; the signed-in session previously returned 200 for Home and its data requests.
-- Comet initially returned stale or blank content and `noWindowsAvailable`. A fresh Comet window and a fresh tab restored enough access to capture signed-in Home, Lectures and Calendar Week. The computer-use tool then reported the user had changed the active Comet window during verification. Browser input stopped to avoid interfering. The successful captures predate the corrections below.
+Current approved:
+- **04 Tasks + Workspaces:** `exec-496f9eb9-a1dc-4fc8-8cdf-c4cbabaef43f.png`.
+- **02A Brain dump:** `exec-a765b19c-7e52-4817-9e7b-51c9659a77f0.png` (corrections above).
 
-## Next steps, in order
+Earlier options for context, not separate implementation targets:
+- 01 Tasks: `exec-716e6dbd-c306-4423-a58c-8f9065d4064e.png`.
+- 03 Workspaces: `exec-55ab3698-cbef-440a-8b57-aa1b8425b5f8.png`.
 
-1. Read this file, inspect current git status, and confirm whether localhost port 3001 is still listening.
-2. If needed, start this checkout with `npm run dev -- --port 3001 --hostname localhost` with local-network permission. Leave the preview running and provide the link.
-3. Use **Comet** (`ai.perplexity.comet`) via the supported computer-use tools. It is the user's signed-in browser. Do not switch to an unauthenticated IAB or automate fresh authentication just to avoid a capture problem.
-4. Recheck the compact Home header and the long personal todo in the saved arrangement. Open **Customise → Study layout** to compare the proposed arrangement and launcher packing, then Cancel to return to the saved layout. Apply writes the preference and is unnecessary for visual QA.
-5. Verify sidebar collapsed, hover-expanded and keyboard-focused states. Check the content does not shift; account/settings/capture remain usable; check a narrow layout.
-6. Inspect Lectures with real data: selection changes details, mobile detail access, filters, prep/follow-up, inferred dates and confirmation/source actions. Avoid modifying real deadlines or completing work merely for QA.
-7. Inspect Calendar Month/Week/Day/Routines and Grid/Agenda. Check selected-day details, event readability, overflow, zoom/Fit day and time-block access without writing events as a test.
-8. Record mismatches with concrete evidence. Delegate only independent, bounded edits to Sol/Terra, with disjoint file ownership and short prompts. Keep tiny dependent fixes in the coordinating agent. Ask clickable questions only for ambiguous design decisions.
-9. After a meaningful fix, inspect it again and run the relevant tests. Repeat full suite/build only if new changes warrant it. Update this file with outcome and remaining issues.
-10. Leave localhost running, give the user the preview link and a concise accurate report. No commit, deploy or publication has been requested.
+Original approved Home language:
+- Concept B: `exec-b771573d-3194-447f-acdb-bb598d30e794.png`.
+- Home: `exec-5cf723bb-279e-47f0-aeb7-eade0d7aa51f.png`.
+- Lectures: `exec-6f98115f-010c-490b-8106-60384007996c.png`.
+- Calendar: `exec-fb333221-88b5-4166-ad1f-72a87bdb8e71.png`.
 
-## Acceptance checklist — update after each review
+Images are generated concepts with illustrative content, not proof of implementation. Inspect CURRENT rendered Home for UI information as well as these references. The 04 global rail is drawn expanded; implementation must retain the approved collapsed/hover-expanded behaviour. Completed Tasks and Habits controls omitted in the illustration must remain available.
 
-- [x] User design approval and permission to edit obtained.
-- [x] Home/sidebar, Lectures and Calendar implemented.
-- [x] Automated tests, type checks and production build passed at last implementation checkpoint.
-- [x] Localhost restarted and confirmed available for this continuation.
-- [x] Current desktop Home compared visually with approved Home concept; layout corrections made and post-fix visual check pending.
-- [ ] Sidebar hover/focus expansion and narrow layout visually verified.
-- [ ] Lectures real-data list/detail behavior and separate status semantics verified in Comet.
-- [ ] All Calendar views and tools reviewed in Comet.
-- [ ] User receives a working preview and honest remaining limitations.
+## Evidence and current checkpoint
 
-## Latest checkpoint and next-action log
+- Confirmed GitHub main via `git ls-remote`: `b92e2db2a87963c31f6d6be3ed92dead4b4a7b6d`.
+- Earlier work shipped: launcher up to 4 columns × 12 rows, folder animations, adaptive Calendar/Money, distant assessments, settings/account sidebar, mobile More navigation, touch resize.
+- Read-only source audit completed by Sol: remaining screens use legacy shell; selected workflows have controls spread across oversized headers/cards.
+- Signed-in Comet successfully showed current deployed Tasks in old dark layout with service header, separate tab/header/filter/view rows. Subsequent navigation stopped updating the rendered view; **Brain dump and Workspaces were source-audited, not visually verified**. Home was subsequently rendered successfully on localhost after restart; its ivory/white/sage styling matches the source baseline.
+- Shared shell/navigation committed `cf77e35`. Tasks integrated through `f20f782` (source commits 5845565,42dad0a,1a5fc62,a0affd9); Workspaces integrated through `dfac776` (source 4a847bd,1d1e133,e211a52). Root review corrected desktop details to INLINE nonmodal panels; native modal only below narrow breakpoint, focus/Back/resize tested. Combined shell/navigation/Tasks/Workspaces checks: 31 tests pass, with agent changed-lint/typechecks passed. Sol capture completion pending; no other active editing ownership.
+- Local preview restarted in integration: `npm run dev -- --webpack --port 3001 --hostname localhost`, exec session `61354`, verified Ready. Signed-in Comet rendered actual current Home successfully. Tasks and Workspaces are integrated. Comet visually verified actual Tasks header/list and optional right detail pane using real data. Root corrected a raw Microsoft sync diagnostic taking over the header to a short message + expandable details (lint passed). Local Microsoft integration reports unauthorized_client; credentials/config were not changed. Full mobile and workspace post-change visual QA still pending. Recheck server before reporting it after any session interruption.
+- No deployment, push to main or external publication requested for this phase.
 
-**15 November 2026 — corrections and browser limit:** Home now has a single desktop header with the query and Customise controls, and todo metadata sits below titles at every widget width. Study layout opens a local preview and writes only on Apply; Cancel retains the user's saved arrangement. Lectures now uses white list/detail panels and a warm date-confirmation chip. Calendar positions Google and routine event labels at the top of their blocks. The rail uses a lighter sage selection. Browser QA stopped after Comet reported user interaction; narrow layouts, sidebar expansion, Lectures selection and filters, and additional Calendar views still need a signed-in browser check. No preferences or study data were changed for QA.
+## Next steps and acceptance
 
-**15 November 2026 — validation:** Post-correction suite, build, changed-file ESLint and `git diff --check` passed. The new Home regression verifies Cancel makes no settings write and Apply makes one write. Port 3001 is still listening. The next check is visual in signed-in Comet, beginning with the updated Home and the Study layout preview.
+1. Collect focused commits; inspect diffs for feature loss, mobile layout, keyboard focus and errors; cherry-pick sequentially into `codex/remaining-screens`. Never reset unrelated changes.
+2. Run focused tests per feature, integrated full suite/typecheck/changed-file lint and production build. Fix new failures, document unrelated blockers accurately.
+3. Start integration checkout on `http://localhost:3001` (loopback). Use available installed dependencies; webpack fallback is acceptable if Turbopack cannot follow symlinks. Keep server running and record process/log.
+4. Inspect in **Comet only**, user's signed-in browser. Home provides actual current visual reference. Verify Tasks list/detail/filter/mutations without altering real data unnecessarily, Brain dump capture/review/cancel without saving test data, Workspaces folders/list/cards/preview/detail. Verify desktop, narrow/mobile, long titles, empty/error/loading states, keyboard/back/focus. Report blocked interactions honestly.
+5. If near context limit or at integrated checkpoint, create the requested fresh chat with Sol/Terra and this plan; hand off exact branch/worktree/commits, server, tests and remaining QA. User explicitly authorised new chat when appropriate. New chat does not reset usage limits.
+6. Update this file after major tasks, check output against approved choices, and provide localhost + plan location. Do not call static wireframes or passing tests visual verification.
 
-**15 November 2026 — signed-in desktop comparison:** Captured Home in a fresh Comet window and Lectures/Week in the existing one. Home's saved arrangement places Study priorities lower down, and a real long todo wraps nearly one word per line alongside its metadata and buttons. The query panel and Customise occupy separate full-width rows; consolidate them into the Home header. Lectures renders the real work list and selected prep detail side by side. Calendar Week centres labels vertically in long Google/routine blocks, whereas the concept aligns them with the start time. Fix these concrete issues and recheck. The Study layout button saves immediately, so avoid applying it to the user's saved settings during review.
+## Later scope (not in this implementation batch)
 
-**15 November 2026 — continuation started:** Read the handoff and checked the intact working tree on `codex/study-ui-redesign` at `ad87d27`. Viewed all four approved images and read the installed Next.js CSS guide. Restarted Next.js on loopback port 3001 with the required local-network permission. Comet showed the signed-in Week grid with populated events and a valid screenshot. Native input/capture became intermittent again while switching to Home. Continue in the same Comet session and establish which views and interactions can be verified.
+Home/sidebar, Lectures and Calendar were previously redesigned. Next candidate screens after these three: Money (ledger/account/import), Education, Research, People, Bible, App Library, AI usage. Ask about priority and provide options before committing new layouts. Health and Health import intentionally return 404 because Bevel replaced them; do not revive without explicit request. Existing Habits behaviour must survive this Tasks pass, but a separate full Habits redesign has not been selected.
 
-**15 November 2026 — handoff prepared:** Implementation and automated validation complete. Visual fidelity remains unverified because Comet capture failed. User selected review-and-fix as next action and Sol/Terra delegation. Port 3001 needs restarting. No additional code changes should precede inspecting the current rendered state unless required to start the app.
+## Working constraints
 
-For each major milestone append or replace a compact entry:
-`Date | task | evidence | passed/failed/not checked | mismatch or risk | next action`.
-Keep this current-state summary short; remove stale next steps rather than accumulating contradictory plans.
+Read relevant installed Next 16.2.12 guides in `node_modules/next/dist/docs/` before edits (AGENTS.md). Use Sol/Terra for bounded tasks, stronger model for difficult decisions only. Ask material ambiguities as clickable chat options. Preserve user data, existing features and saved layouts. Keep progress messages concise and the plan current. Prefer new branches per task; do not duplicate Claude's completed work.
 
-## Copy into a new session
+Research basis: Notion mobile navigation/views (`https://www.notion.com/help/workspaces-on-mobile`), Asana mobile quick actions (`https://help.asana.com/s/article/getting-started-with-asana-s-mobile-app`), Salesforce accessible mobile typography/targets (`https://developer.salesforce.com/docs/platform/mobile-offline/guide/ux-a11y.html`), Apple reduced motion. These inform consistency and action access; they do not mandate copying another app.
 
-Continue the Study Copilot UI redesign in `/Users/williamhoward/local_projects_1/personal_dashboard_v1`. First read `UI_REDESIGN_HANDOFF.md` completely and inspect the working tree; do not reset uncommitted changes. The user approved the Sunsama-inspired concept B and the Home/sidebar, Lectures and Calendar implementation. Next restart localhost:3001 if needed, inspect the CURRENT Home in signed-in Comet, view the approved reference images listed in the handoff, compare all three screens, and fix clear mismatches. Use Sol/Terra for focused independent edits/tests and reserve stronger reasoning for difficult decisions. Keep features and saved widget layouts. Ask material design questions as clickable chat options. Update the handoff at the start, after each major task and verification, and before usage/context handoff; record visual success honestly. Leave localhost running and provide the preview link. Do not claim visual verification if Comet capture remains unavailable.
+## Paste into a new chat
 
-## Repeat these instructions before handing off
-
-Re-read the original brief and the latest user decisions above. Check whether the actual output meets them, not merely whether code compiles. Update status, evidence, failures, server state and the exact next action. Pass this file and the approved image paths to the next chat. Tell the next agent to inspect the current Home screen for UI information. Keep simple tasks on Sol/Terra, avoid duplicated research and giant tool output, and never describe an agent-maintained plan as automatically updating while no agent is running.
+Continue the approved Study Copilot Tasks/Brain dump/Workspaces implementation and review. First read `/Users/williamhoward/local_projects_1/personal_dashboard_v1/UI_REDESIGN_HANDOFF.md` and the integration copy `/private/tmp/study-next-screens/UI_REDESIGN_HANDOFF.md`, using the latest checkpoint. Work in `/private/tmp/study-next-screens` on `codex/remaining-screens`, not the original dirty repo. User approved preview04 for Tasks/Workspaces and02A for Brain dump as separate screens, all prior features retained. Inspect current Home in signed-in Comet for UI information and view approved images. Check active agents before touching their files. Use Sol/Terra for focused work; keep this plan updated after milestones and before handing off. Complete implementation, appropriate tests and honest desktop/mobile visual QA, leave localhost running, and report unresolved limitations without inventing verification. Do not push/deploy or merge the unrelated phone branch.

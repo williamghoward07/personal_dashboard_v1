@@ -12,7 +12,8 @@ import {
   launcherRowsForHeight,
   stepLauncherSpan,
 } from '@/lib/app-launcher/launcher-layout'
-import { HOME_GRID_COLUMNS, heightFromPointer, spanClass, spanFromPointer, type HomeWidgetSpan } from '@/lib/home/layout'
+import { MIN_WIDGET_HEIGHT, MAX_WIDGET_HEIGHT } from '@/lib/settings/schema'
+import { HOME_GRID_COLUMNS, heightFromPointer, spanClass, type HomeWidgetSpan } from '@/lib/home/layout'
 
 export interface HomeWidgetFrameProps {
   id: string
@@ -29,7 +30,7 @@ export interface HomeWidgetFrameProps {
   onSizePreview: (id: string, span: HomeWidgetSpan, height: number | undefined) => void
   /** Final size for the gesture — this is the one that persists. */
   onSizeCommit: (id: string, span: HomeWidgetSpan, height: number | undefined) => void
-  children: ReactNode
+  children: ReactNode | ((width: number | undefined) => ReactNode)
 }
 
 interface GridMeasurement {
@@ -45,6 +46,8 @@ interface ResizeOrigin extends GridMeasurement {
   startY: number
   startSpan: HomeWidgetSpan
   startRows: number
+  startHeight: number
+  originalHeight: number | undefined
   touchedHeight: boolean
   nextSpan: HomeWidgetSpan
   nextHeight: number | undefined
@@ -84,6 +87,7 @@ export default function HomeWidgetFrame({
 
   const nodeRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
   const resizeRef = useRef<ResizeOrigin | null>(null)
   const isLauncher = id === 'app-launcher'
   const rows = launcherRowsForHeight(height)
@@ -91,6 +95,7 @@ export default function HomeWidgetFrame({
   // Masonry: the grid has 1px implicit rows and no row gap, so each card
   // spans as many rows as it is tall (plus the gap) and the next card in
   // its column packs straight up under it.
+  const [measuredWidth, setMeasuredWidth] = useState<number | undefined>(undefined)
   const [rowSpan, setRowSpan] = useState<number | null>(null)
 
   useEffect(() => {
@@ -99,7 +104,8 @@ export default function HomeWidgetFrame({
     if (!node || !grid) return
     const update = () => {
       const gap = Number.parseFloat(window.getComputedStyle(grid).columnGap) || 0
-      const height = node.getBoundingClientRect().height
+      const { height, width } = node.getBoundingClientRect()
+      if (width > 0) setMeasuredWidth(Math.round(width))
       // A collapsed (empty) widget is display:none; give it no rows at all.
       setRowSpan(height > 0 ? Math.ceil(height + gap) : 1)
     }
@@ -153,6 +159,8 @@ export default function HomeWidgetFrame({
         startY: event.clientY,
         startSpan: span,
         startRows: rows,
+        originalHeight: height,
+        startHeight: height ?? Math.max(MIN_WIDGET_HEIGHT, (contentRef.current?.firstElementChild?.getBoundingClientRect().height || 240)),
         touchedHeight: height !== undefined,
         nextSpan: span,
         nextHeight: height,
@@ -162,10 +170,6 @@ export default function HomeWidgetFrame({
     },
     [measure, span, rows, height]
   )
-
-  // In edit mode the card sits under a header bar (+ its 8px flex gap);
-  // height is the card alone, so the pointer maths skips the header.
-  const headerOffset = useCallback(() => (headerRef.current ? headerRef.current.offsetHeight + 8 : 0), [])
 
   const handleResizeMove = useCallback(
     (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -187,13 +191,17 @@ export default function HomeWidgetFrame({
       // Height only becomes explicit once the pointer actually moves
       // vertically, so a purely horizontal drag keeps the card on auto.
       if (Math.abs(event.clientY - origin.startY) > 6) origin.touchedHeight = true
-      const nextSpan = spanFromPointer(event.clientX, origin.left, origin.track, origin.gap, span)
+      const columnStep = Math.round((event.clientX - origin.startX) / (origin.track + origin.gap))
+      const nextSpan = stepLauncherSpan(origin.startSpan, columnStep, origin.columns)
       const nextHeight = origin.touchedHeight
-        ? heightFromPointer(event.clientY, origin.top, headerOffset())
-        : height
-      if (nextSpan !== span || nextHeight !== height) onSizePreview(id, nextSpan, nextHeight)
+        ? heightFromPointer(origin.startHeight + event.clientY - origin.startY, 0, 0)
+        : origin.nextHeight
+      if (nextSpan === origin.nextSpan && nextHeight === origin.nextHeight) return
+      origin.nextSpan = nextSpan
+      origin.nextHeight = nextHeight
+      onSizePreview(id, nextSpan, nextHeight)
     },
-    [id, isLauncher, onSizePreview, span, height, headerOffset]
+    [id, isLauncher, onSizePreview]
   )
 
   const handleResizeEnd = useCallback(
@@ -204,10 +212,20 @@ export default function HomeWidgetFrame({
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId)
       }
-      onSizeCommit(id, isLauncher ? origin.nextSpan : span, isLauncher ? origin.nextHeight : height)
+      if (origin.nextSpan !== origin.startSpan || origin.nextHeight !== origin.originalHeight) {
+        onSizeCommit(id, origin.nextSpan, origin.nextHeight)
+      }
     },
-    [id, isLauncher, onSizeCommit, span, height]
+    [id, onSizeCommit]
   )
+
+  const handleResizeCancel = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    const origin = resizeRef.current
+    if (!origin) return
+    resizeRef.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    onSizePreview(id, origin.startSpan, origin.originalHeight)
+  }, [id, onSizePreview])
 
   const resizeLauncherBy = useCallback(
     (columnStep: number, rowStep: number) => {
@@ -232,8 +250,8 @@ export default function HomeWidgetFrame({
           resizeLauncherBy(0, event.key === 'ArrowDown' ? 1 : -1)
           return
         }
-        const base = height ?? nodeRef.current?.getBoundingClientRect().height ?? 240
-        const next = heightFromPointer(base + (event.key === 'ArrowDown' ? 40 : -40) + headerOffset(), 0, headerOffset())
+        const base = height ?? (contentRef.current?.firstElementChild?.getBoundingClientRect().height || 240)
+        const next = heightFromPointer(base + (event.key === 'ArrowDown' ? 80 : -80), 0, 0)
         onSizeCommit(id, span, next)
         return
       }
@@ -244,19 +262,27 @@ export default function HomeWidgetFrame({
         resizeLauncherBy(step, 0)
         return
       }
-      const next = Math.min(4, Math.max(1, span + step)) as HomeWidgetSpan
+      const next = stepLauncherSpan(span, step, gridColumns)
       if (next !== span) onSizeCommit(id, next, height)
     },
-    [id, isLauncher, onSizeCommit, span, height, headerOffset, resizeLauncherBy]
+    [id, isLauncher, onSizeCommit, span, height, resizeLauncherBy, gridColumns]
   )
 
+  const changeHeight = (step: number) => {
+    const base = height ?? (contentRef.current?.firstElementChild?.getBoundingClientRect().height || 240)
+    onSizeCommit(id, span, heightFromPointer(base + step, 0, 0))
+  }
+
   const width = Math.min(span, gridColumns)
-  const sizeText = isLauncher ? `${width}/${gridColumns} wide · ${rows} rows` : `${span}/4`
+  const sizeText = isLauncher ? `${width}/${gridColumns} wide · ${rows} rows` : `${width}/${gridColumns} wide · ${height ? `${height}px` : 'Auto'}`
 
   return (
     <div
       ref={setRefs}
+      data-home-widget={id}
       style={{
+        containerType: 'inline-size',
+        containerName: 'home-widget',
         transform: transform
           ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)`
           : undefined,
@@ -265,6 +291,7 @@ export default function HomeWidgetFrame({
       }}
       className={[
         spanClass(span),
+        'min-w-0',
         editing ? 'relative flex flex-col gap-2' : '',
         // A widget is allowed to render nothing (MorningRoutineCard does
         // once its setup offer is dismissed). Outside edit mode the empty
@@ -277,14 +304,14 @@ export default function HomeWidgetFrame({
         .join(' ')}
     >
       {editing ? (
-        <div ref={headerRef} className={`flex items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-high px-1.5 py-1 ${isLauncher ? 'flex-wrap' : ''}`}>
+        <div ref={headerRef} className="flex flex-wrap items-center gap-1 rounded-lg border border-outline-variant bg-surface-container-high px-1.5 py-1">
           <button
             type="button"
             ref={setActivatorNodeRef}
             {...attributes}
             {...listeners}
             aria-label={`Reorder ${label}`}
-            className="shrink-0 touch-none cursor-grab rounded-sm p-1 text-on-surface-variant/60 transition-colors hover:bg-surface-container-highest hover:text-on-surface active:cursor-grabbing"
+            className="grid size-11 shrink-0 touch-none cursor-grab place-items-center rounded-sm p-1 text-on-surface-variant/60 transition-colors hover:bg-surface-container-highest hover:text-on-surface active:cursor-grabbing"
           >
             <GripVertical className="h-4 w-4" />
           </button>
@@ -297,7 +324,7 @@ export default function HomeWidgetFrame({
             onClick={() => onHide(id)}
             aria-label={`Hide ${label}`}
             title={`Hide ${label}`}
-            className="shrink-0 rounded-sm p-1 text-on-surface-variant/60 transition-colors hover:bg-surface-container-highest hover:text-on-surface"
+            className="grid size-11 shrink-0 place-items-center rounded-sm p-1 text-on-surface-variant/60 transition-colors hover:bg-surface-container-highest hover:text-on-surface"
           >
             <EyeOff className="h-3.5 w-3.5" />
           </button>
@@ -316,7 +343,7 @@ export default function HomeWidgetFrame({
                   title={label}
                   disabled={disabled}
                   onClick={() => resizeLauncherBy(dx, dy)}
-                  className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-30"
+                  className="grid size-11 place-items-center rounded-sm text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-30"
                 >
                   <Icon className="h-4 w-4" />
                 </button>
@@ -326,16 +353,31 @@ export default function HomeWidgetFrame({
         </div>
       ) : null}
 
+      {editing && !isLauncher && (
+        <div role="group" aria-label={`${label} size controls`} className="flex flex-wrap items-center justify-end gap-1 rounded-lg bg-surface-container-high px-1.5">
+          {[
+            { name: 'Narrower', Icon: ChevronLeft, disabled: width <= 1, run: () => onSizeCommit(id, stepLauncherSpan(span, -1, gridColumns), height) },
+            { name: 'Wider', Icon: ChevronRight, disabled: width >= gridColumns, run: () => onSizeCommit(id, stepLauncherSpan(span, 1, gridColumns), height) },
+            { name: 'Shorter', Icon: ChevronUp, disabled: height === MIN_WIDGET_HEIGHT, run: () => changeHeight(-80) },
+            { name: 'Taller', Icon: ChevronDown, disabled: height === MAX_WIDGET_HEIGHT, run: () => changeHeight(80) },
+          ].map(({ name, Icon, disabled, run }) => (
+            <button key={name} type="button" aria-label={`${label}: ${name}`} title={name} disabled={disabled} onClick={run} className="grid size-11 place-items-center rounded-md text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-30"><Icon className="size-4" /></button>
+          ))}
+          <button type="button" disabled={height === undefined} onClick={() => onSizeCommit(id, span, undefined)} className="min-h-11 rounded-md px-2 text-xs text-on-surface-variant hover:bg-surface-container-highest disabled:opacity-30">Auto height</button>
+        </div>
+      )}
+
       {/* `contents` outside edit mode so this wrapper adds no layout of its
           own; in edit mode it swallows clicks so arranging the grid can't
           navigate away through a card's link. */}
       <div
+        ref={contentRef}
         className={editing
           ? 'pointer-events-none flex flex-1 select-none flex-col [&>*]:flex-1'
           : minHeight === undefined ? 'contents' : 'flex flex-col [&>*]:flex-1'}
         style={{ minHeight }}
       >
-        {children}
+        {typeof children === 'function' ? children(measuredWidth) : children}
       </div>
 
       {editing ? (
@@ -345,16 +387,16 @@ export default function HomeWidgetFrame({
           tabIndex={0}
           aria-label={`${label} size`}
           aria-valuemin={1}
-          aria-valuemax={isLauncher ? gridColumns : 4}
-          aria-valuenow={isLauncher ? width : span}
-          aria-valuetext={isLauncher ? `${width} of ${gridColumns} columns wide, up to ${rows} app rows` : `${span} of 4 columns`}
+          aria-valuemax={gridColumns}
+          aria-valuenow={width}
+          aria-valuetext={isLauncher ? `${width} of ${gridColumns} columns wide, up to ${rows} app rows` : `${width} of ${gridColumns} columns, ${height ? `${height} pixels tall` : 'automatic height'}`}
           onPointerDown={handleResizeStart}
           onPointerMove={handleResizeMove}
           onPointerUp={handleResizeEnd}
-          onPointerCancel={handleResizeEnd}
+          onPointerCancel={handleResizeCancel}
           onKeyDown={handleResizeKey}
           onDoubleClick={() => onSizeCommit(id, span, undefined)}
-          className={`absolute -right-2 -bottom-2 h-6 w-6 cursor-nwse-resize touch-none items-center justify-center rounded-full border border-outline-variant bg-surface-container-highest text-on-surface-variant transition-colors hover:border-primary-container hover:text-primary-container ${isLauncher ? 'flex' : 'hidden xl:flex'}`}
+          className={`absolute right-0 bottom-0 h-8 w-8 cursor-nwse-resize touch-none items-center justify-center rounded-full border border-outline-variant bg-surface-container-highest text-on-surface-variant transition-colors hover:border-primary-container hover:text-primary-container hidden md:flex`}
         >
           <MoveDiagonal2 className="h-3 w-3" />
         </button>

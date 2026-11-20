@@ -76,14 +76,31 @@ describe('AppChrome', () => {
   it.each(['/', '/lectures', '/lectures/session', '/calendar'])('uses the workspace shell for %s', async (path) => {
     await renderRoute(path)
     expect(screen.getByRole('main').closest('.workspace-ui')).not.toBeNull()
-    expect(screen.getByRole('button', { name: 'Account' }).textContent).toBe('A')
+    const rail = within(screen.getByRole('navigation', { name: 'Workspace' }))
+    expect(rail.getByRole('button', { name: 'Account' }).textContent).toBe('AAccount')
+    expect(rail.getByRole('button', { name: 'Settings' })).toBeTruthy()
+    expect(screen.queryByRole('banner')).toBeNull()
     expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull()
+  })
+
+  it('renders settings and account once on workspace routes (the rail doubles as the single-row phone bar)', async () => {
+    await renderRoute('/')
+    expect(screen.getAllByRole('button', { name: 'Settings' })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: 'Account' })).toHaveLength(1)
+    expect(screen.getAllByRole('link', { name: 'Quick capture' })).toHaveLength(1)
+    // Brand, capture, settings and account all live in one nav landmark.
+    const rail = within(screen.getByRole('navigation', { name: 'Workspace' }))
+    expect(rail.getByRole('link', { name: 'Study Copilot home' })).toBeTruthy()
+    expect(screen.getAllByRole('navigation', { name: 'Workspace' })).toHaveLength(1)
   })
 
   it('keeps the regular chrome on other routes and omits it on login', async () => {
     await renderRoute('/people')
     expect(screen.getByRole('main').closest('.workspace-ui')).toBeNull()
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' }).textContent).toContain('People')
+    const bar = within(screen.getByRole('banner'))
+    expect(bar.getByRole('button', { name: 'Settings' })).toBeTruthy()
+    expect(bar.getByRole('button', { name: 'Sign out' })).toBeTruthy()
     cleanup()
 
     await renderRoute('/login')
@@ -93,15 +110,23 @@ describe('AppChrome', () => {
 
   it('retains active navigation, capture, and the navigation settings on workspace pages', async () => {
     await renderRoute('/lectures/session')
-    const rail = within(screen.getByRole('navigation', { name: 'Main' }))
+    const rail = within(screen.getByRole('navigation', { name: 'Workspace' }))
     expect(rail.getByRole('link', { name: 'Lectures', current: 'page' }).getAttribute('href')).toBe('/lectures')
     expect(rail.getByRole('link', { name: 'Quick capture' }).getAttribute('href')).toBe('/brain-dump')
-    expect(within(screen.getByRole('banner')).getByRole('link', { name: 'Quick capture' }).getAttribute('href')).toBe('/brain-dump')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
-    const settings = within(screen.getByRole('dialog', { name: 'Settings' }))
+    const trigger = rail.getByRole('button', { name: 'Settings' })
+    fireEvent.click(trigger)
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    const dialog = rail.getByRole('dialog', { name: 'Settings' })
+    expect(document.activeElement).toBe(dialog)
+    const settings = within(dialog)
     fireEvent.click(settings.getByRole('switch', { name: 'Lectures tab', checked: true }))
     expect(updateSettings).toHaveBeenCalledWith({ hidden_nav_items: ['/lectures'] })
+
+    const nextTrigger = rail.getByRole('button', { name: 'Account' })
+    act(() => nextTrigger.focus())
+    expect(screen.queryByRole('dialog', { name: 'Settings' })).toBeNull()
+    expect(document.activeElement).toBe(nextTrigger)
   })
 
   it('shows identity, integration status, fullscreen, and sign out in the account popover', async () => {
@@ -109,6 +134,7 @@ describe('AppChrome', () => {
     const trigger = screen.getByRole('button', { name: 'Account' })
     fireEvent.click(trigger)
     const dialog = screen.getByRole('dialog', { name: 'Account' })
+    expect(document.activeElement).toBe(dialog)
     const account = within(dialog)
     expect(account.getByText('Ada Lovelace')).toBeTruthy()
     expect(account.getByText('ada@example.test')).toBeTruthy()

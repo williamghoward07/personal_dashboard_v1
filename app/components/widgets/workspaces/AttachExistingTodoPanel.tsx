@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Todo } from '@/lib/types'
@@ -49,7 +50,7 @@ export default function AttachExistingTodoPanel({
       </p>
 
       {loading ? (
-        <p className="text-xs text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : candidates.length === 0 ? (
         <p className="text-xs text-on-surface-variant">No unassigned todos to attach.</p>
       ) : (

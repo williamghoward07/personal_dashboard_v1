@@ -1,22 +1,17 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ArrowUpRight, Contact } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import type { FollowUp } from '@/lib/types'
-import type { HomeWidgetProps } from '@/lib/home/layout'
+import { widgetDensity, type HomeWidgetDimensions } from '@/lib/home/widget-content'
+import { formatDueDay } from '../../lectures/work-format'
 import WidgetCard from '../../WidgetCard'
 import { ACCENT_TEXT } from '@/lib/theme'
 
-// A wider card can afford more follow-ups. Fetched once at the ceiling and
-// sliced in render, so dragging the card wider never refetches.
-const MAX_ROWS = 8
-function rowsForSpan(span: number) {
-  if (span >= 3) return MAX_ROWS
-  if (span === 2) return 5
-  return 3
-}
+const MAX_ROWS = 10
 
 /**
  * Unlike the other home glance cards, this one can't just wrap the whole
@@ -25,7 +20,7 @@ function rowsForSpan(span: number) {
  * directly on WidgetCard with the "view all" arrow moved into the action
  * slot instead.
  */
-export default function PeopleGlance({ span = 1 }: HomeWidgetProps) {
+export default function PeopleGlance(dimensions: HomeWidgetDimensions) {
   const [followUps, setFollowUps] = useState<FollowUp[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -42,37 +37,39 @@ export default function PeopleGlance({ span = 1 }: HomeWidgetProps) {
       })
   }, [])
 
-  const shown = followUps.slice(0, rowsForSpan(span))
+  const density = widgetDensity(dimensions)
+  const shown = followUps.slice(0, [3, 6, MAX_ROWS][density])
 
   return (
     <WidgetCard
       title="People"
       icon={<Contact className="h-4 w-4" />}
       accent="amber"
-      className="h-full"
+      className="h-full min-w-0"
       action={
         <Link
           href="/people"
           aria-label="View all people"
-          className={`transition-transform duration-300 hover:translate-x-0.5 hover:-translate-y-0.5 ${ACCENT_TEXT.amber}`}
+          className={`grid min-h-11 min-w-11 place-items-center rounded [@media(pointer:fine)]:min-h-6 [@media(pointer:fine)]:min-w-6 transition-transform duration-300 hover:translate-x-0.5 hover:-translate-y-0.5 ${ACCENT_TEXT.amber}`}
         >
           <ArrowUpRight className="h-4 w-4" />
         </Link>
       }
     >
       {loading ? (
-        <p>Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : shown.length === 0 ? (
         <p>Nothing to follow up.</p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
+        <ul className="grid gap-x-5 gap-y-1 @min-[680px]/home-widget:grid-cols-2">
           {shown.map((f) => (
-            <li key={f.id}>
+            <li key={f.id} className="min-w-0">
               <Link
                 href={`/people?person=${f.person_id}`}
-                className="block truncate text-on-surface hover:text-people-amber"
+                className="flex min-h-11 flex-col justify-center rounded py-1 wrap-anywhere text-on-surface hover:text-people-amber"
               >
-                {f.note}
+                <span>{f.note}</span>
+                {f.due_date && <span className="text-xs text-on-surface-variant">Due {formatDueDay(f.due_date)}</span>}
               </Link>
             </li>
           ))}

@@ -1,0 +1,472 @@
+.page {
+  width: 100%;
+  max-width: 90rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding: 14px clamp(12px, 3vw, 32px) 24px;
+  color: var(--color-on-surface);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font: 700 clamp(1.25rem, 3vw, 1.875rem) / 1.2 var(--font-display);
+}
+
+.title > svg {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+
+.board {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.85fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.capture,
+.review {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(12px, 1.5vw, 20px);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 12px;
+  background: var(--color-surface-container-low);
+}
+
+.capture h2,
+.review h2 {
+  font: 650 1.25rem / 1.25 var(--font-display);
+}
+
+.captureForm {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.captureForm textarea,
+.editorInput {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-outline);
+  border-radius: 8px;
+  background: var(--color-surface-container-low);
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.captureForm textarea {
+  flex: 1;
+  min-height: 13rem;
+  padding: 12px;
+  resize: vertical;
+}
+
+.captureForm textarea::placeholder {
+  color: var(--color-on-surface-variant);
+}
+
+.captureHelp,
+.empty,
+.metadata {
+  color: var(--color-on-surface-variant);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.captureHelp {
+  text-align: center;
+}
+
+.empty {
+  border-top: 1px solid var(--color-outline-variant);
+  padding-block: 16px;
+}
+
+.primaryButton,
+.secondaryButton,
+.draftActions button,
+.steps button,
+.preview {
+  display: inline-flex;
+  min-height: 36px;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 8px;
+  background: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  font-size: 0.875rem;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.steps,
+.preview {
+  display: none;
+}
+
+.primaryButton {
+  border-color: var(--color-primary-container);
+  background: var(--color-primary-container);
+  color: var(--color-on-primary-container);
+  font-weight: 650;
+}
+
+.board :is(button, input, textarea, h2):focus-visible {
+  outline: 2px solid var(--color-primary-container);
+  outline-offset: 2px;
+}
+
+.board button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+@media (hover: hover) {
+  .board button:where(:not(:disabled)):hover {
+    filter: brightness(0.95);
+  }
+}
+
+.reviewHeader,
+.reviewFooter,
+.counts {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.counts {
+  justify-content: flex-start;
+  color: var(--color-on-surface-variant);
+  font-size: 0.8125rem;
+}
+
+.readyBadge,
+.reviewBadge,
+.kind {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 16px;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.readyBadge,
+.kind {
+  background: #e7ecdf;
+  color: #37472e;
+}
+
+.reviewBadge {
+  background: #f9e8dc;
+  color: #743e24;
+}
+
+.kind:is([data-kind="new_person"], [data-kind="update_person"], [data-kind="log_interaction"]) {
+  background: #eee6f4;
+  color: #533967;
+}
+
+.kind[data-kind="calendar_event"] {
+  background: #e6edf2;
+  color: #37576a;
+}
+
+.error {
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
+  border-radius: 8px;
+  background: var(--color-error-container);
+  color: var(--color-on-error-container);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.drafts {
+  min-width: 0;
+  border-top: 1px solid var(--color-outline-variant);
+}
+
+.draft {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px 10px;
+  padding-block: 12px;
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.indicator {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  margin-top: 1px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  color: var(--color-on-surface-variant);
+}
+
+.indicator[data-ready="true"] {
+  border-color: var(--color-primary-container);
+  background: var(--color-primary-container);
+  color: var(--color-on-primary-container);
+}
+
+.draftContent {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.draftHeader {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+
+.draft h3 {
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.draft[data-status="rejected"] h3 {
+  text-decoration: line-through;
+}
+
+.metadata,
+.metadata > span {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.metadata > span {
+  gap: 5px;
+}
+
+.metadata svg {
+  flex: none;
+}
+
+.draftActions {
+  display: flex;
+  grid-column: 2;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.draftActions .confirmButton {
+  background: #edf1e6;
+  border-color: #9ba88e;
+  color: #37472e;
+}
+
+.draftActions .reviewButton {
+  background: #f0e9f5;
+  border-color: #cfbfd9;
+  color: #533967;
+}
+
+.problem {
+  color: var(--color-error);
+  font-size: 0.875rem;
+}
+
+.editor {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.editorDates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  gap: 6px;
+}
+
+.editorInput {
+  min-height: 36px;
+}
+
+textarea.editorInput {
+  resize: vertical;
+}
+
+@media (min-width: 72rem) {
+  .draft {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+  }
+
+  .draftActions {
+    grid-column: auto;
+  }
+}
+
+@media (width < 48rem) {
+  .panels {
+    display: block;
+  }
+
+  .steps {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .steps button {
+    background: var(--color-surface-container);
+  }
+
+  .steps button[aria-current="step"] {
+    border-color: #aebba4;
+    background: #e7ecdf;
+    color: #37472e;
+    font-weight: 650;
+  }
+
+  .steps button > span {
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-size: 0.75rem;
+  }
+
+  .board[data-step="capture"] .review,
+  .board[data-step="review"] .capture {
+    display: none;
+  }
+
+  .board[data-step="review"] .preview {
+    display: flex;
+    justify-content: space-between;
+    text-align: start;
+  }
+
+  .preview > span {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .preview > span > span {
+    overflow: hidden;
+    color: var(--color-on-surface-variant);
+    font-size: 0.875rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .preview > svg {
+    flex: none;
+  }
+
+  .captureForm textarea {
+    min-height: 11rem;
+  }
+
+  .review {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .drafts {
+    display: grid;
+    gap: 8px;
+    border-top: 0;
+  }
+
+  .draft {
+    padding: 10px;
+    border: 1px solid var(--color-outline-variant);
+    border-radius: 10px;
+    background: var(--color-surface-container-low);
+  }
+
+  .draftActions button,
+  .reviewFooter .primaryButton {
+    flex: 1 1 auto;
+  }
+}
+
+@media (width < 48rem), (pointer: coarse) {
+  .board button,
+  .editorInput {
+    min-height: 44px;
+  }
+
+  .board button {
+    min-width: 44px;
+    font-size: 1rem;
+  }
+}
+
+.reviewForm {
+  padding: 2px;
+  overflow-wrap: anywhere;
+}
+
+.reviewForm :is(input, textarea, select) {
+  min-width: 0;
+}
+
+.reviewForm :is(button, input, textarea, select):focus-visible {
+  outline: 2px solid var(--color-primary-container);
+  outline-offset: 1px;
+}
+
+.reviewForm button:disabled {
+  opacity: 0.55;
+}
+
+@media (width < 48rem), (pointer: coarse) {
+  .reviewForm :is(button, input, select) {
+    min-height: 44px;
+  }
+
+  .reviewForm :is(input, textarea, select, button) {
+    font-size: 1rem;
+  }
+}

@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Contact, Plus, Search } from 'lucide-react'
@@ -119,7 +120,7 @@ export default function PeopleDirectoryCard({
           )}
 
           {loading ? (
-            <p>Loading...</p>
+            <LoadingSkeleton label="Loading..." />
           ) : filtered.length === 0 ? (
             <p>
               {people.length === 0

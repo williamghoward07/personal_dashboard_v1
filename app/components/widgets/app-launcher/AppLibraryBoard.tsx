@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArchiveRestore, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, LayoutGrid, Plus, Trash2 } from 'lucide-react'
 import {
@@ -31,8 +32,8 @@ import {
   moveLink,
 } from '@/lib/app-launcher/order'
 import { resolveLauncherIds, toggleLauncherLink } from '@/lib/app-launcher/launcher-selection'
-import { useSettings } from '@/lib/settings/use-settings'
 import { useStoredIdSet } from '@/lib/utils/use-stored-id-set'
+import { useAppSettings } from '../../settings/SettingsProvider'
 import ConfirmDialog from '../../ConfirmDialog'
 import FolderTile, { folderDragId, type FolderGroup } from './FolderTile'
 import LinkFolderFormModal, { type LinkFolderFormValues } from './LinkFolderFormModal'
@@ -83,7 +84,7 @@ export default function AppLibraryBoard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [collapsedIds, setCollapsedIds] = useStoredIdSet(COLLAPSED_STORAGE_KEY)
-  const { settings, error: settingsError, updateSettings } = useSettings()
+  const { settings, error: settingsError, updateSettings } = useAppSettings()
 
   const [isAddFolderOpen, setIsAddFolderOpen] = useState(false)
   const [editingFolder, setEditingFolder] = useState<LinkFolder | null>(null)
@@ -414,10 +415,10 @@ export default function AppLibraryBoard() {
     : null
 
   return (
-    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
-      <div className="flex items-center justify-between">
+    <main className="workspace-page">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className={`flex items-center gap-2 font-display text-headline-lg font-bold ${ACCENT_TEXT.neutral}`}>
+          <h1 className={`flex items-center gap-2 workspace-page-title ${ACCENT_TEXT.neutral}`}>
             <LayoutGrid className="h-6 w-6" />
             App Library
           </h1>
@@ -440,7 +441,7 @@ export default function AppLibraryBoard() {
           <button
             type="button"
             onClick={() => setIsAddFolderOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-outline px-3 py-1.5 text-sm font-medium text-surface-container-lowest hover:brightness-110"
+            className="flex items-center gap-1.5 rounded-lg bg-primary-container px-3 py-2 text-sm font-medium text-on-primary-container hover:brightness-110"
           >
             <Plus className="h-4 w-4" />
             Add folder
@@ -455,7 +456,7 @@ export default function AppLibraryBoard() {
       )}
 
       {loading && links.length === 0 && folders.length === 0 ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton shape="cards" label="Loading..." />
       ) : folderGroups.length === 0 ? (
         <div className="flex flex-col items-start gap-3">
           <p className="text-sm text-on-surface-variant">

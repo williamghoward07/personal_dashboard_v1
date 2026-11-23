@@ -1,94 +1,101 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { CalendarClock, Sparkles } from 'lucide-react'
-import { addDays, londonToday } from '@/lib/blackboard/dates'
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
+import { useMemo, useState, type ReactNode } from 'react'
+import { BookOpenCheck } from 'lucide-react'
 import { useWorkItems } from '@/lib/blackboard/use-work-items'
-import { dueWithin, type WorkItem } from '@/lib/blackboard/work'
+import { WORK_CATEGORY_LABEL, type WorkItem } from '@/lib/blackboard/work'
+import { prepOverflowCount, priorityLayout, studyPriorities, type HomeWidgetDimensions } from '@/lib/home/widget-content'
 import { moduleNameMap } from '../../lectures/module-names'
-import { formatDueDay, relativeDueLabel } from '../../lectures/work-format'
+import { dueTimeLabel, formatDueDay, relativeDueLabel } from '../../lectures/work-format'
 import HomeSectionCard from './HomeSectionCard'
 
-const DAYS = 7
-const MAX_ROWS = 6
+function PriorityList({
+  title,
+  items,
+  limit,
+  today,
+  names,
+  overflow,
+}: {
+  title: string
+  items: WorkItem[]
+  limit: number
+  today: string
+  names: ReturnType<typeof moduleNameMap>
+  /** Replaces the default "+N more in Lectures" footer. */
+  overflow?: ReactNode
+}) {
+  return (
+    <section className="min-w-0">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{title}</h3>
+      <ul className="divide-y divide-outline-variant/50">
+        {items.slice(0, limit).map((item) => {
+          const moduleName = item.moduleCode ? names.get(item.moduleCode) ?? item.moduleCode : item.courseName
+          const category = item.source === 'prep'
+            ? item.setWork?.length ? `${item.setWork.length} work set` : null
+            : item.category === 'test' ? 'Test' : WORK_CATEGORY_LABEL[item.category]
+          const certainty = item.ai?.status === 'suggested'
+            ? 'Date to review'
+            : item.ai?.status === 'confirmed'
+              ? 'Confirmed date'
+              : item.dueFromKeyDateId ? 'Extracted date' : null
+          const context = [category, moduleName, certainty].filter(Boolean).join(' · ')
+          const due = item.dueOn && [
+            formatDueDay(item.dueOn),
+            dueTimeLabel(item.dueOn, item.dueAt),
+            relativeDueLabel(item.dueOn, today),
+          ].filter(Boolean).join(' · ')
 
-// Deadlines and tests only: lecture prep is the Lectures page's job.
-const isDeadlineOrTest = (item: WorkItem) =>
-  item.source === 'assignment' || item.source === 'key_date' || (item.source === 'session' && item.category === 'test')
-
-// Lectures and tutorials in the window that have work set for them.
-function sessionsWithWork(items: WorkItem[], today: string): number {
-  const end = addDays(today, DAYS)
-  return items.filter((item) => {
-    const type = item.session?.type.trim().toLowerCase()
-    return (
-      (type === 'lecture' || type === 'tutorial') &&
-      !!item.setWork?.length &&
-      item.dueOn !== null &&
-      item.dueOn >= today &&
-      item.dueOn < end
-    )
-  }).length
+          return (
+            <li key={item.key} className="min-w-0 space-y-0.5 py-1.5 first:pt-0 last:pb-0">
+              <p className="break-words font-medium text-on-surface">{item.title}</p>
+              {due && <p className="text-xs tabular-nums text-on-surface-variant">{due}</p>}
+              {context && <p className="break-words text-xs text-on-surface-variant">{context}</p>}
+            </li>
+          )
+        })}
+      </ul>
+      {overflow !== undefined ? overflow : items.length > limit && <p className="mt-2 text-xs">+{items.length - limit} more in Lectures</p>}
+    </section>
+  )
 }
 
-export default function DueSoonGlance() {
-  const { items, loading } = useWorkItems()
+export default function DueSoonGlance(dimensions: HomeWidgetDimensions) {
+  const { items, loading, error, timetableError } = useWorkItems()
   const [now] = useState(() => new Date())
-
-  const { due, names, withWork, today } = useMemo(() => {
-    const today = londonToday(now)
-    return {
-      today,
-      due: dueWithin(items, now, DAYS).filter(isDeadlineOrTest),
-      names: moduleNameMap(items),
-      withWork: sessionsWithWork(items, today),
-    }
-  }, [items, now])
-
-  const shown = due.slice(0, MAX_ROWS)
+  const { deadlines, overdue, prep, names, today } = useMemo(() => ({
+    ...studyPriorities(items, now),
+    names: moduleNameMap(items),
+  }), [items, now])
+  const layout = priorityLayout({ deadlines: deadlines.length, prep: prep.length }, dimensions)
+  const prepOverflow = prepOverflowCount(prep, layout.prep, today)
 
   return (
-    <HomeSectionCard href="/lectures" title="Due soon" icon={<CalendarClock className="h-4 w-4" />} accent="orange">
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {shown.length === 0 ? (
-            <p>Nothing due in the next 7 days.</p>
-          ) : (
-            <ul className="flex flex-col gap-1.5">
-              {shown.map((item) => {
-                const name = item.moduleCode ? names.get(item.moduleCode) : null
-                const moduleLabel = [item.moduleCode, name].filter(Boolean).join(' ')
-                return (
-                  <li key={item.key} className="flex flex-col gap-0.5 text-on-surface">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        {item.ai && (
-                          <Sparkles className="h-3 w-3 shrink-0 text-on-surface-variant" aria-label="AI-found" />
-                        )}
-                        <span className="truncate" title={item.title}>
-                          {item.title}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-xs text-on-surface-variant">
-                        {relativeDueLabel(item.dueOn as string, today)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 text-xs text-on-surface-variant">
-                      <span className="truncate">{moduleLabel}</span>
-                      <span className="shrink-0 tabular-nums">{formatDueDay(item.dueOn as string)}</span>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
+    <HomeSectionCard href="/lectures" title="Study priorities" icon={<BookOpenCheck className="h-4 w-4" />} accent="orange">
+      {loading ? <LoadingSkeleton label="Loading study priorities…" /> : (
+        <div className="space-y-4">
+          <div className={layout.twoColumn ? 'grid grid-cols-2 items-start gap-4' : 'grid gap-4'}>
+            {deadlines.length > 0 && <PriorityList title="Upcoming deadlines" items={deadlines} limit={layout.deadlines} today={today} names={names} />}
+            {prep.length > 0 && (
+              <PriorityList
+                title="Upcoming prep"
+                items={prep}
+                limit={layout.prep}
+                today={today}
+                names={names}
+                overflow={prepOverflow === 0
+                  ? prep.length > layout.prep ? <p className="mt-2 text-xs">All prep in Lectures →</p> : null
+                  : <p className="mt-2 text-xs">+{prepOverflow} more this fortnight</p>}
+              />
+            )}
+          </div>
+          {overdue.length > 0 && <PriorityList title="Overdue deadlines" items={overdue} limit={layout.overdue} today={today} names={names} />}
+          {deadlines.length === 0 && prep.length === 0 && overdue.length === 0 && (
+            <p>No upcoming deadlines or prep.</p>
           )}
-          {due.length > MAX_ROWS && <p className="text-xs">+{due.length - MAX_ROWS} more</p>}
-          {withWork > 0 && (
-            <p className="text-xs">
-              {withWork} {withWork === 1 ? 'session has' : 'sessions have'} work set
-            </p>
+          {(error || (timetableError && timetableError !== 'not_configured')) && (
+            <p className="text-xs text-error">Some study data could not be loaded. Check Lectures.</p>
           )}
         </div>
       )}

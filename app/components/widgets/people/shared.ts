@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Interaction, InteractionChannel, InteractionPerson, Person } from '@/lib/types'
 
@@ -97,4 +98,18 @@ export async function insertFollowUpsForInteraction(
   return supabase
     .from('follow_ups')
     .insert(personIds.map((personId) => ({ interaction_id: interactionId, person_id: personId, note })))
+}
+
+export function keepReviewFocus(event: KeyboardEvent<HTMLFormElement>) {
+  if (event.key !== 'Tab') return
+  const controls = event.currentTarget.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)',
+  )
+  const first = controls.item(0)
+  const last = controls.item(controls.length - 1)
+  if (event.shiftKey ? event.target === first : event.target === last) {
+    event.preventDefault()
+    const target = event.shiftKey ? last : first
+    target?.focus()
+  }
 }

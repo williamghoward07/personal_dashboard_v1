@@ -20,6 +20,7 @@ export default function Popover({
   open: controlledOpen,
   onOpenChange,
   align = 'start',
+  focusPanel = false,
   label,
   className = '',
   panelClassName = '',
@@ -29,6 +30,8 @@ export default function Popover({
   open?: boolean
   onOpenChange?: (open: boolean) => void
   align?: 'start' | 'end'
+  /** Moves focus into the dialog on open and closes it when focus leaves. */
+  focusPanel?: boolean
   label: string
   className?: string
   panelClassName?: string
@@ -37,6 +40,7 @@ export default function Popover({
   const open = controlledOpen ?? uncontrolledOpen
   const panelId = useId()
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
 
   const setOpen = useCallback(
     (next: boolean) => {
@@ -47,6 +51,10 @@ export default function Popover({
   )
 
   const close = useCallback(() => setOpen(false), [setOpen])
+
+  useEffect(() => {
+    if (open && focusPanel) panelRef.current?.focus()
+  }, [open, focusPanel])
 
   useEffect(() => {
     if (!open) return
@@ -68,7 +76,13 @@ export default function Popover({
   }, [open, close])
 
   return (
-    <div ref={wrapperRef} className={`relative ${className}`}>
+    <div
+      ref={wrapperRef}
+      className={`relative ${className}`}
+      onBlur={focusPanel && open ? (event) => {
+        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close()
+      } : undefined}
+    >
       {trigger({
         'aria-expanded': open,
         'aria-controls': panelId,
@@ -78,6 +92,8 @@ export default function Popover({
       {open && (
         <div
           id={panelId}
+          ref={panelRef}
+          tabIndex={focusPanel ? -1 : undefined}
           role="dialog"
           aria-label={label}
           className={`absolute top-full z-40 mt-2 w-max max-w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-outline-variant bg-surface-container-low p-3 text-on-surface shadow-2xl shadow-black/50 ${

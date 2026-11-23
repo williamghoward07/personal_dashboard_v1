@@ -10,7 +10,6 @@ import { groupByParent } from '@/lib/todos/subtasks'
 import { formatDue } from '@/lib/todos/format'
 import { isSyncedTodo } from '@/lib/todos/patch'
 import { londonDayBoundsUTC } from '@/lib/google/london-day'
-import Modal from '../../Modal'
 import WorkspaceChip from '../workspaces/WorkspaceChip'
 import StarButton from './StarButton'
 
@@ -76,7 +75,7 @@ export default function TodoDetailModal({
   const linkedSources = useLinkedSources(todo.id)
 
   return (
-    <Modal onClose={onClose} size="lg">
+    <div>
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-2">
           <h2 className="font-display text-base font-bold text-on-surface">{todo.title}</h2>
@@ -85,23 +84,22 @@ export default function TodoDetailModal({
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
+              aria-label="Back to tasks"
+              autoFocus
               className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
             >
-              <X className="h-4 w-4" />
+              <X className="h-4 w-4" /> <span className="text-sm">Back</span>
             </button>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-on-surface-variant">
           {due && <span className={due.overdue ? 'text-academic-orange' : undefined}>Due: {due.label}</span>}
-          {list && <span>List: {list.name}</span>}
+          <span>List: {list?.name ?? 'Unlisted'}</span>
           {isSyncedTodo(todo) && <span>Synced with Microsoft To Do</span>}
-          {workspace && (
-            <span className="flex items-center gap-1.5">
-              Workspace: <WorkspaceChip workspace={workspace} />
-            </span>
-          )}
+          <span className="flex items-center gap-1.5">
+            Workspace: {workspace ? <WorkspaceChip workspace={workspace} /> : 'None'}
+          </span>
         </div>
 
         {linkedSources.length > 0 && (
@@ -191,6 +189,7 @@ export default function TodoDetailModal({
           </div>
         )}
 
+        <button type="button" onClick={() => onToggle(todo.id)} className="rounded-lg bg-[#678451] px-3 py-2 text-sm font-semibold text-white">{todo.completed_at ? 'Mark incomplete' : 'Mark complete'}</button>
         <div className="flex justify-end gap-2 pt-1">
           <button
             type="button"
@@ -210,6 +209,6 @@ export default function TodoDetailModal({
           </button>
         </div>
       </div>
-    </Modal>
+    </div>
   )
 }

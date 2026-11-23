@@ -5,7 +5,7 @@
   --foreground: #dae5da;
 }
 
-@theme inline {
+@theme {
   --color-background: #0c150f;
   --color-foreground: #dae5da;
 
@@ -59,11 +59,6 @@
   --color-people-amber: #ffc233;
   --color-bible-crimson: #ff3b3b;
   --color-workspace-teal: #2dd4bf;
-  /* A workspace's own accent: pages/cards set --ws-accent (from
-     lib/theme.ts ACCENT_VAR) on their root, and every ws-accent utility
-     inside follows it. Literal fallback = teal. Works only because this
-     block is `inline` — the var is resolved where it's used, not at :root. */
-  --color-ws-accent: var(--ws-accent, #2dd4bf);
 
   --font-display: var(--font-bricolage-grotesque), "Bricolage Grotesque", sans-serif;
   --font-body: var(--font-instrument-sans), "Instrument Sans", sans-serif;
@@ -161,6 +156,11 @@
   --duration-normal: 200ms;
   --duration-slow: 400ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Resolve workspace-specific accent aliases at the element using them. */
+@theme inline {
+  --color-ws-accent: var(--ws-accent, #2dd4bf);
 }
 
 body {

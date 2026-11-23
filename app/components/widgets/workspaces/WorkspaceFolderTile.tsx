@@ -6,7 +6,6 @@ import { Folder, GripVertical, MoreHorizontal } from 'lucide-react'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import type { Accent } from '@/lib/theme'
 import type { WorkspaceFolder } from '@/lib/types'
-import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import Popover from '../../Popover'
 import WorkspaceFolderEditor, { type FolderEditorValues } from './WorkspaceFolderEditor'
 import { accentVars, iconButtonClass, wsAccentStyle } from './shared'
@@ -17,6 +16,7 @@ export const folderDropId = (folderId: string | null) => `drop:${folderId ?? 'ro
 // accepts workspaces/folders dropped onto it.
 export default function WorkspaceFolderTile({
   folder,
+  compact = false,
   folders,
   accent,
   counts,
@@ -25,6 +25,7 @@ export default function WorkspaceFolderTile({
   onDelete,
 }: {
   folder: WorkspaceFolder
+  compact?: boolean
   folders: WorkspaceFolder[]
   accent: Accent
   counts: { workspaces: number; subfolders: number }
@@ -60,10 +61,9 @@ export default function WorkspaceFolderTile({
       style={accentVars(accent)}
       className={`${isDragging ? 'opacity-40' : ''} ${menuOpen ? 'relative z-10' : ''}`}
     >
-      <ModuleGlassCard
-        style={wsAccentStyle}
-        size="sm"
-        className={`flex h-full items-center gap-2 transition-colors ${
+      <div
+        style={compact ? undefined : wsAccentStyle}
+        className={`flex h-full min-h-14 items-center gap-2 transition-colors ${compact ? "px-2 py-1" : "rounded-lg border border-outline-variant/60 bg-surface p-3"} ${
           isDropTarget ? 'outline-2 outline-offset-2 outline-ws-accent' : ''
         }`}
       >
@@ -113,7 +113,7 @@ export default function WorkspaceFolderTile({
             />
           )}
         </Popover>
-      </ModuleGlassCard>
+      </div>
     </li>
   )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { listTopicPassagesWithPassage, type BibleTopicPassageWithPassage } from '@/lib/bible/topics'
 import { formatReference } from '@/lib/bible/passages'
@@ -26,7 +27,7 @@ export default function TopicPassageList({
       .finally(() => setLoading(false))
   }, [topic.id])
 
-  if (loading) return <p className="text-sm text-on-surface-variant">Loading…</p>
+  if (loading) return <LoadingSkeleton label="Loading…" />
   if (items.length === 0) return <p className="text-sm text-on-surface-variant">No passages curated for this topic yet.</p>
 
   return (

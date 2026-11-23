@@ -18,12 +18,12 @@ export type { HomeLayoutEntry, HomeWidgetSpan }
  * four columns the widget currently occupies, so a widget can show more
  * when it is wide. It is optional: a widget is free to ignore it, and the
  * grid always renders correctly at all four spans.
- *
- * This shape is a fixed cross-phase contract — AppLauncherGlance derives
- * its tile count from exactly this prop.
  */
 export interface HomeWidgetProps {
+  /** Actual rendered outer width in CSS pixels, independent of viewport breakpoints. */
+  width?: number
   span?: HomeWidgetSpan
+  height?: number
 }
 
 /**
@@ -56,28 +56,22 @@ export interface HomeWidgetMeta {
 }
 
 /**
- * Registry order is the default render order, and it matches the grid as
- * it shipped before this was customisable — an untouched home page looks
- * exactly as it did, every card one column wide.
+ * Registry order and spans define the default study-first arrangement.
+ * Saved layouts keep their own order, sizes, and visibility.
  */
 export const HOME_WIDGETS: readonly HomeWidgetMeta[] = [
-  { id: 'daily-goals', label: 'Daily goals', defaultSpan: 1, defaultHidden: false },
-  { id: 'due-soon', label: 'Due soon', defaultSpan: 1, defaultHidden: false },
-  { id: 'morning-routine', label: 'Morning routine', defaultSpan: 1, defaultHidden: false },
-  { id: 'education', label: 'Education', defaultSpan: 1, defaultHidden: false },
+  { id: 'due-soon', label: 'Study priorities', defaultSpan: 3, defaultHidden: false },
+  { id: 'calendar', label: 'Calendar', defaultSpan: 1, defaultHidden: false },
+  { id: 'daily-goals', label: 'Personal todos', defaultSpan: 2, defaultHidden: false },
   { id: 'workspaces', label: 'Workspaces', defaultSpan: 1, defaultHidden: false },
+  { id: 'app-launcher', label: 'App Launcher', defaultSpan: 1, defaultHidden: false },
+  { id: 'education', label: 'Education', defaultSpan: 1, defaultHidden: false },
   { id: 'money', label: 'Money', defaultSpan: 1, defaultHidden: false },
   { id: 'ai-usage', label: 'AI usage', defaultSpan: 1, defaultHidden: false },
   { id: 'research', label: 'Research', defaultSpan: 1, defaultHidden: false },
-  { id: 'habits', label: 'Habits', defaultSpan: 1, defaultHidden: false },
   { id: 'people', label: 'People', defaultSpan: 1, defaultHidden: false },
-  { id: 'app-launcher', label: 'App library', defaultSpan: 1, defaultHidden: false },
-  { id: 'calendar', label: 'Calendar', defaultSpan: 1, defaultHidden: false },
-  // Registered but hidden by default: the Health module is parked and
-  // /health calls notFound() (app/health/page.tsx, 2026-09-01). Keeping it
-  // in the registry makes restoring the widget the same one-line-revert
-  // decision as restoring the page — un-hide this AND remove that
-  // notFound(), or the card's link 404s.
+  { id: 'morning-routine', label: 'Morning routine', defaultSpan: 1, defaultHidden: false },
+  { id: 'habits', label: 'Habits', defaultSpan: 1, defaultHidden: false },
   { id: 'health', label: 'Health', defaultSpan: 1, defaultHidden: true },
 ]
 
@@ -119,6 +113,16 @@ export function defaultHomeLayout(): HomeLayoutEntry[] {
     span: widget.defaultSpan,
     hidden: widget.defaultHidden,
   }))
+}
+
+
+/** Apply the study-first order and widths without changing visibility or saved heights. */
+export function studyHomeLayout(layout: readonly HomeLayoutEntry[]): HomeLayoutEntry[] {
+  const byId = new Map(layout.map((entry) => [entry.id, entry]))
+  return HOME_WIDGETS.flatMap((widget) => {
+    const entry = byId.get(widget.id)
+    return entry ? [{ ...entry, span: widget.defaultSpan }] : []
+  })
 }
 
 /**

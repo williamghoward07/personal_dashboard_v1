@@ -5,20 +5,17 @@ import { canHideNavItem, isNavItemVisible, navItems, setNavItemVisibility } from
 import Popover from '../Popover'
 import { useAppSettings } from './SettingsProvider'
 
-/**
- * The top bar's settings panel. Today it holds one thing — which tabs are on
- * the rail — but it is the home for any other per-user app preference, so
- * the sections are laid out to take a second one.
- *
- * Uses the in-place `Popover` (not the portalled `Modal`) so it stays
- * anchored to its button in the fixed header, and so it inherits the page's
- * CSS variables like every other menu in the app.
- */
 export default function SettingsMenu({
   triggerClassName,
+  labelClassName,
+  panelClassName = '',
+  focusPanel,
   onOpenChange,
 }: {
   triggerClassName: string
+  labelClassName?: string
+  panelClassName?: string
+  focusPanel?: boolean
   /** Lets the top bar stop auto-hiding on scroll while the panel is open. */
   onOpenChange?: (open: boolean) => void
 }) {
@@ -40,10 +37,12 @@ export default function SettingsMenu({
       label="Settings"
       align="end"
       onOpenChange={onOpenChange}
-      panelClassName="w-72 max-h-[calc(100vh-6rem)] overflow-y-auto"
+      focusPanel={focusPanel}
+      panelClassName={`w-72 max-h-[calc(100vh-6rem)] overflow-y-auto ${panelClassName}`}
       trigger={(props) => (
-        <button type="button" {...props} title="Settings" aria-label="Settings" className={triggerClassName}>
-          <Settings className="h-3.5 w-3.5" strokeWidth={1.75} />
+        <button type="button" {...props} title={labelClassName ? undefined : 'Settings'} aria-label="Settings" className={triggerClassName}>
+          <Settings aria-hidden className="h-3.5 w-3.5" strokeWidth={1.75} />
+          {labelClassName && <span className={labelClassName}>Settings</span>}
         </button>
       )}
     >

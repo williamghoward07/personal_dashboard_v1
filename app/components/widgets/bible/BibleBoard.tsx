@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
@@ -52,7 +53,7 @@ export default function BibleBoard() {
         </GlassCardHeader>
         <GlassCardContent>
           {loading ? (
-            <p className="text-sm text-on-surface-variant">Loading…</p>
+            <LoadingSkeleton label="Loading…" />
           ) : !study ? (
             <StudyImportForm onImported={refresh} />
           ) : (

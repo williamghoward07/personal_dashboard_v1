@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useMemo, useState, type ReactNode } from 'react'
 import { CalendarClock, BookOpen, Check, EyeOff, ExternalLink, FileText, Pin, Presentation, Video, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -244,7 +245,7 @@ export default function SessionBlackboardBlock({
     return toWorkItems({ courses: [course], assignments: [], keyDates, sessions: [], contentUrlById, now })
   }, [match, course, now])
 
-  if (loading) return <p className="text-xs text-on-surface-variant">Loading…</p>
+  if (loading) return <LoadingSkeleton label="Loading…" />
   if (error) {
     return (
       <p role="alert" className="text-xs text-error">

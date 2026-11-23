@@ -1,0 +1,13 @@
+.row { display: flex; min-height: 48px; align-items: center; gap: 8px; padding: 8px 0; cursor: pointer; }
+.content { flex: 1; min-width: 0; text-align: left; }
+.selected { background: #e8efdf; }
+.title { display: block; overflow-wrap: anywhere; font-size: 14px; }
+.context { display: flex; flex-wrap: wrap; gap: 4px; color: #596055; font-size: 12px; }
+.mobileDue { display: none; }
+.desktopDue { flex-shrink: 0; font-size: 12px; }
+@media (max-width: 640px) {
+  .title { font-size: 16px; line-height: 1.3; }
+  .context { font-size: 14px; line-height: 1.3; }
+  .mobileDue { display: inline; }
+  .desktopDue { display: none; }
+}

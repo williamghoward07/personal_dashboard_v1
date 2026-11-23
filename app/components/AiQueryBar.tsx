@@ -3,9 +3,8 @@
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Send, Sparkles, Square, X } from 'lucide-react'
+import { ArrowRight, Search, Send, Square, X } from 'lucide-react'
 import LoadingGlowBorder from './LoadingGlowBorder'
-import LiquidSwitch from './LiquidSwitch'
 import DraftList from './capture/DraftList'
 import type { SearchModule } from '@/lib/search/nl-search'
 import type { SearchResultItem } from '@/lib/search/types'
@@ -44,16 +43,8 @@ const MODE_OPTIONS = [
   { value: 'capture', label: 'Capture' },
 ] as const satisfies readonly { value: QueryMode; label: string }[]
 
-const MODE_HINT: Record<QueryMode, string> = {
-  auto: 'Picks for you: questions get answered, instructions and lists get captured, anything else is searched.',
-  find: 'Searches your modules for matching items. Changes nothing.',
-  ask: 'Searches, then answers your question from what it found. Changes nothing.',
-  capture:
-    'Splits what you type into todos, deadlines, events and people updates. Nothing is saved until you confirm.',
-}
-
 const PLACEHOLDER: Record<QueryMode, string> = {
-  auto: 'Search, ask a question, or jot down things to add…',
+  auto: 'Search, ask or capture…',
   find: 'Search people, todos, tasks, money, habits, prompts…',
   ask: 'e.g. what did I spend on food this month?',
   capture: 'e.g. essay plan due friday, call mum tomorrow, met Sam at church',
@@ -179,19 +170,10 @@ export default function AiQueryBar() {
       <LoadingGlowBorder loading={loading} className="rounded-xl">
         <form
           onSubmit={handleSubmit}
-          className="overflow-hidden rounded-xl border border-outline-variant bg-linear-to-br from-surface-container-low to-surface-container-lowest p-6 transition-all hover:border-academic-orange/40 hover:shadow-[0_0_15px_rgba(255,107,0,0.15)]"
+          className="rounded-xl border border-outline-variant bg-surface-container-low focus-within:border-outline"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border border-academic-orange bg-academic-orange/20 text-academic-orange">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <h2 className="font-display text-headline-md text-on-surface">System Query</h2>
-            </div>
-            <LiquidSwitch options={MODE_OPTIONS} value={mode} onChange={setMode} accent="orange" />
-          </div>
-
-          <div className="relative mt-4">
+          <div className="flex items-start gap-1 px-2">
+            <Search className="ml-1 mt-3 size-4 shrink-0 text-on-surface-variant" aria-hidden="true" />
             <textarea
               ref={textareaRef}
               rows={1}
@@ -201,14 +183,22 @@ export default function AiQueryBar() {
               placeholder={PLACEHOLDER[mode]}
               disabled={loading}
               aria-label="Search, ask or capture"
-              className="block w-full resize-none rounded-lg border border-outline-variant bg-surface-container-lowest py-3.5 pl-4 pr-12 text-sm leading-5 text-on-surface outline-none placeholder:text-on-surface-variant focus:border-academic-orange disabled:opacity-60"
+              className="min-w-0 flex-1 resize-none bg-transparent px-1.5 py-2.5 text-sm leading-5 text-on-surface outline-none placeholder:text-on-surface-variant disabled:opacity-60"
             />
+            <select
+              aria-label="Query mode"
+              value={mode}
+              onChange={(event) => setMode(event.target.value as QueryMode)}
+              className="mt-1.5 rounded-md bg-surface-container-high px-1.5 py-1 text-xs font-medium text-on-surface focus-visible:outline-2 focus-visible:outline-primary"
+            >
+              {MODE_OPTIONS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+            </select>
             {capture.loading ? (
               <button
                 type="button"
                 onClick={captureStore.stop}
                 aria-label="Stop"
-                className="absolute bottom-3.5 right-3 text-academic-orange"
+                className="mt-1.5 grid size-7 shrink-0 place-items-center rounded-md text-academic-orange hover:bg-surface-container-high"
               >
                 <Square className="h-4 w-4" />
               </button>
@@ -217,24 +207,23 @@ export default function AiQueryBar() {
                 type="submit"
                 disabled={loading || !queryLongEnough}
                 aria-label="Submit"
-                className="absolute bottom-3.5 right-3 text-academic-orange disabled:opacity-40"
+                className="mt-1.5 grid size-7 shrink-0 place-items-center rounded-md text-academic-orange enabled:hover:bg-surface-container-high disabled:opacity-40"
               >
                 <Send className="h-4 w-4" />
               </button>
             )}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-on-surface-variant">
-            <p className="min-w-0 flex-1">{MODE_HINT[mode]}</p>
-            {autoTarget && (
-              <span className="flex shrink-0 items-center gap-1 rounded-full border border-academic-orange/40 px-2 py-0.5 text-academic-orange">
+          {autoTarget && (
+            <div className="flex justify-end px-2 pb-1 text-xs">
+              <span className="flex items-center gap-1 rounded-full border border-academic-orange/40 px-2 py-0.5 text-academic-orange">
                 <ArrowRight className="h-3 w-3" />
                 {RESOLVED_LABEL[autoTarget]}
               </span>
-            )}
-          </div>
-          {loading && <p className="mt-1 text-xs text-on-surface-variant">{loadingLabel}</p>}
-          {searchError && <p className="mt-1 text-xs text-error">{searchError}</p>}
+            </div>
+          )}
+          {loading && <p className="px-3 pb-2 text-xs text-on-surface-variant">{loadingLabel}</p>}
+          {searchError && <p className="px-3 pb-2 text-xs text-error">{searchError}</p>}
         </form>
       </LoadingGlowBorder>
 

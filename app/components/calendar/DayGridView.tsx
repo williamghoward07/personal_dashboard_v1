@@ -66,9 +66,9 @@ export default function DayGridView({
   }, [dateKey, pxPerMin])
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
       {untimed.length > 0 && (
-        <div className="flex flex-col gap-1 border-b border-outline-variant/60 pb-2">
+        <div className="flex flex-col gap-1 border-b border-outline-variant p-2">
           {untimed.map((item) => (
             <UntimedItemRow key={itemKey(item)} item={item} onSelectTask={onSelectTask} />
           ))}
@@ -77,12 +77,12 @@ export default function DayGridView({
 
       <div
         ref={scrollRef}
-        className="relative overflow-y-auto rounded-lg border border-outline-variant/60"
+        className="relative overflow-y-auto"
         style={{ height: Math.min(maxContainerHeightPx, gridHeightPx(pxPerMin)) }}
       >
         <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
           <TimeGridHourLabels pxPerMin={pxPerMin} />
-          <div className="relative flex-1">
+          <div className="relative min-w-0 flex-1">
             <TimeGridLines pxPerMin={pxPerMin} />
             {isToday && <CurrentTimeLine nowMinutes={nowMinutes} pxPerMin={pxPerMin} />}
             {timed.map((item) => {

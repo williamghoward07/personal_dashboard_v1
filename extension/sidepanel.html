@@ -71,6 +71,12 @@
       .link { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
       .link:hover { color: var(--ink); }
       .error-text { color: var(--accent); }
+      .alert { border-color: var(--accent); }
+      .alert h2 { color: var(--accent); }
+      /* Under a row: what was saved, or the exact error. */
+      .detail { margin-top: -3px; padding: 0 0 9px; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+      .detail > div + div { margin-top: 2px; }
+      .detail.error-text, .detail .error-text { color: var(--accent); }
 
       /* Progress: the one indicator, horizontal. */
       .progress { margin-top: 14px; }

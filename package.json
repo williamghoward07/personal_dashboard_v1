@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "build:extension": "node extension/build.mjs"
+    "build:extension": "node extension/build.mjs",
+    "bb:eval": "JITI_ALIAS=\"{\\\"@/\\\":\\\"$PWD/\\\",\\\"server-only\\\":\\\"$PWD/node_modules/server-only/empty.js\\\"}\" jiti scripts/bb-eval.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

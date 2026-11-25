@@ -13,13 +13,13 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-surface px-4">
-      <div className="flex w-full max-w-sm flex-col items-center gap-8 rounded-2xl border border-outline-variant bg-surface-container-high p-10 text-center">
+    <main className="workspace-ui flex min-h-dvh w-full items-center justify-center bg-surface px-4">
+      <div className="flex w-full max-w-sm flex-col items-center gap-8 rounded-2xl border border-outline-variant bg-surface-container-low p-6 sm:p-10 text-center">
         <div className="flex flex-col items-center gap-3">
-          <Hexagon className="h-8 w-8 text-secondary-container" strokeWidth={1.5} />
+          <Hexagon className="h-8 w-8 text-primary-container" strokeWidth={1.5} />
           <div>
-            <h1 className="font-display text-headline-md font-bold tracking-wide text-on-surface">
-              STUDY COPILOT
+            <h1 className="font-display text-headline-md font-semibold tracking-tight text-on-surface">
+              Study Copilot
             </h1>
             <p className="mt-1 text-sm text-on-surface-variant">Sign in to continue</p>
           </div>

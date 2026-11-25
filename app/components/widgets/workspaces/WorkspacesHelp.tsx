@@ -24,6 +24,10 @@ export default function WorkspacesHelp({ align = 'start' }: { align?: 'start' | 
           of your thinking.
         </p>
 
+        <Section title="Browsing workspaces">
+          <p>Choose a folder to browse its workspaces. Search matches workspace titles and subtitles in the current folder. List shows a compact overview; Cards offers a larger view. Select a list row to preview its scoped tasks and sources, then choose Open workspace for the full desk.</p>
+        </Section>
+
         <Section title="Folders & colours">
           <p>
             Group workspaces into folders (folders can sit inside folders — e.g. Uni › Year 2). Open a folder to see
@@ -58,9 +62,10 @@ export default function WorkspacesHelp({ align = 'start' }: { align?: 'start' | 
           <p>
             Give a workspace a <span className="text-on-surface">module code</span> (e.g. GEOG1081, in the palette
             menu next to the title) — or use Create workspace on the Lectures tab — and it becomes a module workspace.
-            It moves from here to the Lectures tab and gets a Lectures section listing every session for that module
-            from your timetable, with the same Upcoming · Past due · Completed · History tabs as the Lectures tab, so
-            you can mark past-due sessions as done right here.
+            It moves from here to the Lectures tab and gets a Lectures section that is the module&apos;s work list: key
+            dates and tests from Blackboard, plus lecture prep for every session on your timetable, with the same
+            Upcoming · Past due · Completed tabs as the Lectures tab, so you can mark past-due sessions as done right
+            here.
           </p>
           <p>
             Open a session to paste its reading links (Talis, Blackboard…) and tick them off, mark &quot;no readings&quot;,

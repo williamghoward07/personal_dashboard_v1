@@ -18,6 +18,7 @@ import {
   type BbJson,
   type BbSnapshot,
 } from './client'
+import { classifyLink, cleanText, dedupeLinks, extractLinks, htmlToText, safeHref, type BbContentLink } from './links'
 
 export const SYNC_TRIGGERS = ['manual', 'visit', 'daily'] as const
 export type BbSyncTrigger = (typeof SYNC_TRIGGERS)[number]
@@ -40,6 +41,8 @@ export interface BbAssignmentRow {
   due_at: string | null
   bb_content_id: string | null
   status: BbAssignmentStatus
+  /** From the To Do item's `column.isFormative`; null = Blackboard didn't say. */
+  is_formative: boolean | null
   url: string
 }
 
@@ -75,6 +78,10 @@ export interface BbContentRow {
   path: string[]
   week_label: number | null
   url: string
+  /** Plain text of the item's description + body, at most MAX_TEXT; null when empty. */
+  body_text: string | null
+  /** Embedded links and the item's own file / link / Talis / Panopto target. Not the raw item's API `links`. */
+  links: BbContentLink[]
 }
 
 export interface BbSyncRows {
@@ -127,41 +134,17 @@ export function toIso(value: unknown): string | null {
 }
 
 function title(value: unknown, fallback: string): string {
-  const text = htmlToText(str(value) ?? '')
-  return (text || fallback).slice(0, MAX_TITLE)
+  const text = cleanText(htmlToText(str(value) ?? ''), MAX_TITLE)
+  return text || cleanText(fallback, MAX_TITLE)
 }
 
+/** Cut to MAX_TEXT, Postgres-safe (no NUL, no half surrogate pair). */
 function clip(text: string | null): string | null {
-  return text ? text.slice(0, MAX_TEXT) : null
+  return text ? cleanText(text, MAX_TEXT) : null
 }
 
-const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
-
-/** Blackboard HTML (announcement bodies, feedback) → plain text with paragraph breaks. */
-export function htmlToText(html: string): string {
-  return (
-    html
-      .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
-      .replace(/<!--[\s\S]*?-->/g, '')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/(p|div|li|h[1-6]|tr|blockquote|ul|ol)\s*>/gi, '\n')
-      .replace(/<li\b[^>]*>/gi, '• ')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (match, entity: string) => {
-        if (entity[0] === '#') {
-          const code = entity[1] === 'x' || entity[1] === 'X' ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10)
-          return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match
-        }
-        return ENTITIES[entity.toLowerCase()] ?? match
-      })
-      .replace(/ /g, ' ')
-      .split('\n')
-      .map((line) => line.replace(/[ \t\r\f\v]+/g, ' ').trim())
-      .join('\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-  )
-}
+/** Blackboard HTML → plain text with paragraph breaks (defined in links.ts). */
+export { htmlToText }
 
 /** Ultra sends rich text either as an HTML string or as `{ rawText, displayText }`. */
 function richText(value: unknown): string | null {
@@ -171,9 +154,13 @@ function richText(value: unknown): string | null {
   return html ? clip(htmlToText(html)) || null : null
 }
 
-/** "Week 5", "Wk 5", "week 12 – rivers" → 5 / 5 / 12. The first number wins ("Weeks 3 & 4" → 3). */
+/**
+ * "Week 5", "Wk 5", "week 12 – rivers" → 5 / 5 / 12. The first number wins
+ * ("Weeks 3 & 4" → 3, "Weeks 13-15: …" → 13, "Weeks 18–19" → 18). Durham
+ * labels are university week numbers; they are stored as written.
+ */
 export function parseWeekLabel(text: string): number | null {
-  const match = /\b(?:weeks?|wk)\.?\s*(\d{1,2})\b/i.exec(text)
+  const match = /\b(?:weeks?|wks?)\.?\s*(\d{1,2})\b/i.exec(text)
   return match ? Number(match[1]) : null
 }
 
@@ -193,10 +180,29 @@ const KIND_BY_HANDLER: Record<string, BbContentKind> = {
   'resource/x-bb-toollink': 'tool',
 }
 
-/** `contentHandler.id` → kind. Unknown handlers are `other`. */
+/**
+ * `contentHandler.id` → kind. Unknown handlers are `other`.
+ * - `x-bb-blti-link` with a `grading` block (or a Turnitin URL) is a
+ *   submission point, so `assignment`; other LTI links are `tool`.
+ * - `x-bb-bltiplacement-*` (Talis reading list, Panopto recordings) is `tool`.
+ * - `x-bb-courselink` follows its `targetType` (discussion boards and
+ *   submission points), else it's a `link` within the course.
+ */
 export function contentKind(item: BbJson): BbContentKind {
-  const handler = str(obj(item.contentHandler).id)
+  const handlerObj = obj(item.contentHandler)
+  const handler = str(handlerObj.id)
   if (!handler) return 'other'
+  if (handler === 'resource/x-bb-blti-link') {
+    const gradable = Object.keys(obj(handlerObj.grading)).length > 0
+    return gradable || /turnitin/i.test(str(handlerObj.url) ?? '') ? 'assignment' : 'tool'
+  }
+  if (handler.startsWith('resource/x-bb-bltiplacement-')) return 'tool'
+  if (handler === 'resource/x-bb-courselink') {
+    const target = str(handlerObj.targetType) ?? ''
+    if (/discussion|forum/i.test(target)) return 'discussion'
+    if (/assess|assignment|test|survey/i.test(target)) return 'assignment'
+    return 'link'
+  }
   return KIND_BY_HANDLER[handler] ?? (handler.includes('turnitin') ? 'assignment' : 'other')
 }
 
@@ -235,12 +241,64 @@ function courseRow(course: BbCourseSnapshot): BbCourseRow {
   }
 }
 
+/** An item's `body` / `description`: an HTML string or `{ rawText, displayText }`. */
+function rawHtml(value: unknown): string {
+  if (typeof value === 'string') return value
+  const o = obj(value)
+  return str(o.displayText) ?? str(o.rawText) ?? ''
+}
+
+/** Description first, then body; empty and repeated parts are skipped. */
+function contentBodyText(htmlParts: string[]): string | null {
+  const parts: string[] = []
+  for (const html of htmlParts) {
+    const text = htmlToText(html)
+    if (text && !parts.includes(text)) parts.push(text)
+  }
+  return clip(parts.join('\n\n'))
+}
+
+/**
+ * The item's own target, from its content handler. Files point at the item
+ * (never a download URL); LTI placements are never launched or resolved, so
+ * they also point at the item.
+ */
+function handlerLinks(item: BbJson, name: string, itemUrl: string): BbContentLink[] {
+  const handler = obj(item.contentHandler)
+  const id = str(handler.id) ?? ''
+  if (id === 'resource/x-bb-externallink') {
+    const href = safeHref(str(handler.url) ?? '', itemUrl)
+    return href ? [{ href, label: name, kind: classifyLink(href, name) }] : []
+  }
+  if (id === 'resource/x-bb-file') {
+    const file = obj(handler.file)
+    const fileName = (str(file.fileName) ?? '').trim()
+    const mime = (str(file.mimeType) ?? '').trim()
+    const kind = classifyLink(itemUrl, fileName || name, mime || undefined) === 'slides' ? 'slides' : 'file'
+    const link: BbContentLink = { href: itemUrl, label: cleanText(fileName || name, 300), kind }
+    if (mime) link.mime = cleanText(mime, 300)
+    return [link]
+  }
+  if (id.includes('lti-talis')) return [{ href: itemUrl, label: name, kind: 'talis' }]
+  if (/panopto/i.test(id)) return [{ href: itemUrl, label: name, kind: 'panopto' }]
+  return []
+}
+
+const ULTRA_BODY_TITLE = /^ultraDocumentBody$/i
+
 function contentRows(course: BbCourseSnapshot): BbContentRow[] {
   return course.contents.map((item: BbContentNode) => {
-    const name = title(item.title, 'Untitled')
-    const path = item.path.map((p) => htmlToText(p))
+    const path = item.path.map((p) => cleanText(htmlToText(p), MAX_TITLE))
+    // An Ultra Document is a parent item plus a child called "ultraDocumentBody"
+    // that holds the page. The child is the thing worth showing, under its
+    // parent's name.
+    const own = title(item.title, 'Untitled')
+    const name = ULTRA_BODY_TITLE.test(own) && path.length > 0 ? path[path.length - 1] : own
     let week = parseWeekLabel(name)
     for (let i = path.length - 1; week === null && i >= 0; i--) week = parseWeekLabel(path[i])
+    const url = contentUrl(item, course.bbId)
+    // `item.links` is Blackboard's own API link list (used for `url` above), not embedded links.
+    const html = [rawHtml(item.description), rawHtml(item.body)]
     return {
       bb_id: item.id,
       course_bb_id: course.bbId,
@@ -250,7 +308,9 @@ function contentRows(course: BbCourseSnapshot): BbContentRow[] {
       available_from: toIso(obj(obj(item.availability).adaptiveRelease).start),
       path,
       week_label: week,
-      url: contentUrl(item, course.bbId),
+      url,
+      body_text: contentBodyText(html),
+      links: dedupeLinks([...handlerLinks(item, name, url), ...html.flatMap((h) => extractLinks(h, url))]),
     }
   })
 }
@@ -295,7 +355,7 @@ function gradeRows(course: BbCourseSnapshot): BbGradeRow[] {
       course_bb_id: course.bbId,
       score,
       possible,
-      display_grade: formatGrade(display, score, possible) ?? (str(g.text) || null),
+      display_grade: clip(formatGrade(display, score, possible) ?? (str(g.text) || null)),
       feedback: richText(g.feedback),
       released_at: toIso(g.lastRelevantDate) ?? toIso(g.firstRelevantDate),
     })
@@ -315,6 +375,16 @@ function isCourseworkColumn(column: BbJson): boolean {
   const grading = obj(column.grading)
   if (grading.type === 'Calculated' || column.externalGrade === true) return false
   return str(column.contentId) !== null || toIso(grading.due) !== null
+}
+
+/**
+ * `column.isFormative` on a To Do item, when it's a boolean. UNVERIFIED: the
+ * To Do feed was empty during the live audit, so the field's presence and
+ * name are a guess; anything else (missing, string, null) is "unknown".
+ */
+function formativeFlag(todoItem: BbJson): boolean | null {
+  const flag = obj(todoItem.column).isFormative
+  return typeof flag === 'boolean' ? flag : null
 }
 
 const TODO_BUCKETS = ['overdueItems', 'dueTodayItems', 'futureDueItems'] as const
@@ -354,6 +424,7 @@ export function normaliseSnapshot(snap: BbSnapshot, trigger: BbSyncTrigger = 'ma
     contentId: string | null,
     name: string,
     due: string | null,
+    isFormative: boolean | null = null,
   ): BbAssignmentRow => ({
     bb_id: key,
     course_bb_id: course.bbId,
@@ -361,6 +432,7 @@ export function normaliseSnapshot(snap: BbSnapshot, trigger: BbSyncTrigger = 'ma
     due_at: due,
     bb_content_id: contentId,
     status: gradeStatus(columnId ? gradeByColumn.get(columnId) : undefined),
+    is_formative: isFormative,
     url: (contentId && contentUrlById.get(contentId)) || courseOutlineUrl(course.bbId),
   })
 
@@ -406,6 +478,7 @@ export function normaliseSnapshot(snap: BbSnapshot, trigger: BbSyncTrigger = 'ma
             contentId,
             title(item.title, fromColumn?.title ?? str(column.name) ?? 'Coursework'),
             toIso(item.dueDate) ?? fromColumn?.due_at ?? null,
+            formativeFlag(item) ?? fromColumn?.is_formative ?? null,
           ),
         )
       }

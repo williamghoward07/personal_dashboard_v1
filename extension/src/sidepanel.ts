@@ -13,12 +13,17 @@ import {
   hostOf,
   readTargets,
   type DashboardTargets,
+  type DocumentsResult,
+  type LastAutoRun,
   type LastRun,
   type SessionCheck,
   type SyncState,
+  type SyncTrigger,
   type TargetId,
+  type UploadBytes,
   type WorkerMessage,
 } from './shared'
+import { DAILY_ALARM, nextDailySync } from './triggers'
 
 type Tab = 'overview' | 'courses'
 type CourseRow = SnapshotSummary['courses'][number]
@@ -37,6 +42,10 @@ const state: {
   dashboardError?: string
   /** The "Sync to Test?" dialog is open. */
   confirming: boolean
+  lastAuto?: LastAutoRun
+  lastSuccessAt?: number
+  /** The daily alarm's next scheduled time (ms epoch), from chrome.alarms. */
+  dailyAlarmAt?: number
 } = { tab: 'overview', targets: { active: 'live' }, draft: { url: '', token: '' }, confirming: false }
 
 // ---------- tiny DOM helper ----------
@@ -64,6 +73,9 @@ function h(tag: string, props: Props = {}, ...children: Child[]): HTMLElement {
 
 const STAGES: SyncState['stage'][] = ['session', 'courses', 'content', 'todo', 'saving']
 
+/** Documents are read after saving, under the same (last) circle. */
+const stageIndex = (stage: SyncState['stage']) => STAGES.indexOf(stage === 'documents' ? 'saving' : stage)
+
 function activeSync(): SyncState | undefined {
   const sync = state.sync
   return sync && Date.now() - sync.updatedAt < SYNC_STALE_MS ? sync : undefined
@@ -87,7 +99,11 @@ function stepText(sync: SyncState): string {
     case 'todo':
       return p?.stage === 'todo' ? `Reading due dates (${p.windowIndex} of ${p.windowCount})` : 'Reading due dates'
     case 'saving':
-      return 'Saving'
+      return 'Saving to the dashboard'
+    case 'documents':
+      return sync.documents
+        ? `Reading handbooks and briefs (${Math.min(sync.documents.done + 1, sync.documents.total)} of ${sync.documents.total})`
+        : 'Reading handbooks and briefs'
   }
 }
 
@@ -106,10 +122,41 @@ function relativeTime(iso: string): string {
   if (date.toDateString() === today.toDateString()) return `Today ${time}`
   const yesterday = new Date(today.getTime() - 86_400_000)
   if (date.toDateString() === yesterday.toDateString()) return `Yesterday ${time}`
+  const tomorrow = new Date(today.getTime() + 86_400_000)
+  if (date.toDateString() === tomorrow.toDateString()) return `Tomorrow ${time}`
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) + ` ${time}`
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+const TRIGGER_LABEL: Record<SyncTrigger, string> = { manual: 'Sync now', daily: 'daily', visit: 'on visit' }
+
+function formatBytes(n: number): string {
+  return n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`
+}
+
+/** "Saved 10 courses · 452 items · …" from the sync RPC's counts. */
+function countsText(counts: Record<string, unknown>): string {
+  const n = (key: string) => (typeof counts[key] === 'number' ? (counts[key] as number) : null)
+  const parts = [
+    [n('courses'), 'course'],
+    [n('content'), 'item'],
+    [n('assignments'), 'assignment'],
+    [n('announcements'), 'announcement'],
+    [n('grades'), 'grade'],
+  ]
+    .filter((p): p is [number, string] => p[0] !== null)
+    .map(([count, word]) => plural(count, word))
+  return parts.length ? `Saved ${parts.join(' · ')}` : 'Saved'
+}
+
+function bytesText(bytes: UploadBytes): string {
+  return bytes.gzip ? `Sent ${formatBytes(bytes.sent)} (gzip, ${formatBytes(bytes.raw)} unpacked)` : `Sent ${formatBytes(bytes.sent)}`
+}
+
+function documentsText(d: DocumentsResult): string {
+  return `${d.read} read · ${d.unchanged} unchanged · ${d.skipped.length} skipped · ${d.failed.length} failed`
+}
 
 // ---------- actions ----------
 
@@ -118,8 +165,9 @@ function startSync() {
   // Optimistic: the worker writes the real state a moment later.
   state.sync = { running: true, startedAt: new Date().toISOString(), updatedAt: Date.now(), via: 'worker', stage: 'session' }
   render()
-  void chrome.runtime.sendMessage<WorkerMessage, LastRun>({ type: 'sync' }).then((run) => {
-    state.lastRun = run
+  void chrome.runtime.sendMessage<WorkerMessage, LastRun | undefined>({ type: 'sync' }).then((run) => {
+    // Undefined: a sync was already running; its own progress shows instead.
+    if (run) state.lastRun = run
     state.sync = undefined
     render()
   })
@@ -276,10 +324,10 @@ function overview(): HTMLElement[] {
 
   let progress: HTMLElement | null = null
   if (sync) {
-    const at = STAGES.indexOf(sync.stage)
+    const at = stageIndex(sync.stage)
     progress = h('div', { class: 'progress' }, progressBar(at, 'current'), h('div', { class: 'step-text' }, `Step ${at + 1} of ${STAGES.length} · ${stepText(sync)}`))
   } else if (failed) {
-    const at = Math.max(0, STAGES.indexOf(failed.stage ?? 'session'))
+    const at = Math.max(0, stageIndex(failed.stage ?? 'session'))
     progress = h(
       'div',
       { class: 'progress' },
@@ -302,11 +350,17 @@ function overview(): HTMLElement[] {
       h(
         'div',
         { class: 'rows' },
-        row('Last sync', run ? `${relativeTime(run.at)}${run.ok ? '' : ', failed'}` : 'Never'),
+        row('Last sync', run ? `${relativeTime(run.at)} · ${TRIGGER_LABEL[run.trigger ?? 'manual']}` : 'Never'),
+        run ? row('Blackboard', run.ok ? 'Read' : run.loginRequired ? 'Login needed' : 'Error') : null,
         s ? row('Found', `${plural(s.courses.length, 'course')} · ${s.todoItems} due · ${s.courses.reduce((n, c) => n + c.contents, 0)} items`) : null,
         row('Dashboard', uploadText()),
+        uploadDetail(),
+        run?.ok && run.documents ? row('Documents', documentsText(run.documents)) : null,
+        run?.ok && run.documents ? documentsDetail(run.documents) : null,
+        row('Next daily sync', nextDailyText()),
+        row('Last automatic sync', lastAutoText()),
       ),
-      uploadError(),
+      switchToLiveOffer(),
       h('button', { class: 'primary', disabled: !!sync, onclick: requestSync }, sync ? 'Syncing…' : syncLabel()),
       s || via
         ? h(
@@ -324,23 +378,69 @@ function overview(): HTMLElement[] {
 
 function uploadText(): string {
   if (!activeDashboard(state.targets)) return 'Not set up'
-  const upload = state.lastRun?.ok ? state.lastRun.upload : undefined
-  if (!upload) return 'Not sent yet'
+  const run = state.lastRun
+  if (!run) return 'Not sent yet'
+  if (!run.ok) return 'Not sent (Blackboard not read)'
+  if (!run.upload) return 'Not sent (connected after this sync)'
   // Runs from before Live/Test have no host.
-  const where = upload.host ? ` to ${upload.host}` : ''
-  return upload.ok ? `Saved${where}` : `Not saved${where}`
+  const where = run.upload.host ? ` to ${run.upload.host}` : ''
+  return run.upload.ok ? `Saved${where}` : `Not saved${where}`
 }
 
-/** Why the last upload failed. Test not answering offers a way back to Live. */
-function uploadError(): HTMLElement | null {
+/** The upload's row counts and size, or its exact error. */
+function uploadDetail(): HTMLElement | null {
+  const run = state.lastRun
+  if (!run?.ok || !run.upload) return null
+  const upload = run.upload
+  if (!upload.ok) return h('div', { class: 'detail error-text' }, upload.error)
+  return h('div', { class: 'detail' }, countsText(upload.counts), upload.bytes ? h('div', {}, bytesText(upload.bytes)) : null)
+}
+
+/** Test not answering (dev server off) offers a way back to Live. */
+function switchToLiveOffer(): HTMLElement | null {
   const upload = state.lastRun?.ok ? state.lastRun.upload : undefined
-  if (!upload || upload.ok) return null
-  const offerLive = upload.unreachable && upload.target === 'test' && state.targets.active === 'test' && !!state.targets.live
+  if (!upload || upload.ok || !upload.unreachable) return null
+  if (upload.target !== 'test' || state.targets.active !== 'test' || !state.targets.live) return null
+  return h('button', { class: 'secondary', onclick: () => pickTarget('live') }, 'Switch to Live')
+}
+
+/** File names with the reason each was skipped or failed. */
+function documentsDetail(d: DocumentsResult): HTMLElement | null {
+  const lines = [
+    ...d.failed.map((n) => h('div', { class: 'error-text' }, `Failed: ${n.fileName}: ${n.reason}`)),
+    ...d.skipped.map((n) => h('div', {}, `Skipped: ${n.fileName}: ${n.reason}`)),
+    d.stopped ? h('div', { class: 'error-text' }, d.stopped) : null,
+  ]
+  return lines.some(Boolean) ? h('div', { class: 'detail' }, ...lines) : null
+}
+
+function nextDailyText(): string {
+  if (state.dailyAlarmAt == null) return 'Not scheduled'
+  return relativeTime(new Date(nextDailySync(state.dailyAlarmAt, { lastSuccessAt: state.lastSuccessAt })).toISOString())
+}
+
+const AUTO_OUTCOME: Record<LastAutoRun['outcome'], string> = {
+  saved: 'saved',
+  read: 'read, not sent',
+  'not-saved': 'not saved',
+  login: 'login needed',
+  error: 'failed',
+}
+
+function lastAutoText(): string {
+  const auto = state.lastAuto
+  if (!auto) return 'None yet'
+  return `${relativeTime(auto.at)} · ${TRIGGER_LABEL[auto.trigger]} · ${AUTO_OUTCOME[auto.outcome]}`
+}
+
+/** At the top of every tab while the active dashboard isn't set up: nothing leaves this browser. */
+function notConnectedBanner(): HTMLElement | null {
+  if (activeDashboard(state.targets)) return null
   return h(
-    'div',
-    {},
-    h('div', { class: 'step-text error-text' }, upload.error),
-    offerLive ? h('button', { class: 'secondary', onclick: () => pickTarget('live') }, 'Switch to Live') : null,
+    'section',
+    { class: 'card alert', role: 'status' },
+    h('h2', {}, 'Not connected to the dashboard: nothing is being saved'),
+    h('p', {}, 'Syncs only stay in this browser. Enter the dashboard address and sync token in the Dashboard card on Overview.'),
   )
 }
 
@@ -509,7 +609,7 @@ function render() {
   app.replaceChildren(
     header(),
     tabs(),
-    h('main', { class: 'content', role: 'tabpanel' }, ...(state.tab === 'overview' ? overview() : courses())),
+    h('main', { class: 'content', role: 'tabpanel' }, notConnectedBanner(), ...(state.tab === 'overview' ? overview() : courses())),
     ...(dialog ? [dialog] : []),
   )
   dialog?.showModal()
@@ -523,12 +623,32 @@ chrome.storage.onChanged.addListener((changes, area) => {
     state.targets = readTargets({ [STORAGE.dashboards]: changes[STORAGE.dashboards].newValue })
   if (area === 'local' && STORAGE.lastSummary in changes)
     state.lastSummary = changes[STORAGE.lastSummary].newValue as SnapshotSummary | undefined
+  if (area === 'local' && STORAGE.lastAutoRun in changes)
+    state.lastAuto = changes[STORAGE.lastAutoRun].newValue as LastAutoRun | undefined
+  if (area === 'local' && STORAGE.lastSuccessAt in changes) {
+    state.lastSuccessAt = changes[STORAGE.lastSuccessAt].newValue as number | undefined
+    void loadDailyAlarm()
+  }
   render()
 })
 
+/** The alarm moves on after it fires, so re-read it whenever a sync finishes. */
+async function loadDailyAlarm() {
+  const alarm = await chrome.alarms.get(DAILY_ALARM)
+  state.dailyAlarmAt = alarm?.scheduledTime
+  render()
+}
+
 async function init() {
   const [local, session] = await Promise.all([
-    chrome.storage.local.get([STORAGE.lastRun, STORAGE.lastSummary, STORAGE.dashboards, STORAGE.dashboard]),
+    chrome.storage.local.get([
+      STORAGE.lastRun,
+      STORAGE.lastSummary,
+      STORAGE.dashboards,
+      STORAGE.dashboard,
+      STORAGE.lastAutoRun,
+      STORAGE.lastSuccessAt,
+    ]),
     chrome.storage.session.get([STORAGE.syncState, STORAGE.session]),
   ])
   state.lastRun = local[STORAGE.lastRun] as LastRun | undefined
@@ -540,7 +660,10 @@ async function init() {
   if (!local[STORAGE.dashboards] && local[STORAGE.dashboard]) void saveTargets(state.targets)
   state.sync = session[STORAGE.syncState] as SyncState | undefined
   state.session = session[STORAGE.session] as SessionCheck | undefined
+  state.lastAuto = local[STORAGE.lastAutoRun] as LastAutoRun | undefined
+  state.lastSuccessAt = local[STORAGE.lastSuccessAt] as number | undefined
   render()
+  void loadDailyAlarm()
   // Fresh "connected" check each time the panel opens (one request).
   if (!activeSync()) void chrome.runtime.sendMessage<WorkerMessage, SessionCheck>({ type: 'check' })
 }

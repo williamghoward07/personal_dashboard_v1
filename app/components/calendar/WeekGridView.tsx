@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem, EventSpan } from './calendarItems'
-import { isBarRenderedCalendarItem } from './calendarItems'
+import { formatDayHeading, isBarRenderedCalendarItem } from './calendarItems'
 import { layoutBarsForWeek, laneCountForWeek } from './weekBarLayout'
 import {
   GUTTER_PX,
@@ -68,117 +68,119 @@ export default function WeekGridView({
   }, [weekKeys[0], pxPerMin])
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex">
-        <div style={{ width: GUTTER_PX }} className="shrink-0" />
-        {weekKeys.map((dateKey, i) => {
-          const isToday = dateKey === todayKey
-          return (
-            <button
-              key={dateKey}
-              type="button"
-              onClick={() => onSelectDate(dateKey)}
-              className="flex-1 rounded-lg px-1.5 py-1 text-left transition-colors duration-200 hover:bg-surface-container-high"
-            >
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">
-                {WEEKDAY_LABELS[i]}
-              </div>
-              <div
-                className={`text-xs font-semibold tabular-nums ${isToday ? 'text-secondary-container' : 'text-on-surface'}`}
-              >
-                {Number(dateKey.slice(-2))}
-              </div>
-            </button>
-          )
-        })}
-      </div>
-
-      {laneCount > 0 && (
-        <div className="flex">
+    <div className="min-w-0 overflow-x-auto rounded-xl border border-outline-variant bg-surface-container-low">
+      <div className="min-w-[42rem]">
+        <div className="flex bg-surface-container/60 [scrollbar-gutter:stable] overflow-y-hidden">
           <div style={{ width: GUTTER_PX }} className="shrink-0" />
-          <div className="flex flex-1" style={{ minHeight: laneCount * 20 }}>
-            {weekKeys.map((_, col) => (
-              <div key={col} className="relative flex-1" style={{ height: laneCount * 20 }}>
-                {placedBars
-                  .filter((bar) => bar.colStart === col)
-                  .map((bar) => (
-                    <div
-                      key={bar.id}
-                      style={{
-                        top: bar.lane * 20,
-                        width: `calc(${bar.colSpan * 100}% - 4px)`,
-                      }}
-                      className="absolute left-0.5 truncate rounded border border-on-surface-variant/30 bg-on-surface-variant/15 px-1 text-[10px] font-medium leading-4 text-on-surface"
-                    >
-                      {bar.title}
-                    </div>
-                  ))}
-              </div>
-            ))}
-          </div>
+          {weekKeys.map((dateKey, i) => {
+            const isToday = dateKey === todayKey
+            return (
+              <button
+                key={dateKey}
+                type="button"
+                onClick={() => onSelectDate(dateKey)}
+                aria-label={formatDayHeading(dateKey)}
+                aria-current={isToday ? 'date' : undefined}
+                className="flex-1 border-r border-outline-variant px-1 py-1.5 text-center transition-colors last:border-r-0 hover:bg-surface-container-high focus-visible:-outline-offset-2"
+              >
+                <span className={`inline-flex min-w-11 flex-col rounded-md px-2 py-1 text-xs font-semibold leading-4 ${
+                  isToday ? 'bg-primary-container/16 text-primary' : 'text-on-surface'
+                }`}>
+                  <span className="text-[11px] font-medium">{WEEKDAY_LABELS[i]}</span>
+                  <span className="tabular-nums">{Number(dateKey.slice(-2))}</span>
+                </span>
+              </button>
+            )
+          })}
         </div>
-      )}
 
-      <div className="flex">
-        <div style={{ width: GUTTER_PX }} className="shrink-0" />
-        {weekKeys.map((dateKey) => {
-          const items = (itemsByDate.get(dateKey) ?? []).filter(
-            (item) => !isTimedDayItem(item) && item.kind !== 'calendar'
-          )
-          return (
-            <div key={dateKey} className="flex flex-1 flex-col gap-0.5 px-0.5">
-              {items.map((item) => (
-                <UntimedItemRow key={itemKey(item)} item={item} onSelectTask={onSelectTask} />
+        {laneCount > 0 && (
+          <div className="flex overflow-y-hidden pt-1 [scrollbar-gutter:stable]">
+            <div style={{ width: GUTTER_PX }} className="shrink-0" />
+            <div className="flex flex-1" style={{ minHeight: laneCount * 20 }}>
+              {weekKeys.map((_, col) => (
+                <div key={col} className="relative flex-1" style={{ height: laneCount * 20 }}>
+                  {placedBars
+                    .filter((bar) => bar.colStart === col)
+                    .map((bar) => (
+                      <div
+                        key={bar.id}
+                        style={{
+                          top: bar.lane * 20,
+                          width: `calc(${bar.colSpan * 100}% - 4px)`,
+                        }}
+                        className="absolute left-0.5 truncate rounded bg-habit-purple/16 px-1.5 text-[11px] font-medium leading-4 text-on-surface"
+                      >
+                        {bar.title}
+                      </div>
+                    ))}
+                </div>
               ))}
             </div>
-          )
-        })}
-      </div>
+          </div>
+        )}
 
-      <div
-        ref={scrollRef}
-        className="relative overflow-y-auto rounded-lg border border-outline-variant/60"
-        style={{ height: Math.min(maxContainerHeightPx, gridHeightPx(pxPerMin)) }}
-      >
-        <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
-          <TimeGridHourLabels pxPerMin={pxPerMin} />
-          <div className="relative flex flex-1">
-            {weekKeys.map((dateKey) => {
-              const isToday = dateKey === todayKey
-              const timed = (itemsByDate.get(dateKey) ?? [])
-                .filter(isTimedDayItem)
-                .filter((item) => !isBarRenderedCalendarItem(item))
-              const ranges = new Map(timed.map((item) => [itemKey(item), resolveTimedRange(item)]))
-              const blocks = timed.map((item) => {
-                const { startMinutes, endMinutes } = ranges.get(itemKey(item))!
-                return { id: itemKey(item), startMinutes, endMinutes: visualEndMinutes(startMinutes, endMinutes, pxPerMin) }
-              })
-              const layouts = new Map(layoutOverlappingBlocks(blocks).map((l) => [l.id, l]))
+        <div className="flex overflow-y-hidden [scrollbar-gutter:stable]">
+          <div style={{ width: GUTTER_PX }} className="shrink-0" />
+          {weekKeys.map((dateKey) => {
+            const items = (itemsByDate.get(dateKey) ?? []).filter(
+              (item) => !isTimedDayItem(item) && item.kind !== 'calendar'
+            )
+            return (
+              <div key={dateKey} className="flex min-w-0 flex-1 flex-col gap-0.5 px-0.5">
+                {items.map((item) => (
+                  <UntimedItemRow key={itemKey(item)} item={item} onSelectTask={onSelectTask} />
+                ))}
+              </div>
+            )
+          })}
+        </div>
 
-              return (
-                <div key={dateKey} className="relative flex-1 border-l border-outline-variant/20 first:border-l-0">
-                  <TimeGridLines pxPerMin={pxPerMin} />
-                  {isToday && <CurrentTimeLine nowMinutes={nowMinutes} pxPerMin={pxPerMin} />}
-                  {timed.map((item) => {
-                    const key = itemKey(item)
-                    const range = ranges.get(key)
-                    const layout = layouts.get(key)
-                    if (!range || !layout) return null
-                    return (
-                      <TimeGridPill
-                        key={key}
-                        item={item}
-                        top={minutesToPx(range.startMinutes, pxPerMin)}
-                        height={pillHeightPx(range.startMinutes, range.endMinutes, pxPerMin)}
-                        column={layout.column}
-                        columnCount={layout.columnCount}
-                        onSelectRoutineInstance={onSelectRoutineInstance}
-                      />
-                    )
-                  })}
-                </div>
-              )
-            })}
+        <div
+          ref={scrollRef}
+          className="relative overflow-y-auto border-t border-outline-variant [scrollbar-gutter:stable]"
+          style={{ height: Math.min(maxContainerHeightPx, gridHeightPx(pxPerMin)) }}
+        >
+          <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
+            <TimeGridHourLabels pxPerMin={pxPerMin} />
+            <div className="relative flex flex-1">
+              {weekKeys.map((dateKey) => {
+                const isToday = dateKey === todayKey
+                const timed = (itemsByDate.get(dateKey) ?? [])
+                  .filter(isTimedDayItem)
+                  .filter((item) => !isBarRenderedCalendarItem(item))
+                const ranges = new Map(timed.map((item) => [itemKey(item), resolveTimedRange(item)]))
+                const blocks = timed.map((item) => {
+                  const { startMinutes, endMinutes } = ranges.get(itemKey(item))!
+                  return { id: itemKey(item), startMinutes, endMinutes: visualEndMinutes(startMinutes, endMinutes, pxPerMin) }
+                })
+                const layouts = new Map(layoutOverlappingBlocks(blocks).map((l) => [l.id, l]))
+
+                return (
+                  <div key={dateKey} className={`relative min-w-0 flex-1 border-r border-outline-variant/60 last:border-r-0 ${isToday ? 'bg-primary-container/4' : ''}`}>
+                    <TimeGridLines pxPerMin={pxPerMin} />
+                    {isToday && <CurrentTimeLine nowMinutes={nowMinutes} pxPerMin={pxPerMin} />}
+                    {timed.map((item) => {
+                      const key = itemKey(item)
+                      const range = ranges.get(key)
+                      const layout = layouts.get(key)
+                      if (!range || !layout) return null
+                      return (
+                        <TimeGridPill
+                          key={key}
+                          item={item}
+                          top={minutesToPx(range.startMinutes, pxPerMin)}
+                          height={pillHeightPx(range.startMinutes, range.endMinutes, pxPerMin)}
+                          column={layout.column}
+                          columnCount={layout.columnCount}
+                          onSelectRoutineInstance={onSelectRoutineInstance}
+                        />
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>

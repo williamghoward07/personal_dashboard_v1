@@ -26,6 +26,7 @@ export default function MonthView({
   itemsByDate,
   spans,
   todayKey,
+  selectedDateKey,
   onSelectDate,
 }: {
   year: number
@@ -33,6 +34,7 @@ export default function MonthView({
   itemsByDate: Map<string, DayItem[]>
   spans: EventSpan[]
   todayKey: string
+  selectedDateKey: string
   onSelectDate: (dateKey: string) => void
 }) {
   const cells = buildMonthCells(year, month)
@@ -40,15 +42,15 @@ export default function MonthView({
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-on-surface-variant">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
+      <div className="grid grid-cols-7 border-b border-outline-variant bg-surface-container/60 text-center text-xs font-semibold text-on-surface-variant">
         {WEEKDAY_LABELS.map((label) => (
-          <div key={label} className="py-1">
+          <div key={label} className="py-2">
             {label}
           </div>
         ))}
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="divide-y divide-outline-variant">
         {weeks.map((week, i) => (
           <WeekRow
             key={i}
@@ -57,9 +59,7 @@ export default function MonthView({
             spans={spans}
             todayKey={todayKey}
             onSelectDate={onSelectDate}
-            minHeightClass="min-h-24"
-            maxCompactItems={3}
-            showWeekdayLabel={false}
+            selectedDateKey={selectedDateKey}
           />
         ))}
       </div>

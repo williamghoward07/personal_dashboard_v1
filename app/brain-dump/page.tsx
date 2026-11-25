@@ -1,14 +1,15 @@
-import PageContainer from '../components/PageContainer'
+import { FileText } from 'lucide-react'
 import BrainDumpBoard from '../components/widgets/braindump/BrainDumpBoard'
+import styles from '../components/widgets/braindump/BrainDump.module.css'
 
 export default function BrainDumpPage() {
   return (
-    <PageContainer
-      title="Brain Dump"
-      subtitle="Type out whatever's on your mind — review and confirm each item before anything is saved."
-      accent="purple"
-    >
+    <main className={styles.page}>
+      <h1 className={styles.title}>
+        <FileText aria-hidden="true" />
+        Brain dump
+      </h1>
       <BrainDumpBoard />
-    </PageContainer>
+    </main>
   )
 }

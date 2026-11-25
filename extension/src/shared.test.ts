@@ -38,6 +38,10 @@ describe('hostOf', () => {
   it('keeps the port', () => {
     expect(hostOf('http://localhost:3000')).toBe('localhost:3000')
   })
+
+  it('returns the text unchanged when it is not a URL', () => {
+    expect(hostOf('not a url')).toBe('not a url')
+  })
 })
 
 describe('dashboardOrigin', () => {

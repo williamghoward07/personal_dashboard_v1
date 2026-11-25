@@ -1,17 +1,18 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowUpRight, FolderKanban } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { ACCENT_TEXT } from '@/lib/theme'
+import { widgetDensity, type HomeWidgetDimensions } from '@/lib/home/widget-content'
 import type { Workspace, WorkspaceFolder } from '@/lib/types'
 import { resolveAccent } from '@/lib/workspaces/folders'
 import { rankWorkspacesForGlance, type SessionStamp } from '@/lib/workspaces/glance'
 import WidgetCard from '../../WidgetCard'
 import { accentVars, relativeTime } from '../workspaces/shared'
 
-const MAX_ROWS = 4
 // Enough recent session rows to cover the few workspaces shown here.
 const SESSION_SAMPLE = 60
 
@@ -32,7 +33,7 @@ interface GlanceData {
  * Built directly on WidgetCard (not HomeSectionCard) because each row is
  * its own link into that workspace — a whole-card link would nest anchors.
  */
-export default function WorkspacesGlance() {
+export default function WorkspacesGlance(dimensions: HomeWidgetDimensions) {
   const [data, setData] = useState<GlanceData | null>(null)
 
   useEffect(() => {
@@ -63,9 +64,11 @@ export default function WorkspacesGlance() {
     }
   }, [])
 
+  const density = widgetDensity(dimensions)
+  const limit = [4, 6, 10][density]
   const rows = useMemo(
-    () => (data ? rankWorkspacesForGlance(data.workspaces, data.sessions, data.openTodoWorkspaceIds, MAX_ROWS) : []),
-    [data]
+    () => (data ? rankWorkspacesForGlance(data.workspaces, data.sessions, data.openTodoWorkspaceIds, limit) : []),
+    [data, limit]
   )
   const folderName = (id: string | null) => (id ? data?.folders.find((f) => f.id === id)?.name : undefined)
 
@@ -74,51 +77,49 @@ export default function WorkspacesGlance() {
       title="Workspaces"
       icon={<FolderKanban className="h-4 w-4" />}
       accent="teal"
-      className="h-full"
+      className="h-full min-w-0"
       action={
         <Link
           href="/workspaces"
           aria-label="View all workspaces"
-          className={`transition-transform duration-300 hover:translate-x-0.5 hover:-translate-y-0.5 ${ACCENT_TEXT.teal}`}
+          className={`grid min-h-11 min-w-11 place-items-center rounded [@media(pointer:fine)]:min-h-6 [@media(pointer:fine)]:min-w-6 transition-transform duration-300 hover:translate-x-0.5 hover:-translate-y-0.5 ${ACCENT_TEXT.teal}`}
         >
           <ArrowUpRight className="h-4 w-4" />
         </Link>
       }
     >
       {!data ? (
-        <p>Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : rows.length === 0 ? (
         <p>
           No active workspaces.{' '}
-          <Link href="/workspaces" className="underline hover:text-on-surface">
+          <Link href="/workspaces" className="inline-flex min-h-11 items-center underline hover:text-on-surface [@media(pointer:fine)]:min-h-6">
             Start one
           </Link>
           .
         </p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className="grid gap-x-5 gap-y-1 @min-[680px]/home-widget:grid-cols-2">
           {rows.map(({ workspace, lastOpenedAt, openActions }) => {
             const folder = folderName(workspace.folder_id)
             const showsActions = !(workspace.hidden_sections ?? []).includes('actions')
             const opened = relativeTime(lastOpenedAt)
             return (
-              <li key={workspace.id} style={accentVars(resolveAccent(workspace, data.folders))}>
+              <li key={workspace.id} className="min-w-0" style={accentVars(resolveAccent(workspace, data.folders))}>
                 <Link
                   href={`/workspaces/${workspace.id}`}
-                  className="-mx-1.5 flex items-center gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-surface-container-high"
+                  className="-mx-1.5 flex min-h-11 items-start gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-surface-container-high"
                 >
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-ws-accent" aria-hidden />
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-ws-accent" aria-hidden />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-on-surface">{workspace.title}</span>
-                    <span className="truncate text-[11px] text-on-surface-variant">
-                      {[folder, opened ? `opened ${opened}` : 'not opened yet'].filter(Boolean).join(' · ')}
+                    <span className="wrap-anywhere text-on-surface">{workspace.title}</span>
+                    <span className="wrap-anywhere text-xs text-on-surface-variant">
+                      {[folder, opened ? `opened ${opened}` : 'not opened yet', showsActions && openActions > 0 ? `${openActions} open` : null].filter(Boolean).join(' · ')}
                     </span>
+                    {density > 0 && workspace.subtitle && (
+                      <span className="wrap-anywhere text-xs text-on-surface-variant">{workspace.subtitle}</span>
+                    )}
                   </span>
-                  {showsActions && openActions > 0 && (
-                    <span className="shrink-0 rounded-full border border-ws-accent/30 bg-ws-accent/10 px-1.5 py-0.5 text-[10px] tabular-nums text-ws-accent">
-                      {openActions} open
-                    </span>
-                  )}
                 </Link>
               </li>
             )

@@ -1,8 +1,9 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, BookOpen, ListChecks, Lock, NotebookPen, Sparkles } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, GraduationCap, ListChecks, Lock, NotebookPen, Sparkles } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { looksLikeUrl } from '@/lib/utils/url'
@@ -23,6 +24,7 @@ import {
 import { formatSessionDay, sessionMeta } from '@/lib/timetable/format'
 import PrepLight from './PrepLight'
 import HandInButton from './HandInButton'
+import SessionBlackboardBlock from './SessionBlackboardBlock'
 import { AddForm, ItemRow, Tick, microLabel, readingItem, taskItem, type PrepItem } from './SessionPrepPanel'
 
 const ACCENT = 'orange'
@@ -199,13 +201,19 @@ function AssignmentBody({ session }: { session: SessionWithPrep }) {
             />
           </Section>
 
+          {session.moduleCode && (
+            <Section icon={<GraduationCap className="h-4 w-4 text-academic-orange" strokeWidth={1.75} />} title="From Blackboard">
+              <SessionBlackboardBlock session={session} accent={ACCENT} readings={prep.readings} addReading={prep.addReading} />
+            </Section>
+          )}
+
           <Section
             icon={<BookOpen className="h-4 w-4 text-academic-orange" strokeWidth={1.75} />}
             title="Readings"
             count={readings.length > 0 ? `${ratio(readings)} read` : undefined}
           >
             {loading ? (
-              <p className="text-xs text-on-surface-variant">Loading…</p>
+              <LoadingSkeleton label="Loading…" />
             ) : readings.length > 0 ? (
               <ul className="flex flex-col">{readings.map(renderItem)}</ul>
             ) : (
@@ -220,7 +228,7 @@ function AssignmentBody({ session }: { session: SessionWithPrep }) {
             count={todo.length > 0 ? `${ratio(todo)} done` : undefined}
           >
             {loading ? (
-              <p className="text-xs text-on-surface-variant">Loading…</p>
+              <LoadingSkeleton label="Loading…" />
             ) : todo.length > 0 ? (
               <ul className="flex flex-col">{todo.map(renderItem)}</ul>
             ) : (

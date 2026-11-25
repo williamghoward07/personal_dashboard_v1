@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ACCENT_CHIP } from '@/lib/theme'
 import { domainOf, faviconPublicUrl, hashAccent, initialLetter } from './shared'
 
-const SIZE_CLASS = { sm: 'h-8 w-8 text-xs', md: 'h-10 w-10 text-sm' } as const
+const SIZE_CLASS = { xs: 'h-3.5 w-3.5 text-[8px]', sm: 'h-8 w-8 text-xs', md: 'h-10 w-10 text-sm' } as const
 
 export default function FaviconTile({
   title,
@@ -17,7 +17,7 @@ export default function FaviconTile({
   url: string
   faviconPath: string | null
   faviconCustomUrl?: string | null
-  size?: 'sm' | 'md'
+  size?: 'xs' | 'sm' | 'md'
 }) {
   const [customFailed, setCustomFailed] = useState(false)
   const [cachedFailed, setCachedFailed] = useState(false)
@@ -35,7 +35,7 @@ export default function FaviconTile({
         src={src}
         alt=""
         onError={() => (useCustom ? setCustomFailed(true) : setCachedFailed(true))}
-        className={`${box} shrink-0 rounded-lg border border-outline-variant bg-surface-container-lowest object-contain p-1`}
+        className={`${box} shrink-0 rounded-lg border border-outline-variant bg-surface-container-lowest object-contain ${size === 'xs' ? 'p-0' : 'p-1'}`}
       />
     )
   }

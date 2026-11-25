@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useState } from 'react'
 import { ListChecks } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -71,7 +72,7 @@ export default function HabitsGlance() {
   return (
     <HomeSectionCard href="/habits" title="Habits" icon={<ListChecks className="h-4 w-4" />} accent="purple">
       {loading ? (
-        <p>Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : error ? (
         <p className="text-xs text-on-surface-variant">Couldn&apos;t load habits.</p>
       ) : habits.length === 0 ? (

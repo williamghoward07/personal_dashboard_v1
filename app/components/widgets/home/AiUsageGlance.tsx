@@ -1,10 +1,11 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { londonDayBoundsUTC } from '@/lib/google/london-day'
-import { DAILY_CALL_CAP } from '@/lib/ai/constants'
+import { DAILY_CALL_CAP, isBlackboardFeature } from '@/lib/ai/constants'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import HomeSectionCard from './HomeSectionCard'
 
@@ -71,7 +72,8 @@ export default function AiUsageGlance() {
   }, [])
 
   const todayKey = londonDayBoundsUTC().startDateKey
-  const todayCount = rows.filter((r) => r.day === todayKey).length
+  // Blackboard processing (bb_*) has its own budget, so it isn't part of "N of 200".
+  const todayCount = rows.filter((r) => r.day === todayKey && !isBlackboardFeature(r.feature)).length
   const monthCostUsd = rows.reduce((sum, r) => sum + Number(r.est_cost_usd), 0)
   const ringPercent = Math.min(100, Math.round((todayCount / DAILY_CALL_CAP) * 100))
 
@@ -82,7 +84,7 @@ export default function AiUsageGlance() {
   return (
     <HomeSectionCard href="/ai-usage" title="AI Usage" icon={<Gauge className="h-4 w-4" />} accent="neutral">
       {loading ? (
-        <p>Loading...</p>
+        <LoadingSkeleton shape="metric" label="Loading..." />
       ) : error ? (
         <p className="text-xs text-on-surface-variant">Couldn&apos;t load AI usage.</p>
       ) : rows.length === 0 ? (

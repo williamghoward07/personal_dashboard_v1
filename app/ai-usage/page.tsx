@@ -1,10 +1,11 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { londonDayBoundsUTC } from '@/lib/google/london-day'
-import { DAILY_CALL_CAP } from '@/lib/ai/constants'
+import { DAILY_CALL_CAP, isBlackboardFeature } from '@/lib/ai/constants'
 import {
   DataTable,
   DataTableBody,
@@ -74,7 +75,8 @@ export default function AiUsagePage() {
   }, [])
 
   const todayKey = londonDayBoundsUTC().startDateKey
-  const todayCount = rows.filter((r) => r.day === todayKey).length
+  // Blackboard processing (bb_*) has its own budget, so it isn't part of "N of 200".
+  const todayCount = rows.filter((r) => r.day === todayKey && !isBlackboardFeature(r.feature)).length
   const monthCostUsd = rows.reduce((sum, r) => sum + Number(r.est_cost_usd), 0)
   const ringPercent = Math.min(100, Math.round((todayCount / DAILY_CALL_CAP) * 100))
 
@@ -87,11 +89,11 @@ export default function AiUsagePage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
-      <h1 className="headline-md text-on-surface">AI Usage</h1>
+    <main className="workspace-page">
+      <h1 className="workspace-page-title text-on-surface">AI Usage</h1>
 
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton shape="cards" label="Loading..." />
       ) : error ? (
         <p className="text-sm text-on-surface-variant">Couldn&apos;t load AI usage.</p>
       ) : (

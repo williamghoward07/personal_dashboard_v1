@@ -1,0 +1,18 @@
+/* Workspace panels stay still and compact while their contents are edited. */
+.surface :global([data-ui='glass-card']) {
+  border-color: var(--color-outline-variant);
+  border-radius: 0.75rem;
+  background: var(--color-surface-container-lowest);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transform: none;
+}
+
+.surface :global([data-ui='glass-card']:hover) {
+  background: var(--color-surface-container-lowest);
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transform: none;
+}

@@ -1,5 +1,8 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
+import styles from './workspace-surface.module.css'
+
 import { useState } from 'react'
 import Link from 'next/link'
 import {
@@ -48,7 +51,7 @@ import WorkspaceAppearanceMenu from './WorkspaceAppearanceMenu'
 import { CollapseButton, CollapsedSectionBar } from './SectionChrome'
 import { accentVars, actionButtonClass, inputClass, logTimestamp, primaryButtonClass, relativeTime } from './shared'
 
-const pageClass = 'mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 pt-6 pb-48'
+const pageClass = 'mx-auto flex w-full max-w-360 min-w-0 flex-1 flex-col gap-4 px-4 pt-5 pb-48 sm:px-8'
 
 const BAR_GRID_CLASS: Record<number, string> = {
   1: '',
@@ -90,15 +93,15 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
 
   if (workspacesLoading) {
     return (
-      <main className={pageClass}>
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+      <main className={`${styles.surface} ${pageClass}`}>
+        <LoadingSkeleton shape="cards" label="Loading..." />
       </main>
     )
   }
 
   if (!workspace) {
     return (
-      <main className={pageClass}>
+      <main className={`${styles.surface} ${pageClass}`}>
         <Link
           href="/workspaces"
           className="flex w-fit items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface hover:underline"
@@ -282,9 +285,9 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
   const error = linksApi.error || todosApi.error || linkTodosApi.error || foldersError
 
   return (
-    <main className={pageClass} style={accentVars(accent)}>
+    <main className={`${styles.surface} ${pageClass}`} style={accentVars(accent)}>
       <WorkspaceHeaderStrip
-        context={isArchived ? 'Archived Context' : 'Active Context'}
+        context={workspace.title}
         crumbs={moduleCode ? [] : crumbs}
         root={moduleCode ? { label: 'Lectures', href: '/lectures' } : undefined}
       />
@@ -298,7 +301,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <h1 className="font-display text-headline-lg font-bold text-ws-accent">{workspace.title}</h1>
+            <h1 className="break-words text-2xl font-bold text-on-surface">{workspace.title}</h1>
             <WorkspaceAppearanceMenu
               workspace={workspace}
               folders={folders}

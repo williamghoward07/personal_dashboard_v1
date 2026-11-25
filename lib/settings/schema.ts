@@ -9,6 +9,9 @@
 // here is defensive against malformed/missing input rather than throwing —
 // lib/settings/use-settings.ts leans on that to fall back to defaults.
 
+import { isDateKey, mondayOf } from '@/lib/blackboard/dates'
+import { WORK_TABS, isWorkCategory, type WorkCategory, type WorkTab } from '@/lib/blackboard/work'
+
 export type HomeWidgetSpan = 1 | 2 | 3 | 4
 
 /** One widget's placement in the home grid, in render order. */
@@ -42,6 +45,9 @@ export interface UserSettings {
   hidden_nav_items: string[]
   launcher_link_ids: string[]
   calendar_view: CalendarView
+  work_filter: WorkFilterSetting
+  /** Monday of university week 1 ('YYYY-MM-DD'). Null = derive it from the timetable. */
+  week_one_start: string | null
 }
 
 export type CalendarView = 'month' | 'week' | 'day' | 'routines'
@@ -52,9 +58,66 @@ export function parseCalendarView(value: unknown): CalendarView {
   return CALENDAR_VIEWS.includes(value as CalendarView) ? (value as CalendarView) : 'week'
 }
 
+/** The /lectures work list's last tab and filter. */
+export interface WorkFilterSetting {
+  tab: WorkTab
+  categories: WorkCategory[] | 'all'
+  /** Module codes. */
+  modules: string[] | 'all'
+}
+
+/**
+ * First visit: Upcoming, every category, every module. Lecture prep is
+ * included so /lectures keeps listing lectures until it's switched off.
+ */
+export function defaultWorkFilter(): WorkFilterSetting {
+  return { tab: 'upcoming', categories: 'all', modules: 'all' }
+}
+
+/**
+ * Tolerant: an unknown tab falls back to Upcoming, unknown categories are
+ * dropped (all unknown → the default set), anything malformed → default.
+ */
+export function parseWorkFilter(raw: unknown): WorkFilterSetting {
+  const fallback = defaultWorkFilter()
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return fallback
+  const value = raw as { tab?: unknown; categories?: unknown; modules?: unknown }
+
+  const tab = (WORK_TABS as readonly unknown[]).includes(value.tab) ? (value.tab as WorkTab) : fallback.tab
+
+  let categories: WorkFilterSetting['categories'] = fallback.categories
+  if (value.categories === 'all') categories = 'all'
+  else if (Array.isArray(value.categories)) {
+    const known = [...new Set(value.categories.filter(isWorkCategory))]
+    categories = known.length > 0 || value.categories.length === 0 ? known : fallback.categories
+  }
+
+  let modules: WorkFilterSetting['modules'] = fallback.modules
+  if (value.modules === 'all') modules = 'all'
+  else if (Array.isArray(value.modules)) {
+    modules = [...new Set(value.modules.filter((m): m is string => typeof m === 'string' && m.trim() !== '').map((m) => m.trim()))]
+  }
+
+  return { tab, categories, modules }
+}
+
+/** A valid date snapped to its Monday (weeks start on Mondays); anything else → null. */
+export function parseWeekOneStart(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const key = raw.slice(0, 10)
+  return isDateKey(key) ? mondayOf(key) : null
+}
+
 /** What a user with no `user_settings` row yet sees. */
 export function defaultSettings(): UserSettings {
-  return { home_layout: [], hidden_nav_items: [], launcher_link_ids: [], calendar_view: 'week' }
+  return {
+    home_layout: [],
+    hidden_nav_items: [],
+    launcher_link_ids: [],
+    calendar_view: 'week',
+    work_filter: defaultWorkFilter(),
+    week_one_start: null,
+  }
 }
 
 /** Clamps to a valid span, defaulting to 1 for anything unparseable. */
@@ -97,7 +160,14 @@ function parseStringArray(raw: unknown): string[] {
  */
 export function parseUserSettings(
   row:
-    | { home_layout?: unknown; hidden_nav_items?: unknown; launcher_link_ids?: unknown; calendar_view?: unknown }
+    | {
+        home_layout?: unknown
+        hidden_nav_items?: unknown
+        launcher_link_ids?: unknown
+        calendar_view?: unknown
+        work_filter?: unknown
+        week_one_start?: unknown
+      }
     | null
     | undefined
 ): UserSettings {
@@ -107,6 +177,8 @@ export function parseUserSettings(
     hidden_nav_items: parseStringArray(row.hidden_nav_items),
     launcher_link_ids: parseStringArray(row.launcher_link_ids),
     calendar_view: parseCalendarView(row.calendar_view),
+    work_filter: parseWorkFilter(row.work_filter),
+    week_one_start: parseWeekOneStart(row.week_one_start),
   }
 }
 

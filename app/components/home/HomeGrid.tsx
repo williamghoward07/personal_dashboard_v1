@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   DndContext,
   KeyboardSensor,
@@ -13,8 +14,8 @@ import {
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { Check, Eye, LayoutGrid, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useSettings } from '@/lib/settings/use-settings'
 import {
+  HOME_GRID_COLUMNS,
   defaultHomeLayout,
   hiddenWidgets,
   homeWidgetLabel,
@@ -24,10 +25,12 @@ import {
   setWidgetHidden,
   setWidgetHeight,
   setWidgetSpan,
+  studyHomeLayout,
   visibleWidgets,
   type HomeLayoutEntry,
   type HomeWidgetSpan,
 } from '@/lib/home/layout'
+import { useAppSettings } from '../settings/SettingsProvider'
 import HomeWidgetFrame from './HomeWidgetFrame'
 import { homeWidgetComponent } from './widget-registry'
 
@@ -39,7 +42,8 @@ import { homeWidgetComponent } from './widget-registry'
  * as its own content and no taller, and 1px implicit rows (no row gap) let
  * each frame span its measured height so cards pack masonry-style instead of
  * leaving a gap under short cards. Resizing sets the column span and, optionally,
- * a minimum height (`height`, px) that stretches the card; unset stays auto.
+ * a height that stretches the card. The launcher uses that height setting
+ * to choose how many rows of apps to show and sizes to its content.
  *
  * State model: `saved` is what the settings row says; `pending` is the
  * in-flight arrangement (only set while a resize is being dragged, or for
@@ -48,14 +52,31 @@ import { homeWidgetComponent } from './widget-registry'
  * server still holds — `useSettings` already restores the previous value
  * and surfaces `error`.
  */
-export default function HomeGrid() {
-  const { settings, error, updateSettings } = useSettings()
+export default function HomeGrid({ heading, query }: { heading: ReactNode; query: ReactNode }) {
+  const { settings, error, updateSettings } = useAppSettings()
   const [editing, setEditing] = useState(false)
+  const [previewingStudyLayout, setPreviewingStudyLayout] = useState(false)
   const [pending, setPending] = useState<HomeLayoutEntry[] | null>(null)
   const gridRef = useRef<HTMLDivElement | null>(null)
+  const [gridColumns, setGridColumns] = useState(HOME_GRID_COLUMNS)
+
+  useEffect(() => {
+    const grid = gridRef.current
+    if (!grid) return
+    const observer = new ResizeObserver(() => {
+      const tracks = window.getComputedStyle(grid).gridTemplateColumns.trim()
+      if (tracks) setGridColumns(tracks.split(/\s+/).length)
+    })
+    observer.observe(grid)
+    return () => observer.disconnect()
+  }, [])
 
   const saved = useMemo(() => resolveHomeLayout(settings.home_layout), [settings.home_layout])
-  const layout = pending ?? saved
+  const currentLayout = pending ?? saved
+  const layout = useMemo(
+    () => previewingStudyLayout ? studyHomeLayout(currentLayout) : currentLayout,
+    [currentLayout, previewingStudyLayout],
+  )
   const visible = useMemo(() => visibleWidgets(layout), [layout])
   const hidden = useMemo(() => hiddenWidgets(layout), [layout])
 
@@ -66,7 +87,7 @@ export default function HomeGrid() {
       // the grid from flashing back through the old arrangement.
       setPending(next)
       await updateSettings({ home_layout: next })
-      setPending(null)
+      setPending((current) => current === next ? null : current)
     },
     [updateSettings]
   )
@@ -121,10 +142,33 @@ export default function HomeGrid() {
 
   return (
     <div className="flex flex-1 flex-col gap-3">
-      <div className="flex min-h-8 items-center justify-end gap-2">
-        {editing ? (
-          <>
+      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 md:grid-cols-[minmax(0,1fr)_minmax(16rem,32rem)_auto]">
+        <div className="col-start-1 row-start-1">{heading}</div>
+        <div className="col-span-2 col-start-1 row-start-2 min-w-0 md:col-span-1 md:col-start-2 md:row-start-1">{query}</div>
+        {!editing && (
+          <Button variant="quiet" size="sm" className="col-start-2 row-start-1 md:col-start-3" onClick={() => setEditing(true)} title="Reorder, resize and hide widgets">
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Customise
+          </Button>
+        )}
+      </header>
+
+      {editing && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {previewingStudyLayout ? (
+            <>
+              <span className="mr-auto text-xs text-on-surface-variant">Previewing Study layout</span>
+              <Button variant="quiet" size="sm" onClick={() => setPreviewingStudyLayout(false)}>Cancel</Button>
+              <Button variant="secondary" size="sm" onClick={() => {
+                setPreviewingStudyLayout(false)
+                void persist(layout)
+              }}>Apply layout</Button>
+            </>
+          ) : <>
             <span className="label-caps mr-auto text-on-surface-variant">Arranging home</span>
+            <Button variant="quiet" size="sm" onClick={() => setPreviewingStudyLayout(true)}>
+              Study layout
+            </Button>
             <Button variant="quiet" size="sm" onClick={handleReset} disabled={isDefaultLayout(layout)}>
               <RotateCcw className="h-3.5 w-3.5" />
               Reset
@@ -133,14 +177,9 @@ export default function HomeGrid() {
               <Check className="h-3.5 w-3.5" />
               Done
             </Button>
-          </>
-        ) : (
-          <Button variant="quiet" size="sm" onClick={() => setEditing(true)} title="Reorder, resize and hide widgets">
-            <LayoutGrid className="h-3.5 w-3.5" />
-            Customise
-          </Button>
-        )}
-      </div>
+          </>}
+        </div>
+      )}
 
       {editing && error ? (
         <p className="body-sm text-error" role="status">
@@ -148,7 +187,7 @@ export default function HomeGrid() {
         </p>
       ) : null}
 
-      {editing && hidden.length > 0 ? (
+      {editing && !previewingStudyLayout && hidden.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-outline-variant p-3">
           <span className="label-caps text-on-surface-variant">Hidden</span>
           {hidden.map((entry) => (
@@ -181,13 +220,14 @@ export default function HomeGrid() {
                   label={homeWidgetLabel(entry.id)}
                   span={entry.span}
                   height={entry.height}
-                  editing={editing}
+                  editing={editing && !previewingStudyLayout}
                   gridRef={gridRef}
+                  gridColumns={gridColumns}
                   onHide={handleHide}
                   onSizePreview={handleSizePreview}
                   onSizeCommit={handleSizeCommit}
                 >
-                  <Widget span={entry.span} />
+                  {(width) => <Widget width={width} span={Math.min(entry.span, gridColumns) as HomeWidgetSpan} height={entry.height} />}
                 </HomeWidgetFrame>
               )
             })}

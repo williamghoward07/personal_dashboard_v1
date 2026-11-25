@@ -1,6 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
+import styles from './workspace-surface.module.css'
+
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -36,6 +39,9 @@ import type { Workspace, WorkspaceFolder } from '@/lib/types'
 import { useWorkspaces } from '@/lib/workspaces/use-workspaces'
 import { isModuleWorkspace } from '@/lib/lectures/module-workspace'
 import { useWorkspaceFolders } from '@/lib/workspaces/use-workspace-folders'
+import { useWorkspaceTodos } from '@/lib/workspaces/use-workspace-todos'
+import { useWorkspaceLinks } from '@/lib/workspaces/use-workspace-links'
+import { splitReadings } from '@/lib/workspaces/readings'
 import { useStudyProgress } from '@/lib/workspaces/use-study-progress'
 import type { StudyProgress } from '@/lib/workspaces/study-progress'
 import { formatMinutes } from '@/lib/workspaces/time'
@@ -47,10 +53,10 @@ import {
   folderPath,
   resolveAccent,
   resolveFolderAccent,
+  moveTargets,
 } from '@/lib/workspaces/folders'
 import ConfirmDialog from '../../ConfirmDialog'
 import Popover from '../../Popover'
-import WorkspaceHeaderStrip from './WorkspaceHeaderStrip'
 import WorkspacesHelp from './WorkspacesHelp'
 import WorkspaceAppearanceMenu from './WorkspaceAppearanceMenu'
 import WorkspaceFolderEditor from './WorkspaceFolderEditor'
@@ -96,6 +102,10 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
   const moduleCount = allWorkspaces.length - workspaces.length
 
   const [title, setTitle] = useState('')
+  const [view, setView] = useState<'list' | 'cards'>('list')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selectedRowRef = useRef<HTMLButtonElement | null>(null)
+  const [query, setQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const [deletingFolder, setDeletingFolder] = useState<WorkspaceFolder | null>(null)
   const [dragItem, setDragItem] = useState<DragItem | null>(null)
@@ -113,7 +123,8 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
     () => workspaces.filter((w) => (w.folder_id ?? null) === folderId),
     [workspaces, folderId]
   )
-  const active = here.filter((w) => !w.archived_at)
+  const search = query.trim().toLowerCase()
+  const active = here.filter((w) => !w.archived_at && `${w.title} ${w.subtitle ?? ''}`.toLowerCase().includes(search))
   const archived = here.filter((w) => w.archived_at)
 
   const pageAccent: Accent = resolveFolderAccent(folders, folderId) ?? 'teal'
@@ -180,14 +191,9 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
 
   return (
     <main
-      className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 pt-6 pb-48"
+      className={`${styles.surface} mx-auto flex w-full max-w-360 min-w-0 flex-1 flex-col gap-4 px-4 pt-5 pb-48 sm:px-8`}
       style={accentVars(pageAccent)}
     >
-      <WorkspaceHeaderStrip
-        context={currentFolder ? currentFolder.name : 'All Contexts'}
-        crumbs={path.slice(0, -1).map((f) => ({ label: f.name, href: `/workspaces?folder=${f.id}` }))}
-      />
-
       <DndContext
         sensors={sensors}
         collisionDetection={pointerWithin}
@@ -199,33 +205,37 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
           setOverFolderId(undefined)
         }}
       >
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/60 pb-3">
           <div className="flex min-w-0 flex-col gap-2">
             <FolderBreadcrumb path={path} isDragging={!!dragItem} overFolderId={overFolderId} />
             <div className="flex items-center gap-2">
               {currentFolder && <Folder className="h-7 w-7 text-ws-accent" strokeWidth={1.75} aria-hidden />}
-              <h1 className="font-display text-headline-lg font-bold text-ws-accent">
+              <h1 className="break-words text-2xl font-bold text-on-surface">
                 {currentFolder ? currentFolder.name : 'Workspaces'}
               </h1>
               <WorkspacesHelp />
             </div>
-            <p className="text-sm text-on-surface-variant">
-              {currentFolder
-                ? 'Folders and workspaces filed here. Drag a grip onto a folder or a breadcrumb step to move it.'
-                : 'An ad hoc container per project — its sources, its scoped actions, and a dated log of your thinking.'}
-              {!currentFolder && moduleCount > 0 && (
-                <>
-                  {' '}
-                  <Link href="/lectures" className="underline hover:text-on-surface">
-                    {moduleCount} module {moduleCount === 1 ? 'workspace is' : 'workspaces are'} on Lectures
-                  </Link>
-                  .
-                </>
-              )}
-            </p>
+            {!currentFolder && moduleCount > 0 && (
+              <Link href="/lectures" className="text-xs text-on-surface-variant underline">
+                {moduleCount} module {moduleCount === 1 ? 'workspace is' : 'workspaces are'} on Lectures
+              </Link>
+            )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto lg:flex-1 lg:justify-end">
+          <label className="min-w-0 flex-1 basis-full sm:basis-auto lg:min-w-48">
+            <span className="sr-only">Search workspaces</span>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search titles and subtitles..." className={`${inputClass} w-full`} />
+          </label>
+          <label className="min-[1000px]:hidden">
+            <span className="sr-only">Choose folder</span>
+            <select value={folderId ?? ''} onChange={(e) => router.push(e.target.value ? `/workspaces?folder=${e.target.value}` : '/workspaces')} className={`${inputClass} min-h-11 max-w-48`}>
+              {moveTargets(folders).map((target) => <option key={target.id ?? 'root'} value={target.id ?? ''}>{`${'  '.repeat(target.depth)}${target.label}`}</option>)}
+            </select>
+          </label>
+          <div role="group" aria-label="Workspace view" className="flex rounded-lg border border-outline-variant p-1">
+            {(['list', 'cards'] as const).map((option) => <button key={option} type="button" aria-pressed={view === option} onClick={() => setView(option)} className={`min-h-9 rounded-md px-3 text-sm capitalize ${view === option ? 'bg-ws-accent/15 font-semibold text-ws-accent' : 'text-on-surface-variant'}`}>{option}</button>)}
+          </div>
             <Popover
               label="New folder"
               align="end"
@@ -247,22 +257,28 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
               )}
             </Popover>
 
-            <form onSubmit={handleCreate} className="flex items-center gap-2">
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Coastal Erosion Essay"
-                aria-label="New workspace name"
-                className={`${inputClass} w-64`}
-              />
-              <button type="submit" disabled={!title.trim()} className={primaryButtonClass}>
-                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-                New workspace
+            <Popover label="New workspace" align="end" panelClassName="w-80" trigger={(props) => (
+              <button type="button" {...props} className={primaryButtonClass}>
+                <Plus className="h-3.5 w-3.5" /> New workspace
               </button>
-            </form>
+            )}>
+              {() => (
+                <form onSubmit={handleCreate} className="flex flex-col gap-2">
+                  <label htmlFor="new-workspace-name" className="text-sm font-semibold">Workspace name</label>
+                  <input id="new-workspace-name" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Coastal Erosion Essay" className={inputClass} />
+                  <button type="submit" disabled={!title.trim()} className={primaryButtonClass}>Create workspace</button>
+                </form>
+              )}
+            </Popover>
           </div>
         </div>
 
+        <div className="flex min-w-0 items-start gap-5">
+          <nav aria-label="Workspace folders" className="hidden w-48 shrink-0 flex-col gap-1 border-r border-outline-variant/60 pr-3 min-[1000px]:flex">
+            <h2 className="px-2 pb-2 text-sm font-semibold">Folders</h2>
+            {moveTargets(folders).map((target) => <Link key={target.id ?? 'root'} href={target.id ? `/workspaces?folder=${target.id}` : '/workspaces'} aria-current={(target.id ?? null) === folderId ? 'page' : undefined} style={{ paddingLeft: `${8 + Math.max(0, target.depth - 1) * 12}px` }} className={`flex min-h-11 items-center gap-2 rounded-md pr-2 text-sm ${target.id === folderId ? 'bg-ws-accent/15 font-semibold text-ws-accent' : 'hover:bg-surface-container-high'}`}><Folder className="h-4 w-4 shrink-0" /> <span className="break-words">{target.id ? target.label : 'All workspaces'}</span></Link>)}
+          </nav>
+          <div className="flex min-w-0 flex-1 flex-col gap-5">
         {(error || foldersError) && (
           <p role="alert" className="text-sm text-error">
             {error || foldersError}
@@ -277,17 +293,18 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
             </Link>
           </p>
         ) : loading || foldersLoading ? (
-          <p className="text-sm text-on-surface-variant">Loading...</p>
+          <LoadingSkeleton label="Loading..." />
         ) : (
           <>
             {subfolders.length > 0 && (
               <section className="flex flex-col gap-3">
                 <h2 className={microLabelClass}>Folders ({subfolders.length})</h2>
-                <ul className={gridClass}>
+                <ul className={view === 'cards' ? gridClass : 'divide-y divide-outline-variant/60'}>
                   {subfolders.map((folder) => (
                     <WorkspaceFolderTile
                       key={folder.id}
                       folder={folder}
+                      compact={view === 'list'}
                       folders={folders}
                       accent={resolveFolderAccent(folders, folder.id) ?? 'teal'}
                       counts={folderCounts(folders, workspaces, folder.id)}
@@ -306,13 +323,15 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
               <h2 className={microLabelClass}>Active ({active.length})</h2>
               {active.length === 0 ? (
                 <p className="text-sm text-on-surface-variant">
-                  {currentFolder
+                  {query.trim() ? 'No workspaces match this search.' : currentFolder
                     ? 'No workspaces in this folder yet — create one above, or drag one onto this folder.'
                     : 'No active workspaces here yet — create one to get started.'}
                 </p>
               ) : (
-                <ul className={gridClass}>
-                  {active.map((w) => (
+                <ul className={view === 'cards' ? gridClass : 'divide-y divide-outline-variant/60'}>
+                  {active.map((w) => view === 'list' ? (
+                    <WorkspaceRow key={w.id} workspace={w} folders={folders} accent={accentOf(w)} study={studyProgress.get(w.id)} selected={selectedId === w.id} onSelect={(button) => { selectedRowRef.current = button; setSelectedId(w.id) }} onChange={(patch) => updateWorkspace(w.id, patch)} onArchive={() => archiveWorkspace(w.id)} />
+                  ) : (
                     <WorkspaceCard
                       key={w.id}
                       workspace={w}
@@ -357,6 +376,9 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
           </>
         )}
 
+          </div>
+          {selectedId && active.some((w) => w.id === selectedId) && <WorkspacePreview workspace={active.find((w) => w.id === selectedId)!} study={studyProgress.get(selectedId)} selectedRowRef={selectedRowRef} onClose={() => setSelectedId(null)} />}
+        </div>
         <DragOverlay dropAnimation={null}>
           {draggedLabel ? (
             <div className="flex max-w-72 items-center gap-2 rounded-lg border border-outline bg-surface-container-high px-3 py-2 shadow-lg">
@@ -561,4 +583,73 @@ function WorkspaceCard({
       </ModuleGlassCard>
     </li>
   )
+}
+
+
+function WorkspaceRow({ workspace, folders, accent, study, selected, onSelect, onChange, onArchive }: {
+  workspace: Workspace; folders: WorkspaceFolder[]; accent: Accent; study?: StudyProgress; selected: boolean;
+  onSelect: (button: HTMLButtonElement) => void; onChange: (patch: { color?: string | null; folder_id?: string | null }) => void; onArchive: () => void
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `ws:${workspace.id}`, data: { type: 'workspace', id: workspace.id } })
+  const hidden = workspace.hidden_sections ?? []
+  return <li ref={setNodeRef} style={accentVars(accent)} className={`flex min-w-0 items-center gap-1 ${selected ? 'bg-ws-accent/10' : ''} ${isDragging ? 'opacity-40' : ''}`}>
+    <button type="button" {...attributes} {...listeners} aria-label={`Move ${workspace.title}`} className="hidden min-h-11 w-8 shrink-0 touch-none items-center justify-center text-on-surface-variant sm:flex"><GripVertical className="h-4 w-4" /></button>
+    <button type="button" onClick={(event) => onSelect(event.currentTarget)} aria-pressed={selected} className="flex min-h-11 min-w-0 flex-1 items-center gap-3 px-2 text-left">
+      <span className="h-3 w-3 shrink-0 rounded-full bg-ws-accent" />
+      <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium">{workspace.title}</span><span className="block text-xs text-on-surface-variant empty:hidden">{[!hidden.includes('readings') && `Readings: ${study?.readings.done ?? 0} / ${study?.readings.total ?? 0}`, !hidden.includes('time') && `${formatMinutes(study?.minutesThisWeek ?? 0)} this week`, workspace.subtitle].filter(Boolean).join(' · ')}</span></span>
+    </button>
+    <WorkspaceAppearanceMenu workspace={workspace} folders={folders} onChange={onChange} onArchive={onArchive} />
+  </li>
+}
+
+function WorkspacePreview({ workspace, study, selectedRowRef, onClose }: {
+  workspace: Workspace
+  study?: StudyProgress
+  selectedRowRef: React.RefObject<HTMLButtonElement | null>
+  onClose: () => void
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    const media = window.matchMedia('(min-width: 1000px)')
+    const updateMode = () => {
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      if (dialog.open) {
+        if (typeof dialog.close === 'function') dialog.close()
+        else dialog.removeAttribute('open')
+      }
+      if (media.matches) {
+        if (typeof dialog.show === 'function') dialog.show()
+        else dialog.setAttribute('open', '')
+        // A nonmodal inline preview must not take focus away from the list.
+        focused?.focus()
+      } else {
+        if (typeof dialog.showModal === 'function') dialog.showModal()
+        else dialog.setAttribute('open', '')
+        dialog.querySelector<HTMLButtonElement>('button')?.focus()
+      }
+    }
+    updateMode()
+    media.addEventListener('change', updateMode)
+    return () => {
+      media.removeEventListener('change', updateMode)
+      if (dialog.open && typeof dialog.close === 'function') dialog.close()
+      // The selected row can change while the desktop pane stays mounted.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      selectedRowRef.current?.focus()
+    }
+  }, [selectedRowRef])
+  const { todos, loading: todosLoading } = useWorkspaceTodos(workspace.id)
+  const { links, loading: linksLoading } = useWorkspaceLinks(workspace.id)
+  const { sources } = splitReadings(links)
+  const hidden = workspace.hidden_sections ?? []
+  return <dialog ref={dialogRef} aria-label={`${workspace.title} preview`} onCancel={(event) => { event.preventDefault(); onClose() }} className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none overflow-y-auto border-0 bg-surface px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop:bg-black/30 min-[1000px]:static min-[1000px]:h-auto min-[1000px]:w-72 min-[1000px]:shrink-0 min-[1000px]:overflow-visible min-[1000px]:rounded-lg min-[1000px]:border min-[1000px]:border-outline-variant/60 min-[1000px]:p-4">
+
+    <div className="flex items-start justify-between gap-3"><div><h2 className="break-words text-xl font-bold">{workspace.title}</h2><p className="mt-1 text-sm text-on-surface-variant">{[!hidden.includes('readings') && `Readings: ${study?.readings.done ?? 0} / ${study?.readings.total ?? 0}`, !hidden.includes('time') && `${formatMinutes(study?.minutesThisWeek ?? 0)} this week`].filter(Boolean).join(' · ')}</p></div><button type="button" onClick={onClose} className="min-h-11 min-w-11 text-sm">Back</button></div>
+    {workspace.subtitle && <p className="mt-3 text-sm text-on-surface-variant">{workspace.subtitle}</p>}
+    <Link href={`/workspaces/${workspace.id}`} className={`${primaryButtonClass} mt-4 flex min-h-11 justify-center`}>Open workspace</Link>
+    <section className="mt-5 border-t border-outline-variant/60 pt-4"><h3 className="font-semibold">Tasks ({todos.length})</h3>{todosLoading ? <LoadingSkeleton label="Loading..." /> : todos.length ? <ul className="mt-2 space-y-2">{todos.slice(0, 5).map((todo) => <li key={todo.id} className="break-words text-sm">{todo.completed_at ? '✓' : '○'} {todo.title}</li>)}</ul> : <p className="mt-2 text-sm text-on-surface-variant">No scoped tasks yet.</p>}</section>
+    <section className="mt-5 border-t border-outline-variant/60 pt-4"><h3 className="font-semibold">Sources ({sources.length})</h3>{linksLoading ? <LoadingSkeleton label="Loading..." /> : sources.length ? <ul className="mt-2 space-y-2">{sources.slice(0, 5).map((link) => <li key={link.id} className="break-words text-sm">{link.title}</li>)}</ul> : <p className="mt-2 text-sm text-on-surface-variant">No sources yet.</p>}</section>
+  </dialog>
 }

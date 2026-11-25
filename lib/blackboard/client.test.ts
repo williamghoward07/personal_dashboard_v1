@@ -3,7 +3,9 @@ import {
   BB_ORIGIN,
   BbLoginRequiredError,
   absoluteUrl,
+  attachmentDownloadUrl,
   getAllPages,
+  getAttachments,
   getContentTree,
   parseCourseCode,
   snapshot,
@@ -92,6 +94,37 @@ describe('getAllPages', () => {
   it('treats a non-JSON 200 as the login page', async () => {
     const { fetchFn } = fakeFetch({ '/a': { __response: { body: null } } })
     await expect(getAllPages(fetchFn, '/a')).rejects.toBeInstanceOf(BbLoginRequiredError)
+  })
+})
+
+describe('getAttachments', () => {
+  const path = '/learn/api/public/v1/courses/_10_1/contents/_5_1/attachments'
+
+  it('lists attachment metadata with absolute URLs', async () => {
+    const { fetchFn, calls } = fakeFetch({
+      [path]: {
+        results: [
+          { id: '_7_1', fileName: 'Handbook.pdf', mimeType: 'application/pdf' },
+          { id: '_8_1', fileName: 'Week 12.pptx' },
+        ],
+      },
+    })
+    expect(await getAttachments(fetchFn, '_10_1', '_5_1')).toEqual([
+      { id: '_7_1', fileName: 'Handbook.pdf', mimeType: 'application/pdf' },
+      { id: '_8_1', fileName: 'Week 12.pptx', mimeType: '' },
+    ])
+    expect(calls).toEqual([`${BB_ORIGIN}${path}`])
+  })
+
+  it('throws BbLoginRequiredError when the session is gone', async () => {
+    const fetchFn: BbFetch = async () => ({ status: 200, url: 'https://login.microsoftonline.com/x', body: null })
+    await expect(getAttachments(fetchFn, '_10_1', '_5_1')).rejects.toBeInstanceOf(BbLoginRequiredError)
+    const unauthorised: BbFetch = async (url) => ({ status: 401, url, body: {} })
+    await expect(getAttachments(unauthorised, '_10_1', '_5_1')).rejects.toBeInstanceOf(BbLoginRequiredError)
+  })
+
+  it('builds the download URL on the Blackboard origin', () => {
+    expect(attachmentDownloadUrl('_10_1', '_5_1', '_7_1')).toBe(`${BB_ORIGIN}${path}/_7_1/download`)
   })
 })
 

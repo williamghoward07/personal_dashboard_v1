@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -78,7 +79,7 @@ export default function PerplexityStore() {
         }
       >
         {loading ? (
-          <p>Loading...</p>
+          <LoadingSkeleton label="Loading..." />
         ) : links.length === 0 ? (
           <p>No saved chats yet — add a link to get started.</p>
         ) : (

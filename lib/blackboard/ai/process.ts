@@ -290,16 +290,17 @@ function isDisabledError(err: unknown): boolean {
 
 /**
  * The model answered, but the reply can't be used: JSON cut off at the
- * token cap or otherwise unparseable (SyntaxError from JSON.parse in
- * lib/ai/gemini.ts), an empty reply (e.g. blocked), or the wrong shape
- * (AiOutputError). That is about THIS batch, so it is marked and the queue
- * moves on. Anything else (network, rate limit, server, budget) would fail
- * every batch alike, so nothing is marked and the loop stops.
+ * token cap or otherwise unparseable (AiTruncatedError from
+ * lib/ai/gemini.ts, or a raw SyntaxError), an empty reply (e.g. blocked), or
+ * the wrong shape (AiOutputError). That is about THIS batch, so it is marked
+ * and the queue moves on. Anything else (network, rate limit, server,
+ * budget) would fail every batch alike, so nothing is marked and the loop
+ * stops.
  */
 export function isBatchError(err: unknown): boolean {
   if (err instanceof SyntaxError) return true
   if (!(err instanceof Error)) return false
-  return err.name === 'AiOutputError' || /empty response/i.test(err.message)
+  return err.name === 'AiTruncatedError' || err.name === 'AiOutputError' || /empty response/i.test(err.message)
 }
 
 function message(err: unknown): string {

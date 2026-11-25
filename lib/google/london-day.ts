@@ -1,4 +1,4 @@
-interface YMD {
+export interface YMD {
   year: number
   month: number
   day: number
@@ -15,7 +15,7 @@ export interface LondonDateRange {
   endDateKey: string
 }
 
-function londonYMD(date: Date): YMD {
+export function londonYMD(date: Date): YMD {
   const londonDate = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/London',
     year: 'numeric',
@@ -47,13 +47,13 @@ function londonMidnightUTC({ year, month, day }: YMD): number {
   return Date.UTC(year, month - 1, day, 0, 0, 0) - offsetMinutes * 60_000
 }
 
-function dateKey({ year, month, day }: YMD): string {
+export function dateKey({ year, month, day }: YMD): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
 // Anchors on UTC noon (clear of any DST transition) before shifting by whole
 // days, then re-derives the London calendar date from the shifted instant.
-function addDays(ymd: YMD, delta: number): YMD {
+export function addDays(ymd: YMD, delta: number): YMD {
   const anchor = new Date(Date.UTC(ymd.year, ymd.month - 1, ymd.day, 12) + delta * 86_400_000)
   return londonYMD(anchor)
 }

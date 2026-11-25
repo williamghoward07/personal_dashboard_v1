@@ -6,6 +6,7 @@ import type { BrainDumpActFields, BrainDumpDraftKind, LocalDraft } from '@/lib/b
 import { isActKind } from '@/lib/braindump/types'
 import BrainDumpDraftRow from '../widgets/braindump/BrainDumpDraftRow'
 import styles from '../widgets/braindump/BrainDump.module.css'
+import { formatDraftDate } from '@/lib/braindump/format-date'
 
 // Static class sets so Tailwind can see every class name.
 export const DRAFT_TONES = {
@@ -227,7 +228,7 @@ export default function DraftCard({
           <p className="text-sm text-on-surface">{summary}</p>
           {draft.act && (draft.act.due_date || draft.act.due_time) && (
             <p className="text-xs text-on-surface-variant">
-              {draft.act.due_date}
+              {draft.act.due_date ? formatDraftDate(draft.act.due_date) : null}
               {draft.act.due_time ? ` · ${draft.act.due_time}` : ''}
             </p>
           )}

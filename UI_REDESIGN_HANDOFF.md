@@ -10,6 +10,8 @@ Commits: shell + Tasks + Workspaces (from `codex/remaining-screens`), `39a76d4` 
 
 Verified in signed-in Comet (17 Nov): Habits tab (desktop), Workspaces Cards view, workspace detail route + browser Back, phone Tasks full-screen detail + Back (focus returns to the row, row stays in view), Brain dump phone Capture → Review → back to Capture keeps text → dismiss (nothing saved), People Add person modal (dark default route, cancelled), Home capture draft (unchanged presentation, dismissed). Earlier (16 Nov): Tasks list/detail, Workspaces list/preview, Brain dump desktop at 1460px; all three at 400px; Home unchanged. vitest 1231/1231, tsc clean, eslint clean on changed files except a pre-existing `set-state-in-effect` error in `HabitBoard.tsx` (exists on main).
 
+PR: https://github.com/williamghoward07/personal_dashboard_v1/pull/6 (Auto-fix on). 25 Nov: merged main into the branch (`03407f9`). Main had gained the same Brain dump commit, page skeletons and the light shell on every signed-in page; conflicts kept this branch's Brain dump review fixes, and the CLAUDE.md scope line was updated to match AppChrome. 1241 tests pass. Port 3000 may be another worktree's server: check `lsof -ti tcp:3000` before trusting what it shows.
+
 Decided: Tasks rows keep separate edit + delete icons (user chose this over preview 04's overflow menu, 17 Nov).
 
 Not done:

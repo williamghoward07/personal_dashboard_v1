@@ -2,7 +2,9 @@
 
 import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, ListChecks, Sunrise } from 'lucide-react'
+import { Plus, ListTodo, Sunrise } from 'lucide-react'
+import type { ReactNode } from 'react'
+import taskStyles from '../daily-goals/TodosBoard.module.css'
 import {
   DndContext,
   closestCenter,
@@ -42,7 +44,7 @@ interface HabitCell {
   date: string
 }
 
-export default function HabitBoard() {
+export default function HabitBoard({ tabs }: { tabs?: ReactNode }) {
   const [habits, setHabits] = useState<DailyGoalHabit[]>([])
   const [completions, setCompletions] = useState<DailyGoalHabitCompletion[]>([])
   const [loading, setLoading] = useState(true)
@@ -212,35 +214,26 @@ export default function HabitBoard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 font-display text-headline-lg font-bold text-habit-purple">
-            <ListChecks className="h-6 w-6" />
-            Habits
-          </h1>
-          <p className="mt-1 text-sm text-on-surface-variant">
-            Daily and weekly habit tracking. Edit a habit to give it steps (core + bonus).
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
+      <header className={taskStyles.header}>
+        <h1><ListTodo size={22} /> Tasks</h1>
+        {tabs}
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
           <button
             type="button"
             onClick={() => setIsRoutineSetupOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container-high hover:text-habit-purple"
+            className="flex min-h-9 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
             <Sunrise className="h-4 w-4" />
             Morning routine
           </button>
-          <button
-            type="button"
-            onClick={() => setIsAddOpen(true)}
-            aria-label="Add habit"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-habit-purple"
-          >
-            <Plus className="h-5 w-5" />
+          <button type="button" className={taskStyles.primary} onClick={() => setIsAddOpen(true)}>
+            <Plus size={16} /> Add habit
           </button>
         </div>
-      </div>
+      </header>
+      <p className="-mt-4 text-sm text-on-surface-variant">
+        Daily and weekly habit tracking. Edit a habit to give it steps (core + bonus).
+      </p>
 
       {error && (
         <div className="rounded-lg border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">

@@ -205,7 +205,7 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
           setOverFolderId(undefined)
         }}
       >
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/60 pb-3">
           <div className="flex min-w-0 flex-col gap-2">
             <FolderBreadcrumb path={path} isDragging={!!dragItem} overFolderId={overFolderId} />
             <div className="flex items-center gap-2">
@@ -222,7 +222,20 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto lg:flex-1 lg:justify-end">
+          <label className="min-w-0 flex-1 basis-full sm:basis-auto lg:min-w-48">
+            <span className="sr-only">Search workspaces</span>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search titles and subtitles..." className={`${inputClass} w-full`} />
+          </label>
+          <label className="min-[1000px]:hidden">
+            <span className="sr-only">Choose folder</span>
+            <select value={folderId ?? ''} onChange={(e) => router.push(e.target.value ? `/workspaces?folder=${e.target.value}` : '/workspaces')} className={`${inputClass} min-h-11 max-w-48`}>
+              {moveTargets(folders).map((target) => <option key={target.id ?? 'root'} value={target.id ?? ''}>{`${'  '.repeat(target.depth)}${target.label}`}</option>)}
+            </select>
+          </label>
+          <div role="group" aria-label="Workspace view" className="flex rounded-lg border border-outline-variant p-1">
+            {(['list', 'cards'] as const).map((option) => <button key={option} type="button" aria-pressed={view === option} onClick={() => setView(option)} className={`min-h-9 rounded-md px-3 text-sm capitalize ${view === option ? 'bg-ws-accent/15 font-semibold text-ws-accent' : 'text-on-surface-variant'}`}>{option}</button>)}
+          </div>
             <Popover
               label="New folder"
               align="end"
@@ -260,21 +273,6 @@ export default function WorkspacesBoard({ folderId }: { folderId: string | null 
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 border-y border-outline-variant/60 py-3">
-          <label className="min-w-0 flex-1">
-            <span className="sr-only">Search workspaces</span>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search titles and subtitles..." className={`${inputClass} w-full`} />
-          </label>
-          <label className="min-[1000px]:hidden">
-            <span className="sr-only">Choose folder</span>
-            <select value={folderId ?? ''} onChange={(e) => router.push(e.target.value ? `/workspaces?folder=${e.target.value}` : '/workspaces')} className={`${inputClass} min-h-11 max-w-48`}>
-              {moveTargets(folders).map((target) => <option key={target.id ?? 'root'} value={target.id ?? ''}>{`${'  '.repeat(target.depth)}${target.label}`}</option>)}
-            </select>
-          </label>
-          <div role="group" aria-label="Workspace view" className="flex rounded-lg border border-outline-variant p-1">
-            {(['list', 'cards'] as const).map((option) => <button key={option} type="button" aria-pressed={view === option} onClick={() => setView(option)} className={`min-h-9 rounded-md px-3 text-sm capitalize ${view === option ? 'bg-ws-accent/15 font-semibold text-ws-accent' : 'text-on-surface-variant'}`}>{option}</button>)}
-          </div>
-        </div>
         <div className="flex min-w-0 items-start gap-5">
           <nav aria-label="Workspace folders" className="hidden w-48 shrink-0 flex-col gap-1 border-r border-outline-variant/60 pr-3 min-[1000px]:flex">
             <h2 className="px-2 pb-2 text-sm font-semibold">Folders</h2>
@@ -594,11 +592,11 @@ function WorkspaceRow({ workspace, folders, accent, study, selected, onSelect, o
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `ws:${workspace.id}`, data: { type: 'workspace', id: workspace.id } })
   const hidden = workspace.hidden_sections ?? []
-  return <li ref={setNodeRef} style={accentVars(accent)} className={`flex min-w-0 items-center gap-1 py-1 ${selected ? 'bg-ws-accent/10' : ''} ${isDragging ? 'opacity-40' : ''}`}>
+  return <li ref={setNodeRef} style={accentVars(accent)} className={`flex min-w-0 items-center gap-1 ${selected ? 'bg-ws-accent/10' : ''} ${isDragging ? 'opacity-40' : ''}`}>
     <button type="button" {...attributes} {...listeners} aria-label={`Move ${workspace.title}`} className="hidden min-h-11 w-8 shrink-0 touch-none items-center justify-center text-on-surface-variant sm:flex"><GripVertical className="h-4 w-4" /></button>
-    <button type="button" onClick={(event) => onSelect(event.currentTarget)} aria-pressed={selected} className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-2 text-left">
+    <button type="button" onClick={(event) => onSelect(event.currentTarget)} aria-pressed={selected} className="flex min-h-11 min-w-0 flex-1 items-center gap-3 px-2 text-left">
       <span className="h-3 w-3 shrink-0 rounded-full bg-ws-accent" />
-      <span className="min-w-0 flex-1"><span className="block break-words text-base font-semibold">{workspace.title}</span><span className="block text-sm text-on-surface-variant">{[!hidden.includes('readings') && `Readings: ${study?.readings.done ?? 0} / ${study?.readings.total ?? 0}`, !hidden.includes('time') && `${formatMinutes(study?.minutesThisWeek ?? 0)} this week`, workspace.subtitle].filter(Boolean).join(' · ')}</span></span>
+      <span className="min-w-0 flex-1"><span className="block break-words text-sm font-medium">{workspace.title}</span><span className="block text-xs text-on-surface-variant empty:hidden">{[!hidden.includes('readings') && `Readings: ${study?.readings.done ?? 0} / ${study?.readings.total ?? 0}`, !hidden.includes('time') && `${formatMinutes(study?.minutesThisWeek ?? 0)} this week`, workspace.subtitle].filter(Boolean).join(' · ')}</span></span>
     </button>
     <WorkspaceAppearanceMenu workspace={workspace} folders={folders} onChange={onChange} onArchive={onArchive} />
   </li>

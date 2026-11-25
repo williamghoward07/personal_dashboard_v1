@@ -366,8 +366,8 @@ export default function DraftList({
           <div className={styles.counts} role="status">
             {pendingCount > 0 ? (
               <>
-                <span className={styles.readyBadge}>{quickDrafts.length} ready</span>
-                <span className={styles.reviewBadge}>{reviewCount} {reviewCount === 1 ? 'needs' : 'need'} review</span>
+                {quickDrafts.length > 0 && <span className={styles.readyBadge}>{quickDrafts.length} ready</span>}
+                {reviewCount > 0 && <span className={styles.reviewBadge}>{reviewCount} {reviewCount === 1 ? 'needs' : 'need'} review</span>}
               </>
             ) : drafts.length > 0 && 'All reviewed'}
           </div>

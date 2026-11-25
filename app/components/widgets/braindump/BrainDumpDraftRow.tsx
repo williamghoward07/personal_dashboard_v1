@@ -68,9 +68,6 @@ export default function BrainDumpDraftRow({
             )}
             {needsReview ? <span className={styles.reviewBadge}>Needs review</span> : <span className="sr-only">Ready to confirm</span>}
             {problem && <p className={styles.problem}>{problem}</p>}
-            {draft.kind === 'education_task' && (
-              <p className={styles.metadata}>Counts on Daily Goals.</p>
-            )}
           </>
         )}
       </div>

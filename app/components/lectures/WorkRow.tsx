@@ -234,7 +234,7 @@ export default function WorkRow({
                 rel="noopener noreferrer"
                 className={cn('inline-flex items-center gap-1 self-start text-xs font-semibold hover:underline', ACCENT_TEXT.blue)}
               >
-                Open source
+                {item.ai.from === 'announcement' ? 'Open on Blackboard' : 'Open source'}
                 <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />
               </a>
             )}
@@ -270,7 +270,7 @@ export default function WorkRow({
                     rel="noopener noreferrer"
                     className={cn('inline-flex items-center gap-1 self-start text-xs font-semibold hover:underline', ACCENT_TEXT.blue)}
                   >
-                    Open source
+                    Open on Blackboard
                     <ExternalLink className="h-3 w-3" strokeWidth={2} aria-hidden />
                   </a>
                 )}

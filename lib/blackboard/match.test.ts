@@ -1098,9 +1098,10 @@ describe('rule 2: coursework never matches a session by number or week', () => {
       [readingDoc.id, ai(readingDoc.id, { role: 'reading', session_type: 'tutorial' })],
     ])
     const first = matchIn(tutorials, rows, on(tutorials, '13/11', 'Tutorial'), { ai: aiRows })
-    expect(ids(first)).toEqual(['t1doc'])
+    // The term-wide reading is on every Term 1 tutorial (rule 9); the essay on none.
+    expect(ids(first)).toEqual(['rddoc', 't1doc'])
     expect(first.other[0].confidence).toBe('ordinal')
-    expect(ids(matchIn(tutorials, rows, on(tutorials, '27/11', 'Tutorial'), { ai: aiRows }))).toEqual([])
+    expect(ids(matchIn(tutorials, rows, on(tutorials, '27/11', 'Tutorial'), { ai: aiRows }))).toEqual(['rddoc'])
     const index = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: rows, ai: aiRows, overrides: [], weekOneStart: WEEK_ONE, sessions: tutorials })
     expect(index.rows.find((r) => r.content.id === 'essay')?.coursework).toBe(true)
     expect(index.rows.find((r) => r.content.id === 't1doc')?.coursework).toBe(false)
@@ -1324,5 +1325,188 @@ describe('a generic "Online Session" takes items dated to its day, whatever thei
     expect(ids(matchIn(sessions, [dropIn, body], on(sessions, '20/10', 'Online Session'), { ai: aiRows }))).toEqual(['dropDoc'])
     expect(ids(matchIn(sessions, [dropIn, body], on(sessions, '19/10'), { ai: aiRows }))).toEqual([])
     expect(ids(matchIn(sessions, [dropIn, body], on(sessions, '26/10'), { ai: aiRows }))).toEqual([])
+  })
+})
+
+// ------------------------------------------- matching gaps (13 Nov 2026) --
+// Found after the first sync that carried `links`. Each from the live layout.
+
+/** An Ultra page: a folder plus a document of the same title, which carries the links. */
+function page(parent: BbContentLite, id: string, title: string, links: BbContentLink[] = []): BbContentLite[] {
+  const folder = child(parent, { id, kind: 'folder', title })
+  return [folder, child(folder, { id: `${id}doc`, kind: 'document', title, links })]
+}
+
+describe('rule 7: an embedded recording dates its item (GEOG1081 introduction lecture)', () => {
+  const lectures = timetable('GEOG1081', 'Physical Geography', 'Lecture', [
+    '05/10', '07/10', '12/10', '14/10', '19/10', '21/10', '26/10', '02/11', '04/11', '09/11', '11/11', '16/11', '18/11',
+  ])
+  const week12 = content({ id: 'wk12', kind: 'folder', title: 'Week 12: Introduction Lecture', week_label: 12 })
+  const intro = page(week12, 'intro', 'Introduction Lecture: Introduction to Physical Geography', [
+    slides('GEOG1081_PG_Intro.pptx'),
+    file('GEOG1081_PG_Intro.pdf'),
+    panopto('05/10/2026 : Physical Geography'),
+  ])
+  const block1 = content({ id: 'b1', kind: 'folder', title: 'Block 1: Climate' })
+  const climate = ['The Climate System', 'Global Energy Cascade', 'Water in the Atmosphere', 'Atmospheric Circulation', 'Oceans and Climate', 'Climate Variability', 'Revision session']
+    .flatMap((topic, i) => page(block1, `c${i + 1}`, `Climate Lecture ${i + 1}: ${topic}`, [slides(`Climate Lecture ${i + 1}.pptx`)]))
+  const block2 = content({ id: 'b2', kind: 'folder', title: 'Block 2: Water and Water Resources' })
+  const recorded = ['04/11/2026', '09/11/2026', '11/11/2026']
+  const water = ['Hydrological Cycle', 'How water structures the British landscape', 'Causes and consequences of flooding', 'River Flow and Sediment Transport', 'Solutes and Anthropogenic Sediment']
+    .flatMap((topic, i) =>
+      page(block2, `w${i + 1}`, `Water Lecture ${i + 1}: ${topic}`, [
+        slides(`Water_${i + 1}_RJH_26.pptx`),
+        ...(recorded[i] ? [panopto(`${recorded[i]} : Physical Geography`)] : []),
+      ])
+    )
+  const rows = [week12, ...intro, block1, ...climate, block2, ...water]
+  const at = (day: string, contents = rows) => matchIn(lectures, contents, on(lectures, day))
+
+  it('the introduction lecture is on 5 Oct only (by its recording), not on both lectures of week 12', () => {
+    expect(all(at('05/10'))).toEqual([expect.objectContaining({ content: expect.objectContaining({ id: 'introdoc' }), confidence: 'date' })])
+    expect(ids(at('07/10'))).toEqual(['c1doc'])
+  })
+
+  it('recordings date their numbered series: the Water lectures are no longer a best guess', () => {
+    const index = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: rows, ai: new Map(), overrides: [], weekOneStart: WEEK_ONE, sessions: lectures })
+    expect(index.series.get('lecture|water lecture')).toEqual({ offset: 8, source: 'dated' })
+    expect(index.series.get('lecture|climate lecture')).toEqual({ offset: 1, source: 'cumulative' })
+    expect(all(at('04/11'))).toEqual([expect.objectContaining({ content: expect.objectContaining({ id: 'w1doc' }), confidence: 'date' })])
+    const fifth = all(at('18/11'))
+    expect(fifth).toEqual([expect.objectContaining({ content: expect.objectContaining({ id: 'w5doc' }), confidence: 'ordinal' })])
+    expect(fifth[0].inferred).toBeUndefined()
+  })
+
+  const loose = (links: BbContentLink[]) => child(week12, { id: 'loose', kind: 'document', title: 'Introductory material', links })
+  const days = (item: BbContentLite) => lectures.filter((s) => ids(matchIn(lectures, [week12, item], s)).includes('loose')).map((s) => s.start.slice(5, 10))
+
+  it('a recording re-used from last year is ignored: only a day the module meets counts', () => {
+    // As GEOG1061 "Block 1, week 3 recording" carries them: this year's and last year's.
+    expect(days(loose([panopto('07/10/2026 : Physical Geography'), panopto('08/10/2025 : Physical Geography')]))).toEqual(['10-07'])
+    expect(days(loose([panopto('08/10/2025 : Physical Geography')]))).toEqual(['10-05', '10-07'])
+  })
+
+  it('recordings of two different sessions leave the item on its week', () => {
+    expect(days(loose([panopto('05/10/2026 : Physical Geography'), panopto('07/10/2026 : Physical Geography')]))).toEqual(['10-05', '10-07'])
+  })
+
+  it('only a Panopto link named after its date counts', () => {
+    expect(days(loose([file('07/10/2026 notes.pdf')]))).toEqual(['10-05', '10-07'])
+    expect(days(loose([panopto('Welcome video (recorded 07/10/2026)')]))).toEqual(['10-05', '10-07'])
+  })
+
+  it('coursework is never dated by a recording', () => {
+    const area = content({ id: 'af', kind: 'lesson', title: 'Assignments and Feedback' })
+    const guidance = page(area, 'guide', 'Formative Essay', [panopto('07/10/2026 : Physical Geography')])
+    for (const s of lectures) expect(ids(matchIn(lectures, [area, ...guidance], s))).toEqual([])
+  })
+})
+
+describe('rule 8: a unit named after two kinds of session serves both (GEOG1222 practical 1)', () => {
+  const lectures = timetable('GEOG1222', 'Introduction to Geographical Research', 'Lecture', ['02/11', '16/11'])
+  const practicals = timetable('GEOG1222', 'Introduction to Geographical Research', 'Practical', ['05/11', '12/11', '19/11'])
+  const sessions = [...lectures, ...practicals]
+  const week16 = content({ id: 'w16', kind: 'lesson', title: 'Week 16: Quantitative Methods lecture and Practical 1 (Nick Cox)', week_label: 16 })
+  const handout = child(week16, { id: 'handout', title: 'igr_stats_1_NJC.doc', links: [file('igr_stats_1_NJC.doc')] })
+  const deck = child(week16, { id: 'deck', title: 'Lecture slides', links: [slides('igr_descriptive.pptx')] })
+  const rivers = child(week16, { id: 'rivers', title: 'riversdata.xlsx', links: [file('riversdata.xlsx')] })
+  const video = page(week16, 'video', 'Video of lecture', [panopto('02/11/2026 : GEOG1222/LECT/003, GEOG1232/LECT/003')])
+  const week17 = content({ id: 'w17', kind: 'lesson', title: 'Week 17 Quantitative Practical II (Nick Cox)', week_label: 17 })
+  const derwent = child(week17, { id: 'derwent', title: 'derwent.xlsx', links: [file('derwent.xlsx')] })
+  const stats2 = child(week17, { id: 'stats2', title: 'igr_stats_2_2026.doc', links: [file('igr_stats_2_2026.doc')] })
+  const rows = [week16, handout, deck, rivers, ...video, week17, derwent, stats2]
+  // As classified live: the AI called everything in the week 16 unit a lecture item.
+  const aiRows = new Map([
+    [week16.id, ai(week16.id, { role: 'admin', uni_week: 16, session_type: 'lecture' })],
+    [handout.id, ai(handout.id, { role: 'handout', uni_week: 16, session_type: 'lecture' })],
+    [deck.id, ai(deck.id, { role: 'slides', uni_week: 16, session_type: 'lecture' })],
+    [rivers.id, ai(rivers.id, { role: 'handout', uni_week: 16, session_type: 'lecture' })],
+    ...video.map((r): [string, BbContentAiLite] => [r.id, ai(r.id, { role: 'recording', uni_week: 16, session_type: 'lecture' })]),
+    [week17.id, ai(week17.id, { role: 'admin', uni_week: 17, session_type: 'practical' })],
+    [derwent.id, ai(derwent.id, { role: 'handout', uni_week: 17, session_type: 'practical' })],
+    [stats2.id, ai(stats2.id, { role: 'handout', uni_week: 17, session_type: 'practical' })],
+  ])
+  const at = (day: string, type = 'Lecture') => ids(matchIn(sessions, rows, on(sessions, day, type), { ai: aiRows })).sort()
+
+  it('practical 1 gets the handout and the data file; the slides and recording stay with the lecture', () => {
+    expect(at('05/11', 'Practical')).toEqual(['handout', 'rivers'])
+    expect(at('02/11')).toEqual(['deck', 'handout', 'rivers', 'videodoc'])
+  })
+
+  it('a unit that names one kind keeps it: week 17 is on practical 2 only', () => {
+    expect(at('12/11', 'Practical')).toEqual(['derwent', 'stats2'])
+    expect(at('16/11')).toEqual([])
+    expect(at('19/11', 'Practical')).toEqual([])
+  })
+
+  it('the AI type is still used when no title names a kind, and never to pick between two a title names', () => {
+    const t = { yearStart: 2026, weekOffset: 0 }
+    const lecture = ai('x', { session_type: 'lecture' })
+    expect(resolveContentTarget({ title: 'igr_stats_1_NJC.doc', path: [week16.title], week_label: 16 }, [], lecture, t).sessionType).toBeUndefined()
+    expect(resolveContentTarget({ title: 'igr_stats_1_NJC.doc', path: ['Week 16: Quantitative Methods'], week_label: 16 }, [], lecture, t).sessionType).toBe('lecture')
+  })
+})
+
+describe('rule 9: a term-wide item is on that term\'s sessions of its kind (GEOG1061 "Reading for Term 1 Tutorials")', () => {
+  const at = (type: string, start: string) => session({ moduleCode: 'GEOG1061', moduleName: 'Planet Under Pressure', type, start })
+  // The real timetable: one tutorial a term.
+  const tutorial1 = at('Tutorial', '2026-11-13T10:00:00Z')
+  const tutorial2 = at('Tutorial', '2027-01-29T10:00:00Z')
+  const lectures = [at('Lecture', '2026-10-12T10:00:00Z'), at('Lecture', '2026-11-09T10:00:00Z'), at('Lecture', '2027-01-25T10:00:00Z')]
+  const sessions = [...lectures, tutorial1, tutorial2].sort((a, b) => a.start.localeCompare(b.start))
+  const area = content({
+    id: 'area',
+    kind: 'lesson',
+    title: 'Assignments and Feedback (including info about Tutorials 1 & 2 and Summative Essay)',
+  })
+  const reading = page(area, 'rd', 'Reading for Term 1 Tutorials')
+  const activities = page(area, 't1', 'Tutorial 1 activities')
+  const essay = child(area, { id: 'essay', kind: 'assignment', title: 'Summative Essay due 16th February 2027 by 2pm (CMP002/ESFN41)' })
+  // The course labels teaching weeks (offset 11): a term is never shifted by it.
+  const block = content({ id: 'b12', kind: 'folder', title: 'BLOCK 1.2, DRB, Week 2 (12 October)', week_label: 2 })
+  const rows = [area, ...reading, ...activities, essay, block]
+  const aiRows = new Map(reading.map((r): [string, BbContentAiLite] => [r.id, ai(r.id, { role: 'reading', session_type: 'tutorial' })]))
+  const match = (s: TimetableSession) => matchIn(sessions, rows, s, { ai: aiRows })
+
+  it('the reading is on the Term 1 tutorial, not on the Term 2 one and not on any lecture', () => {
+    const first = match(tutorial1)
+    expect(first.readings).toEqual([expect.objectContaining({ label: 'Reading for Term 1 Tutorials', confidence: 'week' })])
+    expect(ids(first)).toEqual(['rddoc', 't1doc'])
+    expect(ids(match(tutorial2))).toEqual([])
+    for (const s of lectures) expect(ids(match(s))).not.toContain('rddoc')
+  })
+
+  it('a term is read in university weeks whatever the course week offset', () => {
+    const index = buildCourseIndex({ course: { id: 'course', week_offset: 0 }, contents: rows, ai: aiRows, overrides: [], weekOneStart: WEEK_ONE, sessions })
+    expect(index.weekOffset).toBe(11)
+    expect(index.rows.find((r) => r.content.id === 'rddoc')?.target).toMatchObject({ sessionType: 'tutorial', uniWeek: 12, uniWeekEnd: 23, via: 'own' })
+  })
+
+  const t = { yearStart: 2026, weekOffset: 11 }
+  const target = (title: string, path: string[] = []) => resolveContentTarget({ title, path, week_label: null }, [], null, t)
+
+  it('reads Term 2 / Epiphany and Term 3 / Easter term, and passes a term down from a unit', () => {
+    expect(target('Term 2 seminar readings')).toMatchObject({ sessionType: 'seminar', uniWeek: 24, uniWeekEnd: 38 })
+    expect(target('Epiphany Tutorials')).toMatchObject({ sessionType: 'tutorial', uniWeek: 24, uniWeekEnd: 38 })
+    expect(target('Easter term workshops')).toMatchObject({ sessionType: 'workshop', uniWeek: 39, uniWeekEnd: 52 })
+    expect(target('Chapter 3.pdf', ['Term 1 Tutorials'])).toMatchObject({ sessionType: 'tutorial', uniWeek: 12, uniWeekEnd: 23, via: 'ancestor' })
+  })
+
+  it('a term with no kind of session beside it places nothing (GEOG1222 "IGR - Term 1 Handbook")', () => {
+    expect(target('IGR - Term 1 Handbook - 26/27 (includes module schedule for Term 1)').uniWeek).toBeUndefined()
+    expect(target('Discussion Board: Term 1 Group Summative Assessment queries').uniWeek).toBeUndefined()
+    expect(target('Easter vacation reading for tutorials').uniWeek).toBeUndefined()
+    // The term belongs to tutorials; a lecture item under it doesn't take it.
+    expect(target('Lecture notes', ['Term 1 Tutorials']).uniWeek).toBeUndefined()
+  })
+
+  it('a week, a date or a number beats the term', () => {
+    const narrow = target('Week 6 reading for Term 1 Tutorials')
+    expect(narrow).toMatchObject({ sessionType: 'tutorial', uniWeek: 17 })
+    expect(narrow.uniWeekEnd).toBeUndefined()
+    expect(target('Term 1 tutorial reading for 13 November')).toMatchObject({ date: '2026-11-13' })
+    expect(target('Term 1 tutorial reading for 13 November').uniWeek).toBeUndefined()
+    expect(target('Tutorial 2 reading (Term 1)')).toMatchObject({ ordinal: 2, ordinalType: 'tutorial' })
+    expect(target('Tutorial 2 reading (Term 1)').uniWeek).toBeUndefined()
   })
 })

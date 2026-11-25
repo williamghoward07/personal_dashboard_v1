@@ -669,3 +669,41 @@ describe('syncStatus', () => {
     expect(syncStatus([run('bad', '2026-11-12T09:00:00Z', false)], NOW)).toMatchObject({ state: 'failed', lastOkAt: null })
   })
 })
+
+describe('stale announcement dates', () => {
+  // NOW is 12 Nov 2026 (London).
+  const ann = (over: Partial<BbKeyDate> & Pick<BbKeyDate, 'id' | 'due_on'>) =>
+    keyDate({ announcement_id: `an-${over.id}`, content_id: null, title: `Note ${over.id}`, ...over })
+
+  it('drops an unconfirmed announcement date once its day has passed', () => {
+    const items = build({
+      keyDates: [
+        ann({ id: 'old', due_on: '2026-11-11' }),
+        ann({ id: 'today', due_on: '2026-11-12' }),
+        ann({ id: 'next', due_on: '2026-11-20' }),
+      ],
+    })
+    expect(keys(items).sort()).toEqual(['kd:next', 'kd:today'])
+  })
+
+  it('keeps past dates that were confirmed, done, or come from content or a handbook', () => {
+    const items = build({
+      keyDates: [
+        // Different days: an announcement on a primary item's day would annotate it instead.
+        ann({ id: 'confirmed', due_on: '2026-11-01', status: 'confirmed' }),
+        ann({ id: 'done', due_on: '2026-11-02', done_at: '2026-11-02T09:00:00Z' }),
+        keyDate({ id: 'content', due_on: '2026-11-03', content_id: 'c1', title: 'From content' }),
+        keyDate({ id: 'handbook', due_on: '2026-11-04', content_id: null, document_id: 'd1', title: 'From a handbook' }),
+      ],
+    })
+    expect(keys(items).sort()).toEqual(['kd:confirmed', 'kd:content', 'kd:done', 'kd:handbook'])
+  })
+
+  it('no longer hangs a stale note on a past session', () => {
+    const lecture = session({ start: '2026-11-10T10:00:00Z' })
+    const note = ann({ id: 'bring', due_on: '2026-11-10', category: 'session_task', for_session_type: 'lecture' })
+    const items = build({ sessions: [lecture], keyDates: [note] })
+    expect(items.some((i) => (i.setWork ?? []).length > 0)).toBe(false)
+    expect(keys(items)).not.toContain('kd:bring')
+  })
+})

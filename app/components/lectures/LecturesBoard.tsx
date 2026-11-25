@@ -23,6 +23,7 @@ import {
   type SessionWithPrep,
 } from '@/lib/timetable/session'
 import { PREP_ACCENT, formatSessionDay, formatSessionTime } from '@/lib/timetable/format'
+import AnnouncementsSection from './AnnouncementsSection'
 import SessionRow from './SessionRow'
 import SyncStatusChip from './SyncStatusChip'
 import WorkList from './WorkList'
@@ -154,6 +155,8 @@ export default function LecturesBoard() {
           }
         />
       </ModuleGlassCard>
+
+      <AnnouncementsSection accent={ACCENT} />
 
       {!error && (
         <ModuleGlassCard accent={ACCENT} size="sm" className="flex flex-col gap-3">

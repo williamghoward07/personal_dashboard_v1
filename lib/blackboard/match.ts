@@ -4,7 +4,9 @@
 //
 // The ICS titles carry no topic, so a session is found by what Blackboard
 // writes in its titles: a date ("Monday, 9 November:"), a lecture number
-// ("Lecture 1 - …"), or a week label. Week labels come in two scales:
+// ("Lecture 1 - …"), or a week label; failing a date there, by the day an
+// embedded Panopto recording is named after, and last by a term ("Term 1
+// Tutorials"). Week labels come in two scales:
 // Durham university weeks (week 12 = Mon 5 Oct 2026) and teaching weeks
 // (week 1 = the same Monday). `bb_courses.week_offset` turns a course's
 // labels into university weeks; `calibrateWeekOffset` guesses it when it's 0.
@@ -106,6 +108,29 @@ function weekLabelOf(title: string): [number, number] | null {
   }
   const week = parseWeekLabel(title)
   return week === null ? null : [week, week]
+}
+
+/**
+ * Durham's three terms in university weeks. Teaching runs 12-21, 26-35 and
+ * 41-49; each range takes in the vacation after it, where nothing is timetabled.
+ */
+const TERM_WEEKS: [number, number][] = [
+  [FIRST_TEACHING_WEEK, 23],
+  [24, 38],
+  [39, 52],
+]
+const TERM_RE = /\bterm\s*(1|2|3|one|two|three|i{1,3})\b|\b(michaelmas|epiphany)\b|\b(easter)\s+term\b/i
+const TERM_NUMBER: Record<string, number> = {
+  '1': 1, one: 1, i: 1, michaelmas: 1,
+  '2': 2, two: 2, ii: 2, epiphany: 2,
+  '3': 3, three: 3, iii: 3, easter: 3,
+}
+
+/** "Reading for Term 1 Tutorials", "Epiphany seminars" → that term's university weeks. Already university weeks: never offset. */
+function termWeeksOf(title: string): [number, number] | null {
+  const m = TERM_RE.exec(title)
+  const term = m ? TERM_NUMBER[(m[1] ?? m[2] ?? m[3]).toLowerCase()] : undefined
+  return term ? TERM_WEEKS[term - 1] : null
 }
 
 const SESSION_WORD_RE =
@@ -404,8 +429,12 @@ function titleDateOf(
  * → AI `explicit_date` (own, then nearest ancestor) → a week from its own
  * or an ancestor's label, else AI `uni_week` (+ offset) → an ordinal
  * ("Lecture 3", "L3") from its own or an ancestor's title, else AI
- * `lecture_ordinal`. Session type: the first title (own, then up) naming
- * exactly one type, else AI `session_type`.
+ * `lecture_ordinal` → with none of those, the term a title names for this
+ * session type ("Reading for Term 1 Tutorials" → Term 1's weeks). Session
+ * type: the first title (own, then up) naming exactly one type, else AI
+ * `session_type`. When that first title names several ("… lecture and
+ * Practical 1"), the item has no type: AI reads the same titles, so its
+ * one answer would only be a pick between them.
  */
 export function resolveContentTarget(
   row: Pick<BbContentRecord, 'title' | 'path' | 'week_label'> & { childDate?: TitleDate | null },
@@ -457,13 +486,16 @@ export function resolveContentTarget(
   }
 
   // Session type.
-  for (const title of [row.title, ...up.map((a) => a.title)]) {
+  const titles = [row.title, ...up.map((a) => a.title)]
+  let severalTypes = false
+  for (const title of titles) {
     const t = sessionTypeOf(title)
     if (t === undefined) continue
     if (t) target.sessionType = t
+    else severalTypes = true
     break
   }
-  if (!target.sessionType) {
+  if (!target.sessionType && !severalTypes) {
     const aiType = normaliseSessionType(ais.find((a) => a?.session_type)?.session_type)
     if (aiType) target.sessionType = aiType
   }
@@ -471,7 +503,7 @@ export function resolveContentTarget(
   // Ordinal.
   let ordinal: { ordinal: number; type: string; series?: string } | null = null
   let ordinalVia: ContentTarget['via'] = null
-  for (const [i, title] of [row.title, ...up.map((a) => a.title)].entries()) {
+  for (const [i, title] of titles.entries()) {
     ordinal = ordinalOf(title)
     if (ordinal) {
       ordinalVia = i === 0 ? 'own' : 'ancestor'
@@ -496,6 +528,17 @@ export function resolveContentTarget(
   }
 
   target.via = date ? dateVia : week ? weekVia : ordinal ? ordinalVia : null
+
+  // Term: only with nothing narrower (no date, week or number), and only from a title that names this session type with it.
+  if (!date && !week && !ordinal && target.sessionType) {
+    const i = titles.findIndex((title) => sessionTypeOf(title) === target.sessionType && termWeeksOf(title))
+    const term = i < 0 ? null : termWeeksOf(titles[i])
+    if (term) {
+      target.uniWeek = term[0]
+      target.uniWeekEnd = term[1]
+      target.via = i === 0 ? 'own' : 'ancestor'
+    }
+  }
   return target
 }
 
@@ -673,6 +716,18 @@ function justDateOf(title: string, yearStart: number, nameWords: Set<string>): T
   return m.endDate ? { date: m.date, endDate: m.endDate } : { date: m.date }
 }
 
+/**
+ * The date a Panopto link is named after: "05/10/2026 : Physical Geography",
+ * "26/10/2026 : GEOG1222/LECT/002, GEOG1232/LECT/002". Panopto names a
+ * recording by the day it was made, so the label must open with the date.
+ */
+function recordingDateOf(link: BbContentLink, yearStart: number): TitleDate | null {
+  if (link.kind !== 'panopto' || !link.label) return null
+  const m = sessionDateMatch(link.label, yearStart)
+  if (!m || m.endDate || link.label.slice(0, m.index).trim()) return null
+  return { date: m.date }
+}
+
 interface IndexedSession {
   uid: string
   day: string
@@ -700,6 +755,10 @@ interface SeriesInfo {
  * - Dates from dated children: a folder or lesson with no date of its own
  *   takes the date its "just a date" children agree on (a Panopto recording
  *   "13/10/2026 : Human Geography"), and its other children inherit it.
+ * - Dates from embedded recordings: an item with no date of its own takes
+ *   the day its Panopto links are named after, when they agree. With a
+ *   timetable only session days count (a re-used recording from last year
+ *   doesn't). Never for coursework, and not passed down.
  * - Numbered series ("Lecture 3", "Climate Lecture 3", "Tutorial Three"):
  *   members with a date that is a session day, or attached to a session by
  *   hand (which outranks dates), give offset = session position − number;
@@ -761,6 +820,14 @@ export function buildCourseIndex(input: CourseIndexInput): CourseIndex {
     if (dates.every((d) => d.date === first.date && d.endDate === first.endDate)) childDate.set(c.id, first)
   }
 
+  // Dates from embedded recordings.
+  const recordingDate = (row: BbContentLite): TitleDate | null => {
+    const dates = (row.links ?? [])
+      .map((l) => recordingDateOf(l, yearStart))
+      .filter((d): d is TitleDate => d !== null && (allSessions.length === 0 || onDays(allSessions, d).length > 0))
+    return dates.length > 0 && dates.every((d) => d.date === dates[0].date) ? dates[0] : null
+  }
+
   const ancestorsOf = (row: BbContentLite): TargetAncestor[] => {
     const chain: TargetAncestor[] = []
     const seen = new Set<string>([row.bb_id])
@@ -778,10 +845,12 @@ export function buildCourseIndex(input: CourseIndexInput): CourseIndex {
   const entries = contents.map((row) => {
     const ancestors = ancestorsOf(row)
     const ai = input.ai.get(row.id)
-    const own = { title: row.title, path: row.path ?? [], week_label: row.week_label, childDate: childDate.get(row.id) ?? null }
-    const target = resolveContentTarget(own, ancestors, ai, { yearStart, weekOffset })
-    const up = nearestFirst(own.path, ancestors)
+    const path = row.path ?? []
+    const up = nearestFirst(path, ancestors)
     const coursework = isCoursework(row, up.map((a) => a.title), yearStart)
+    const ownDate = childDate.get(row.id) ?? (coursework ? null : recordingDate(row))
+    const own = { title: row.title, path, week_label: row.week_label, childDate: ownDate }
+    const target = resolveContentTarget(own, ancestors, ai, { yearStart, weekOffset })
     return { row, ai, ancestors, own, up, target, coursework }
   })
 

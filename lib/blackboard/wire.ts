@@ -27,12 +27,18 @@ export const PAGE_BREAK = '\f'
 /**
  * A content item whose attached documents the dashboard wants read
  * (handbooks and assessment briefs). `known` maps a document's `bb_id`
- * (attachment id) to the version already stored, so unchanged files are skipped.
+ * (attachment id, or `<content id>:<file id>` for a file embedded in an
+ * Ultra Document) to the version already stored, so unchanged files are skipped.
  */
 export interface WantedDocument {
   course_bb_id: string
   content_bb_id: string
   known: Record<string, string>
+  /**
+   * The user marked the item "read with AI": read every pdf / docx in it.
+   * Otherwise an Ultra Document's handbook-looking files are preferred.
+   */
+  all?: true
 }
 
 /** 200 response of `POST /api/blackboard/sync`. */
@@ -45,7 +51,7 @@ export interface SyncResponse {
 export interface DocumentUpload {
   course_bb_id: string
   content_bb_id: string
-  /** Attachment id. */
+  /** Attachment id, or `<content id>:<file id>` for an embedded file. */
   bb_id: string
   file_name: string
   mime_type: string

@@ -17,7 +17,7 @@ import TimeGridPill, { isTimedDayItem } from './time-grid/TimeGridPill'
 import CurrentTimeLine, { useCurrentTimeMinutes } from './time-grid/CurrentTimeLine'
 import { TimeGridHourLabels, TimeGridLines } from './time-grid/TimeGridChrome'
 import UntimedItemRow from './time-grid/UntimedItemRow'
-import { useScrollBox } from './time-grid/use-scroll-box'
+import { useInitialScroll, useScrollBox } from './time-grid/use-scroll-box'
 import DayHeading from './DayHeading'
 
 function itemKey(item: DayItem): string {
@@ -68,13 +68,7 @@ export default function DayGridView({
     return new Map(layoutOverlappingBlocks(blocks).map((l) => [l.id, l]))
   }, [timed, ranges, pxPerMin])
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(isToday, nowMinutes), pxPerMin) })
-    // Only re-run when the visible day or zoom level changes — the
-    // current-time tick shouldn't yank the user's scroll position back
-    // every minute.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateKey, pxPerMin])
+  useInitialScroll(scrollRef, `${dateKey}|${pxPerMin}`, minutesToPx(defaultScrollMinutes(isToday, nowMinutes), pxPerMin), viewportPx)
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">

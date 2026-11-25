@@ -19,7 +19,7 @@ import TimeGridPill, { isTimedDayItem } from './time-grid/TimeGridPill'
 import CurrentTimeLine, { useCurrentTimeMinutes } from './time-grid/CurrentTimeLine'
 import { TimeGridHourLabels, TimeGridLines } from './time-grid/TimeGridChrome'
 import UntimedItemRow from './time-grid/UntimedItemRow'
-import { useScrollBox } from './time-grid/use-scroll-box'
+import { useInitialScroll, useScrollBox } from './time-grid/use-scroll-box'
 import DayHeading from './DayHeading'
 
 const LANE_PX = 20
@@ -73,13 +73,7 @@ export default function WeekGridView({
     if (viewportPx > 0) onGridViewportHeight(viewportPx)
   }, [viewportPx, onGridViewportHeight])
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(todayInWeek, nowMinutes), pxPerMin) })
-    // Only re-run when the visible week or zoom level changes — the
-    // current-time tick shouldn't yank the user's scroll position back
-    // every minute.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekKeys[0], pxPerMin])
+  useInitialScroll(scrollRef, `${weekKeys[0]}|${pxPerMin}`, minutesToPx(defaultScrollMinutes(todayInWeek, nowMinutes), pxPerMin), viewportPx)
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">

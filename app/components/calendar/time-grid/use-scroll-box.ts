@@ -1,6 +1,6 @@
 'use client'
 
-import { useLayoutEffect, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 
 /**
  * A scroll container's visible height and its vertical scrollbar's width.
@@ -26,4 +26,35 @@ export function useScrollBox(ref: RefObject<HTMLElement | null>): { height: numb
   }, [ref])
 
   return box
+}
+
+/**
+ * Scrolls a freshly-shown grid to `targetPx` once per `resetKey` (visible
+ * day/week or zoom level), as soon as it can actually scroll. Before the
+ * calendar body has been sized to the window the grid is as tall as its
+ * content and can't scroll, so a scroll on mount would be lost; waiting
+ * for `viewportPx` to change retries it. The current-time tick must not
+ * yank the user's scroll position, so `targetPx` isn't a dependency.
+ */
+export function useInitialScroll(
+  ref: RefObject<HTMLElement | null>,
+  resetKey: string,
+  targetPx: number,
+  viewportPx: number
+): void {
+  const doneKey = useRef<string | null>(null)
+  const target = useRef(targetPx)
+
+  useEffect(() => {
+    target.current = targetPx
+  }, [targetPx])
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el || doneKey.current === resetKey) return
+    // Not scrollable yet: try again when the viewport height is known.
+    if (el.scrollHeight <= el.clientHeight) return
+    el.scrollTo({ top: target.current })
+    doneKey.current = resetKey
+  }, [ref, resetKey, viewportPx])
 }

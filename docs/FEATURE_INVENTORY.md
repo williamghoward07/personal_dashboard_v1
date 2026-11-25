@@ -88,6 +88,11 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
   past due. A sync line shows when Blackboard last synced and what the AI
   read. Needs the extension (`extension/`) and the Gemini key; the AI has
   its own daily cap.
+- ✅ Tests tab next to the work list (Upcoming / Past, with a countdown
+  badge): timetable sessions of type Test, plus Google events with test/exam
+  in the title (`lib/timetable/tests.ts`; quizzes, revision, tips and
+  briefings are left out, and a Google copy of a timetable test is dropped).
+  Nothing stored.
 - ✅ Content and handbooks are the source for key dates; announcements only
   annotate (a note on the matching item, or a line on a session).
 - ⚠️ Not deployed yet (13 Nov 2026): item text, links and handbook text
@@ -154,7 +159,11 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
 
 ### Calendar (`/calendar`)
 - ✅ Month / Week / Day grids (real 24-hour grid), Grid/Agenda toggle,
-  hour-density zoom.
+  hour-density zoom (Fit = whole day, no scrolling).
+- ✅ Google Calendar-style layout: grid and month views fill the window
+  (measured, so the page never scrolls), one toolbar row, day headings as
+  "MON 9" on one line with today's date in a filled circle, pills titled
+  first, and month rows filled with the neighbouring months' days.
 - ✅ **Google Calendar** (read-only; Google is the source of truth).
 - ✅ Blackboard deadlines (assignments and key dates with a day) show as
   items and open in an anchored popover.

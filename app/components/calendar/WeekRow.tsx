@@ -3,7 +3,15 @@ import { DEADLINE_DONE_CLASS, deadlineTime, dotClassFor, formatDayHeading, forma
 import { layoutBarsForWeek, laneCountForWeek } from './weekBarLayout'
 import PrepLight from '../lectures/PrepLight'
 
-const MAX_COMPACT_ITEMS = 3
+const DEFAULT_COMPACT_ITEMS = 3
+// Month view filling the window: how many item lines fit a row of a given
+// height. Day-number row (size-5 + margins), a bar lane (leading-4 + mb-0.5),
+// the list's bottom padding, and 16px per item line with a 2px gap.
+const NUMBER_ROW_PX = 32
+const BAR_LANE_PX = 18
+const LIST_PADDING_PX = 6
+const ITEM_LINE_PX = 16
+const ITEM_GAP_PX = 2
 
 // One CSS grid per week: a full-height "cell" button per day (rows 1..N,
 // stretched), then day-number / spanning-bar / compact-list rows placed
@@ -18,6 +26,8 @@ export default function WeekRow({
   todayKey,
   onSelectDate,
   selectedDateKey,
+  maxCompactItems = DEFAULT_COMPACT_ITEMS,
+  rowHeightPx,
 }: {
   weekCells: (string | null)[]
   itemsByDate: Map<string, DayItem[]>
@@ -25,22 +35,46 @@ export default function WeekRow({
   todayKey: string
   onSelectDate: (dateKey: string) => void
   selectedDateKey: string
+  /** Items a day lists before "+N more", when the row's height isn't fixed. */
+  maxCompactItems?: number
+  /** When the row's height is fixed (month view filling the window), list as many items as fit in it. */
+  rowHeightPx?: number
 }) {
   const placedBars = layoutBarsForWeek(weekCells, spans)
   const laneCount = laneCountForWeek(placedBars)
   const firstBarRow = 2
   const listRow = firstBarRow + laneCount
   const totalRows = listRow
+  // A fixed-height row (month filling the window) sizes its cells itself.
+  const minHeight = rowHeightPx ? 'min-h-0' : 'min-h-17 sm:min-h-24'
+  const lineBudget = rowHeightPx
+    ? Math.max(
+        1,
+        Math.floor(
+          (rowHeightPx - NUMBER_ROW_PX - laneCount * BAR_LANE_PX - LIST_PADDING_PX + ITEM_GAP_PX) /
+            (ITEM_LINE_PX + ITEM_GAP_PX)
+        )
+      )
+    : null
+  // How many items a day lists before "+N more". With a line budget the
+  // "+N more" line itself takes one of the lines.
+  const shownCount = (total: number) =>
+    lineBudget === null ? maxCompactItems : total > lineBudget ? Math.max(0, lineBudget - 1) : lineBudget
 
   return (
-    <div className="grid grid-cols-7">
+    <div
+      className={`grid grid-cols-7 ${rowHeightPx ? 'h-full overflow-hidden' : ''}`}
+      // Date and bar rows hug their content; the item list takes the rest,
+      // so a row stretched to fill the month grows its list, not its date.
+      style={{ gridTemplateRows: `repeat(${listRow - 1}, auto) minmax(0, 1fr)` }}
+    >
       {weekCells.map((dateKey, col) => {
         if (!dateKey) {
           return (
             <div
               key={`blank-${col}`}
               style={{ gridColumn: col + 1, gridRow: `1 / span ${totalRows}` }}
-              className={`min-h-17 border-outline-variant bg-surface-container/35 sm:min-h-24 ${col < 6 ? 'border-r' : ''}`}
+              className={`${minHeight} border-outline-variant bg-surface-container/35 ${col < 6 ? 'border-r' : ''}`}
             />
           )
         }
@@ -55,7 +89,7 @@ export default function WeekRow({
             aria-pressed={isSelected}
             aria-current={dateKey === todayKey ? 'date' : undefined}
             style={{ gridColumn: col + 1, gridRow: `1 / span ${totalRows}` }}
-            className={`min-h-17 border-outline-variant transition-colors ${col < 6 ? 'border-r' : ''} focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary sm:min-h-24 ${
+            className={`${minHeight} border-outline-variant transition-colors ${col < 6 ? 'border-r' : ''} focus-visible:z-10 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary ${
               isSelected ? 'bg-primary-container/12' : 'hover:bg-surface-container-high'
             }`}
           />
@@ -101,10 +135,10 @@ export default function WeekRow({
           <ul
             key={`list-${dateKey}`}
             style={{ gridColumn: col + 1, gridRow: listRow }}
-            className="pointer-events-none min-w-0 flex flex-col gap-0.5 px-1 pb-1.5 sm:px-1.5"
+            className="pointer-events-none flex min-h-0 min-w-0 flex-col gap-0.5 overflow-hidden px-1 pb-1.5 sm:px-1.5"
           >
-            {items.slice(0, MAX_COMPACT_ITEMS).map((item) => (
-              <li key={`${item.kind}-${item.id}`} className="flex min-w-0 items-center gap-1 truncate text-[10px] text-on-surface sm:text-[11px]">
+            {items.slice(0, shownCount(items.length)).map((item) => (
+              <li key={`${item.kind}-${item.id}`} className="flex min-w-0 items-center gap-1 truncate text-[10px] leading-4 text-on-surface sm:text-[11px]">
                 {item.kind === 'session' ? (
                   <PrepLight status={item.session.status} postStatus={item.session.postStatus} size="sm" />
                 ) : (
@@ -124,8 +158,8 @@ export default function WeekRow({
                 </span>
               </li>
             ))}
-            {items.length > MAX_COMPACT_ITEMS && (
-              <li className="text-[11px] text-on-surface-variant">+{items.length - MAX_COMPACT_ITEMS}<span className="hidden sm:inline"> more</span></li>
+            {items.length > shownCount(items.length) && (
+              <li className="text-[11px] leading-4 text-on-surface-variant">+{items.length - shownCount(items.length)}<span className="hidden sm:inline"> more</span></li>
             )}
           </ul>
         )

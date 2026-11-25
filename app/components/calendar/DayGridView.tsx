@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from './calendarItems'
 import {
+  GUTTER_PX,
   defaultScrollMinutes,
   gridHeightPx,
   minutesToPx,
@@ -16,6 +17,8 @@ import TimeGridPill, { isTimedDayItem } from './time-grid/TimeGridPill'
 import CurrentTimeLine, { useCurrentTimeMinutes } from './time-grid/CurrentTimeLine'
 import { TimeGridHourLabels, TimeGridLines } from './time-grid/TimeGridChrome'
 import UntimedItemRow from './time-grid/UntimedItemRow'
+import { useInitialScroll, useScrollBox } from './time-grid/use-scroll-box'
+import DayHeading from './DayHeading'
 
 function itemKey(item: DayItem): string {
   return `${item.kind}-${item.id}`
@@ -30,20 +33,28 @@ export default function DayGridView({
   items,
   isToday,
   pxPerMin,
-  maxContainerHeightPx,
+  onGridViewportHeight,
   onSelectTask,
   onSelectRoutineInstance,
+  headerAction,
 }: {
   dateKey: string
   items: DayItem[]
   isToday: boolean
   pxPerMin: number
-  maxContainerHeightPx: number
+  onGridViewportHeight: (px: number) => void
   onSelectTask: (task: Task) => void
   onSelectRoutineInstance: (instance: RoutineInstance) => void
+  /** Right of the day heading (e.g. Auto time-block today). */
+  headerAction?: ReactNode
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const { height: viewportPx } = useScrollBox(scrollRef)
   const nowMinutes = useCurrentTimeMinutes()
+
+  useEffect(() => {
+    if (viewportPx > 0) onGridViewportHeight(viewportPx)
+  }, [viewportPx, onGridViewportHeight])
 
   const untimed = useMemo(() => items.filter((item) => !isTimedDayItem(item)), [items])
   const timed = useMemo(() => items.filter(isTimedDayItem), [items])
@@ -57,29 +68,26 @@ export default function DayGridView({
     return new Map(layoutOverlappingBlocks(blocks).map((l) => [l.id, l]))
   }, [timed, ranges, pxPerMin])
 
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(isToday, nowMinutes), pxPerMin) })
-    // Only re-run when the visible day or zoom level changes — the
-    // current-time tick shouldn't yank the user's scroll position back
-    // every minute.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateKey, pxPerMin])
+  useInitialScroll(scrollRef, `${dateKey}|${pxPerMin}`, minutesToPx(defaultScrollMinutes(isToday, nowMinutes), pxPerMin), viewportPx)
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
-      {untimed.length > 0 && (
-        <div className="flex flex-col gap-1 border-b border-outline-variant p-2">
-          {untimed.map((item) => (
-            <UntimedItemRow key={itemKey(item)} item={item} onSelectTask={onSelectTask} />
-          ))}
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
+      <div className="shrink-0 border-b border-outline-variant bg-surface-container/60">
+        <div className="flex items-center pr-2">
+          <div style={{ width: GUTTER_PX }} className="shrink-0" />
+          <DayHeading dateKey={dateKey} isToday={isToday} className="flex-1 justify-start px-2" />
+          {headerAction}
         </div>
-      )}
+        {untimed.length > 0 && (
+          <div className="flex max-h-40 flex-col gap-1 overflow-y-auto pb-1.5 pr-2" style={{ paddingLeft: GUTTER_PX }}>
+            {untimed.map((item) => (
+              <UntimedItemRow key={itemKey(item)} item={item} onSelectTask={onSelectTask} />
+            ))}
+          </div>
+        )}
+      </div>
 
-      <div
-        ref={scrollRef}
-        className="relative overflow-y-auto"
-        style={{ height: Math.min(maxContainerHeightPx, gridHeightPx(pxPerMin)) }}
-      >
+      <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
           <TimeGridHourLabels pxPerMin={pxPerMin} />
           <div className="relative min-w-0 flex-1">

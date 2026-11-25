@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MIN_PILL_HEIGHT_PX,
   defaultScrollMinutes,
+  pillTitleLines,
   minutesSinceLondonMidnight,
   pillHeightPx,
   visualEndMinutes,
@@ -29,11 +30,20 @@ describe('defaultScrollMinutes', () => {
   })
 
   it("opens today's column with a lead-in before the current time", () => {
-    expect(defaultScrollMinutes(true, 10 * 60)).toBe(10 * 60 - 90)
+    // 10:00 less 90 minutes is 08:30, snapped down to the 08:00 line.
+    expect(defaultScrollMinutes(true, 10 * 60)).toBe(8 * 60)
   })
 
   it('never scrolls above the top of the grid', () => {
     expect(defaultScrollMinutes(true, 30)).toBe(0)
+  })
+})
+
+describe('pillTitleLines', () => {
+  it('gives the title every line the time leaves free', () => {
+    expect(pillTitleLines(36)).toBe(1)
+    expect(pillTitleLines(72)).toBe(3)
+    expect(pillTitleLines(144)).toBe(7)
   })
 })
 

@@ -99,7 +99,7 @@ describe('wantedDocuments', () => {
     const rows = [handbook('_1_1', 0), row({ bb_id: '_2_1', title: 'Lecture 2' }), row({ bb_id: '_3_1', title: 'Week 3 reading' })]
     const known = new Map([['_1_1', { _att_1: '2026-10-01T00:00:00.000Z' }]])
     expect(wantedDocuments(rows, { readWithAi: new Set(['_3_1']), known })).toEqual([
-      { course_bb_id: '_100_1', content_bb_id: '_3_1', known: {} },
+      { course_bb_id: '_100_1', content_bb_id: '_3_1', known: {}, all: true },
       { course_bb_id: '_100_1', content_bb_id: '_1_1', known: { _att_1: '2026-10-01T00:00:00.000Z' } },
     ])
   })

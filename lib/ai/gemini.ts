@@ -1,5 +1,5 @@
 import 'server-only'
-import { GoogleGenAI, Type, type Schema } from '@google/genai'
+import { FinishReason, GoogleGenAI, Type, type Schema } from '@google/genai'
 import type { AiSchema } from './schema'
 
 // Server-side only. scripts/bb-eval.ts (`npm run bb:eval`) calls the model
@@ -34,6 +34,13 @@ export class AiBudgetExceededError extends Error {
   constructor() {
     super('AI budget reached for today.')
     this.name = 'AiBudgetExceededError'
+  }
+}
+
+export class AiTruncatedError extends Error {
+  constructor() {
+    super('The AI response was cut off — try a shorter input.')
+    this.name = 'AiTruncatedError'
   }
 }
 
@@ -169,12 +176,22 @@ export async function generateStructuredWithUsage<T>({
     .record({ feature, tier, model, inputTokens, outputTokens, thoughtTokens })
     .catch((err) => console.error('AI usage recording failed:', err))
 
+  // After record(): a truncated call still cost money and must be logged.
+  if (response.candidates?.[0]?.finishReason === FinishReason.MAX_TOKENS) throw new AiTruncatedError()
+
   const text = response.text
   if (!text) {
     throw new Error('Gemini returned an empty response')
   }
 
-  return { data: JSON.parse(text) as T, model, inputTokens, outputTokens, thoughtTokens }
+  let data: T
+  try {
+    data = JSON.parse(text) as T
+  } catch {
+    throw new AiTruncatedError()
+  }
+
+  return { data, model, inputTokens, outputTokens, thoughtTokens }
 }
 
 // The one narrow entry point every AI feature in this app calls through —

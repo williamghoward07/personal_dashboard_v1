@@ -753,3 +753,15 @@ describe('processNext', () => {
     })
   })
 })
+
+describe('isBatchError', () => {
+  it('treats a cut-off reply from lib/ai/gemini.ts as a batch problem, not a global one', async () => {
+    const { isBatchError } = await import('./process')
+    // gemini.ts throws AiTruncatedError (matched by name: that file is server-only).
+    const truncated = new Error('The AI response was cut off — try a shorter input.')
+    truncated.name = 'AiTruncatedError'
+    expect(isBatchError(truncated)).toBe(true)
+    expect(isBatchError(new SyntaxError('Unexpected end of JSON input'))).toBe(true)
+    expect(isBatchError(new Error('fetch failed'))).toBe(false)
+  })
+})

@@ -1,4 +1,8 @@
+'use client'
+
+import { useRef } from 'react'
 import type { DayItem, EventSpan } from './calendarItems'
+import { useScrollBox } from './time-grid/use-scroll-box'
 import WeekRow from './WeekRow'
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -40,17 +44,27 @@ export default function MonthView({
   const cells = buildMonthCells(year, month)
   const weeks: (string | null)[][] = []
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+  const weeksRef = useRef<HTMLDivElement>(null)
+  const { height: weeksPx } = useScrollBox(weeksRef)
+  // The weeks share the height left under the weekday header equally, as in
+  // Google Calendar; each cell lists as many items as fit. Until measured
+  // (first paint) the rows keep their natural height and three items.
+  const rowPx = weeksPx > 0 ? weeksPx / weeks.length : undefined
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
-      <div className="grid grid-cols-7 border-b border-outline-variant bg-surface-container/60 text-center text-xs font-semibold text-on-surface-variant">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
+      <div className="grid shrink-0 grid-cols-7 border-b border-outline-variant bg-surface-container/60 text-center text-xs font-semibold text-on-surface-variant">
         {WEEKDAY_LABELS.map((label) => (
           <div key={label} className="py-2">
             {label}
           </div>
         ))}
       </div>
-      <div className="divide-y divide-outline-variant">
+      <div
+        ref={weeksRef}
+        className="grid min-h-0 flex-1 divide-y divide-outline-variant"
+        style={{ gridTemplateRows: `repeat(${weeks.length}, minmax(0, 1fr))` }}
+      >
         {weeks.map((week, i) => (
           <WeekRow
             key={i}
@@ -60,6 +74,7 @@ export default function MonthView({
             todayKey={todayKey}
             onSelectDate={onSelectDate}
             selectedDateKey={selectedDateKey}
+            rowHeightPx={rowPx}
           />
         ))}
       </div>

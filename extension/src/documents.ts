@@ -11,6 +11,8 @@ import {
   type BbFetch,
   type BbSnapshot,
 } from '@/lib/blackboard/client'
+import { matchesHandbook } from '@/lib/blackboard/documents'
+import { embeddedFiles } from '@/lib/blackboard/links'
 import {
   DOCUMENT_MAX_CHARS,
   DOCUMENT_MIME_TYPES,
@@ -85,11 +87,44 @@ export function sniffKind(bytes: Uint8Array): DocumentKind | null {
   return null
 }
 
+function snapshotItem(snap: BbSnapshot, courseBbId: string, contentBbId: string) {
+  return snap.courses.find((c) => c.bbId === courseBbId)?.contents.find((c) => c.id === contentBbId)
+}
+
 /** The content item's `modified` from the snapshot: the document's version. '' when unknown. */
 export function contentVersion(snap: BbSnapshot, courseBbId: string, contentBbId: string): string {
-  const course = snap.courses.find((c) => c.bbId === courseBbId)
-  const item = course?.contents.find((c) => c.id === contentBbId)
+  const item = snapshotItem(snap, courseBbId, contentBbId)
   return typeof item?.modified === 'string' ? item.modified : ''
+}
+
+/** One file to consider: an attachment, or a file embedded in an Ultra Document's body. */
+interface DocumentSource {
+  /** The `bb_id` it is stored under. */
+  id: string
+  fileName: string
+  mimeType: string
+  url: string
+}
+
+/** Ultra Documents keep their files in the body; Blackboard answers 400 for their `/attachments`. */
+const ULTRA_DOCUMENT = 'resource/x-bb-document'
+
+function isUltraDocument(item: ReturnType<typeof snapshotItem>): boolean {
+  const handler = item?.contentHandler
+  return handler !== null && typeof handler === 'object' && (handler as { id?: unknown }).id === ULTRA_DOCUMENT
+}
+
+/**
+ * The pdf / docx files embedded in an item's body. A page often carries
+ * readings and slides next to its handbook or brief, so unless the user asked
+ * for the whole item (`all`), the handbook-looking files win when there are any.
+ * The id is prefixed with the item's: the same file can sit in two pages.
+ */
+export function embeddedSources(item: ReturnType<typeof snapshotItem>, want: WantedDocument): DocumentSource[] {
+  const readable = embeddedFiles(typeof item?.body === 'string' ? item.body : '').filter((f) => documentKind(f) !== null)
+  const named = readable.filter((f) => matchesHandbook(f.fileName) || matchesHandbook(f.displayName))
+  const chosen = want.all || named.length === 0 ? readable : named
+  return chosen.map((f) => ({ id: `${want.content_bb_id}:${f.id}`, fileName: f.fileName, mimeType: f.mimeType, url: f.url }))
 }
 
 function cutText(text: string): string {
@@ -111,20 +146,35 @@ export async function readDocuments(snap: BbSnapshot, wanted: WantedDocument[], 
 
   for (const [index, want] of wanted.entries()) {
     deps.onProgress?.(index, wanted.length)
-    let attachments: BbAttachment[]
-    try {
-      attachments = await getAttachments(deps.bbFetch, want.course_bb_id, want.content_bb_id)
-    } catch (err) {
-      if (err instanceof BbLoginRequiredError) {
-        result.stopped = 'The background worker is not logged in to Blackboard, so documents could not be read.'
-        break
+    const item = snapshotItem(snap, want.course_bb_id, want.content_bb_id)
+    let sources: DocumentSource[]
+    if (isUltraDocument(item)) {
+      sources = embeddedSources(item, want)
+    } else {
+      try {
+        const attachments: BbAttachment[] = await getAttachments(deps.bbFetch, want.course_bb_id, want.content_bb_id)
+        sources = attachments.map((a) => ({
+          id: a.id,
+          fileName: a.fileName,
+          mimeType: a.mimeType,
+          url: attachmentDownloadUrl(want.course_bb_id, want.content_bb_id, a.id),
+        }))
+      } catch (err) {
+        if (err instanceof BbLoginRequiredError) {
+          result.stopped = 'The background worker is not logged in to Blackboard, so documents could not be read.'
+          break
+        }
+        // Another item type that has no file list: its body is all there is.
+        sources = embeddedSources(item, want)
+        if (sources.length === 0) {
+          note(result.failed, `item ${want.content_bb_id}`, `couldn't list its files (${errorText(err)})`)
+          continue
+        }
       }
-      note(result.failed, `item ${want.content_bb_id}`, `couldn't list its files (${errorText(err)})`)
-      continue
     }
     const version = contentVersion(snap, want.course_bb_id, want.content_bb_id)
 
-    for (const attachment of attachments) {
+    for (const attachment of sources) {
       const name = attachment.fileName || attachment.id
       const kind = documentKind(attachment)
       if (!kind) {
@@ -146,7 +196,7 @@ export async function readDocuments(snap: BbSnapshot, wanted: WantedDocument[], 
       downloads++
 
       await deps.pause()
-      const file = await deps.download(attachmentDownloadUrl(want.course_bb_id, want.content_bb_id, attachment.id))
+      const file = await deps.download(attachment.url)
       if (!file.ok) {
         if (file.tooLarge) {
           note(result.skipped, name, file.reason)

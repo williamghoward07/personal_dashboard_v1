@@ -4,10 +4,11 @@ import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, CalendarClock, ClipboardList, FolderPlus, GraduationCap } from 'lucide-react'
+import { ArrowRight, CalendarClock, ClipboardCheck, ClipboardList, FolderPlus, GraduationCap } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { Button } from '@/components/ui/button'
 import { CountBadge } from '@/components/ui/count-badge'
+import { FilterTabs } from '@/components/ui/filter-tabs'
 import { ACCENT_BAR } from '@/lib/theme'
 import { cn } from '@/lib/utils/cn'
 import { useWorkItems } from '@/lib/blackboard/use-work-items'
@@ -23,12 +24,16 @@ import {
   type SessionWithPrep,
 } from '@/lib/timetable/session'
 import { PREP_ACCENT, formatSessionDay, formatSessionTime } from '@/lib/timetable/format'
+import AnnouncementsSection from './AnnouncementsSection'
 import SessionRow from './SessionRow'
 import SyncStatusChip from './SyncStatusChip'
+import TestsList from './TestsList'
 import WorkList from './WorkList'
 
 const ACCENT = 'orange'
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
+
+type BoardView = 'work' | 'tests'
 
 const microLabel = 'font-display text-[10px] font-semibold uppercase tracking-[0.14em] text-on-surface-variant/70'
 
@@ -65,6 +70,7 @@ export default function LecturesBoard() {
   // The one list on the page. The timetable above still feeds the module
   // cards and "Next 7 days", which need sessions rather than work items.
   const work = useWorkItems()
+  const [view, setView] = useState<BoardView>('work')
   const [creating, setCreating] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   // Fixed for the page's lifetime: "now" shouldn't re-sort rows mid-click.
@@ -138,22 +144,41 @@ export default function LecturesBoard() {
         </p>
       )}
 
-      <ModuleGlassCard accent={ACCENT} size="sm" className="flex flex-col gap-3">
-        <WorkList
-          detailView
-          items={work.items}
-          now={now}
-          accent={ACCENT}
-          loading={work.loading}
-          error={work.error}
-          title={
-            <h2 className="flex min-w-0 items-center gap-2 font-display text-sm font-semibold text-on-surface">
-              <ClipboardList className="h-4 w-4 shrink-0 text-academic-orange" strokeWidth={1.75} />
-              All work
-            </h2>
-          }
-        />
-      </ModuleGlassCard>
+      <FilterTabs
+        accent={ACCENT}
+        aria-label="Work or tests"
+        value={view}
+        onChange={setView}
+        options={[
+          { value: 'work', label: 'Work', icon: <ClipboardList className="h-3.5 w-3.5" strokeWidth={1.75} /> },
+          { value: 'tests', label: 'Tests', icon: <ClipboardCheck className="h-3.5 w-3.5" strokeWidth={1.75} /> },
+        ]}
+      />
+
+      {view === 'tests' ? (
+        <ModuleGlassCard accent={ACCENT} size="sm">
+          <TestsList sessions={sessions} now={now} accent={ACCENT} timetableLoading={loading} />
+        </ModuleGlassCard>
+      ) : (
+        <ModuleGlassCard accent={ACCENT} size="sm" className="flex flex-col gap-3">
+          <WorkList
+            detailView
+            items={work.items}
+            now={now}
+            accent={ACCENT}
+            loading={work.loading}
+            error={work.error}
+            title={
+              <h2 className="flex min-w-0 items-center gap-2 font-display text-sm font-semibold text-on-surface">
+                <ClipboardList className="h-4 w-4 shrink-0 text-academic-orange" strokeWidth={1.75} />
+                All work
+              </h2>
+            }
+          />
+        </ModuleGlassCard>
+      )}
+
+      <AnnouncementsSection accent={ACCENT} />
 
       {!error && (
         <ModuleGlassCard accent={ACCENT} size="sm" className="flex flex-col gap-3">

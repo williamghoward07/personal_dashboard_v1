@@ -31,8 +31,11 @@ import {
   STORAGE,
   SYNC_PATH,
   SYNC_STALE_MS,
+  activeDashboard,
   browserFetch,
   errorMessage,
+  hostOf,
+  readTargets,
   type ContentCheckReply,
   type ContentMessage,
   type ContentReply,
@@ -42,6 +45,7 @@ import {
   type SessionCheck,
   type SyncState,
   type SyncVia,
+  type TargetId,
   type UploadResult,
   type WorkerMessage,
 } from './shared'
@@ -64,17 +68,28 @@ const DOCUMENT_DELAY_MS = 150
 const workerFetch = (url: string, init: RequestInit) => fetch(url, init)
 
 // Clicking the toolbar icon opens the side panel, which stays open across tabs.
-const openPanelOnClick = () => void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
-chrome.runtime.onInstalled.addListener(() => {
-  openPanelOnClick()
+const onLoad = () => {
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  void idleBadge()
   void ensureDailyAlarm()
-})
-chrome.runtime.onStartup.addListener(() => {
-  openPanelOnClick()
-  void ensureDailyAlarm()
-})
+}
+chrome.runtime.onInstalled.addListener(onLoad)
+chrome.runtime.onStartup.addListener(onLoad)
 // Also on every worker start: Chrome can drop alarms (updates, restarts).
 void ensureDailyAlarm()
+
+const ACCENT = '#D97757'
+const MUTED = '#6B6A66'
+/** Shown on the toolbar icon whenever syncs go to Test and nothing else needs attention. */
+const TEST_BADGE = 'TEST'
+
+// Switching Live/Test updates the badge, unless it's showing a problem.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !(STORAGE.dashboards in changes)) return
+  void chrome.action.getBadgeText({}).then((text) => {
+    if (text === '' || text === TEST_BADGE) void idleBadge()
+  })
+})
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === DAILY_ALARM) void startSync('daily')
@@ -256,8 +271,8 @@ async function checkSession(): Promise<SessionCheck> {
 
 async function saveSession(result: SessionCheck) {
   await chrome.storage.session.set({ [STORAGE.session]: result })
-  if (result.status === 'login') await setBadge('!', '#D97757')
-  else if (result.status === 'connected') await setBadge('', '#D97757')
+  if (result.status === 'login') await setBadge('!', ACCENT)
+  else if (result.status === 'connected') await idleBadge()
 }
 
 async function runSync(trigger: SyncTrigger): Promise<LastRun> {
@@ -265,7 +280,7 @@ async function runSync(trigger: SyncTrigger): Promise<LastRun> {
   currentTrigger = trigger
   courseCount = undefined
   await writeState('worker', 'session')
-  await setBadge('…', '#6B6A66')
+  await setBadge('…', MUTED)
   let workerError: string
   try {
     const snap = await snapshot(browserFetch, { onProgress: (p) => void writeState('worker', p.stage, p) })
@@ -320,14 +335,23 @@ async function finish(snap: BbSnapshot, via: SyncVia, workerError?: string): Pro
   })
   await chrome.storage.session.remove(STORAGE.syncState)
   await saveSession({ status: 'connected', via, userName: snap.user.userName })
-  if (!saved) await setBadge('?', '#6B6A66')
+  if (!saved) await setBadge('?', MUTED)
   return run
 }
 
-async function readDashboard(): Promise<DashboardConfig | undefined> {
-  const stored = await chrome.storage.local.get(STORAGE.dashboard)
-  const dashboard = stored[STORAGE.dashboard] as DashboardConfig | undefined
-  return dashboard?.url && dashboard.token ? dashboard : undefined
+async function loadTargets() {
+  return readTargets(await chrome.storage.local.get([STORAGE.dashboards, STORAGE.dashboard]))
+}
+
+/** The dashboard syncs go to right now (Live or Test), or undefined when the active one isn't set up. */
+async function readDashboard(): Promise<(DashboardConfig & { target: TargetId }) | undefined> {
+  return activeDashboard(await loadTargets())
+}
+
+/** No problem to show: blank on Live, TEST on Test. */
+async function idleBadge() {
+  const { active } = await loadTargets()
+  await setBadge(active === 'test' ? TEST_BADGE : '', ACCENT)
 }
 
 const isSyncResponse = (body: unknown): body is SyncResponse =>
@@ -338,16 +362,19 @@ const isDocumentResponse = (body: unknown): body is DocumentResponse =>
 
 /** POSTs the snapshot (gzipped when possible) with the real trigger. */
 async function sendSnapshot(
-  dashboard: DashboardConfig,
+  dashboard: DashboardConfig & { target: TargetId },
   snap: BbSnapshot,
 ): Promise<{ upload: UploadResult; wanted: WantedDocument[] }> {
   const res = await postToDashboard(workerFetch, `${dashboard.url}${SYNC_PATH}`, dashboard.token, { trigger: currentTrigger, snapshot: snap }, {
     accept: isSyncResponse,
     tooLarge: 'Snapshot too large for the dashboard',
   })
-  if (!res.ok) return { upload: { ok: false, error: res.error, bytes: res.bytes }, wanted: [] }
+  const where = { target: dashboard.target, host: hostOf(dashboard.url) }
+  if (!res.ok) {
+    return { upload: { ...where, ok: false, error: res.error, bytes: res.bytes, unreachable: res.unreachable }, wanted: [] }
+  }
   const wanted = Array.isArray(res.body.wanted) ? res.body.wanted : []
-  return { upload: { ok: true, counts: res.body.counts, bytes: res.bytes }, wanted }
+  return { upload: { ...where, ok: true, counts: res.body.counts, bytes: res.bytes }, wanted }
 }
 
 /** Reads the wanted handbooks / briefs from the worker (downloads can't go through a tab). */
@@ -399,7 +426,7 @@ async function fail(err: unknown, loginRequired: boolean): Promise<LastRun> {
   await chrome.storage.local.set({ [STORAGE.lastRun]: run })
   await chrome.storage.session.remove(STORAGE.syncState)
   if (loginRequired) await saveSession({ status: 'login', reason: run.error })
-  else await setBadge('?', '#6B6A66')
+  else await setBadge('?', MUTED)
   return run
 }
 

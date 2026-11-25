@@ -65,6 +65,7 @@ export default function ReadingsSection({
   const [week, setWeek] = useState<number | null>(null)
   const savingRef = useRef(false)
   const [saving, setSaving] = useState(false)
+  const [renameId, setRenameId] = useState<string | null>(null)
   // Weeks the user has opened/closed by hand; otherwise finished weeks are closed.
   const [toggledWeeks, setToggledWeeks] = useState<ReadonlySet<number>>(new Set())
 
@@ -81,7 +82,10 @@ export default function ReadingsSection({
     setSaving(true)
     try {
       const created = await addLink(rawUrl, { week: targetWeek })
-      if (created) setUrlInput('')
+      if (created) {
+        setUrlInput('')
+        setRenameId(created.id)
+      }
     } finally {
       savingRef.current = false
       setSaving(false)
@@ -223,6 +227,8 @@ export default function ReadingsSection({
                       onInternalReorder={reorderWithinWeek}
                       onExternalUrlDrop={(url) => void addReading(url, group.week)}
                       weekChoices={choices}
+                      renameRequested={renameId === link.id}
+                      onRenameHandled={() => setRenameId(null)}
                     />
                   ))}
               </section>

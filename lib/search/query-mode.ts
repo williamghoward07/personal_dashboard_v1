@@ -33,8 +33,42 @@ const ACTION_PREFIXES = [
   'met',
   'todo',
   'to do',
+  'need to',
+  'i need to',
+  'i have to',
+  'have to',
+  "don't forget",
+  'dont forget',
+  'remember to',
+  'must',
+  'gotta',
+  'note',
+  'reply',
+  'send',
+  'pick up',
+  'order',
+  'cancel',
+  'renew',
+  'print',
+  'revise',
+  'read',
 ]
-const DATE_HINT = /\b(due|tomorrow|tonight|next week|this (morning|afternoon|evening))\b|\b\d{1,2}(:\d{2})?\s?(am|pm)\b/
+// Weekdays only count as a date when preceded by a preposition-ish word or
+// when they end the query ("dentist friday"), so "sunday service notes"
+// still searches. The trailing form skips the short forms that are also
+// ordinary words ("the sun", "sat"), which would otherwise turn a search
+// into a capture.
+const WEEKDAY = '(mon(day)?|tue(s|sday)?|wed(s|nesday)?|thu(r|rs|rsday)?|fri(day)?|sat(urday)?|sun(day)?)'
+const TRAILING_WEEKDAY = '(monday|tue(s|sday)?|wed(s|nesday)|thu(r|rs|rsday)?|fri(day)?|saturday|sunday)'
+const DATE_HINT = new RegExp(
+  [
+    '\\b(due|today|tomorrow|tonight|next week|next month|this (morning|afternoon|evening))\\b',
+    '\\b\\d{1,2}(:\\d{2})?\\s?(am|pm)\\b',
+    '\\bin \\d+ (day|days|week|weeks)\\b',
+    `\\b(on|by|this|next|before|until|till) ${WEEKDAY}\\b`,
+    `\\s${TRAILING_WEEKDAY}$`,
+  ].join('|'),
+)
 
 function firstWord(text: string): string {
   return text.split(/\s+/)[0] ?? ''

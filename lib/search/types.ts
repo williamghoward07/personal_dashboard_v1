@@ -1,4 +1,4 @@
-import type { SearchModule } from './nl-search'
+import type { SearchModule } from './local-query'
 
 export interface SearchResultItem {
   module: SearchModule

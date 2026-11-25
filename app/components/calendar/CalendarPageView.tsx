@@ -1,9 +1,10 @@
 'use client'
 
 import LoadingSkeleton from '@/app/components/LoadingSkeleton'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, ListTodo, RefreshCw, Wand2, ZoomIn, ZoomOut } from 'lucide-react'
 import { FilterTabs } from '@/components/ui/filter-tabs'
+import { useFillViewportHeight } from '@/lib/ui/use-fill-viewport-height'
 import { supabase } from '@/lib/supabase'
 import { useSettings } from '@/lib/settings/use-settings'
 import type { ActivitySession, RoutineInstance, Task } from '@/lib/types'
@@ -102,10 +103,14 @@ const GRID_MODE_OPTIONS: { value: GridMode; label: string }[] = [
   { value: 'agenda', label: 'Agenda' },
 ]
 
-// Leave space for the app bar, calendar tools and week headers.
-const RESERVED_CHROME_PX = 230
-const MIN_GRID_CONTAINER_PX = 420
-const SSR_FALLBACK_VIEWPORT_PX = RESERVED_CHROME_PX + MIN_GRID_CONTAINER_PX
+// Below the calendar body: the page's bottom padding (`pb-6` in
+// app/calendar/page.tsx). The body itself is measured, so it ends exactly at
+// the bottom of the window whatever sits above it.
+const BODY_BOTTOM_GAP_PX = 24
+// On a short window the body stops shrinking here and the page scrolls.
+const MIN_BODY_PX = 420
+// Until the hour grid has been measured (first paint, SSR).
+const FALLBACK_GRID_PX = 560
 const iconButtonClass = 'grid size-8 shrink-0 place-items-center rounded-md text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface disabled:opacity-40'
 const textButtonClass = 'rounded-md border border-outline-variant px-2.5 py-1.5 text-xs font-medium text-on-surface hover:bg-surface-container-high'
 const panelClass = 'min-w-0 rounded-xl border border-outline-variant bg-surface-container-low'
@@ -125,10 +130,11 @@ export default function CalendarPageView() {
   // until the user picks a zoom level themselves. "Fit day" sets it to the
   // fit value.
   const [manualPxPerMin, setManualPxPerMin] = useState<number | null>(null)
-  // Read only after mount (see effect below) — window isn't available
-  // during SSR, so this fallback keeps the first client render matching
-  // the server-rendered markup exactly.
-  const [viewportH, setViewportH] = useState(SSR_FALLBACK_VIEWPORT_PX)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const bodyHeight = useFillViewportHeight(bodyRef, BODY_BOTTOM_GAP_PX, MIN_BODY_PX)
+  // The hour grid's visible height, reported by Week/Day once laid out:
+  // "Fit day" zooms the whole 24h into exactly this.
+  const [gridViewportPx, setGridViewportPx] = useState(0)
   const [selectedDateKey, setSelectedDateKey] = useState(() => todayKeyLondon())
   const [fetched, setFetched] = useState<{
     rangeStart: string
@@ -147,8 +153,7 @@ export default function CalendarPageView() {
   const [refreshToken, setRefreshToken] = useState(0)
   const refetch = () => setRefreshToken((t) => t + 1)
 
-  const maxContainerHeightPx = Math.max(MIN_GRID_CONTAINER_PX, viewportH - RESERVED_CHROME_PX)
-  const fitPxPerMin = maxContainerHeightPx / MINUTES_PER_DAY
+  const fitPxPerMin = (gridViewportPx > 0 ? gridViewportPx : FALLBACK_GRID_PX) / MINUTES_PER_DAY
   const zoomMaxPxPerMin = Math.max(MAX_PX_PER_MIN, fitPxPerMin * 2)
   // The actual zoom level in effect: whatever the user picked, or the
   // readable default if they haven't touched the zoom.
@@ -158,7 +163,6 @@ export default function CalendarPageView() {
   useEffect(() => {
     const narrow = window.matchMedia('(width < 64rem)')
     const updateViewport = () => {
-      setViewportH(window.innerHeight)
       setIsNarrow(narrow.matches)
       if (!narrow.matches) setMonthDialogOpen(false)
     }
@@ -239,11 +243,14 @@ export default function CalendarPageView() {
   const itemActions = { onSelectTask: setSelectedTask, onSelectRoutineInstance: setSelectedRoutineInstance }
   const reconnect = () => connectGoogleCalendar('/calendar')
   const title = formatTitle(view, selectedDateKey)
+  // Grid and month views fill the window like Google Calendar; agenda and
+  // routines are lists and keep their natural height.
+  const fillsBody = (showsGridOptions && gridMode === 'grid') || view === 'month'
 
   function renderView() {
     if (view === 'month') {
       return (
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <div className="grid h-full min-h-0 gap-3 lg:grid-cols-[minmax(0,1fr)_17rem]">
           <MonthView
             year={year}
             month={month}
@@ -256,7 +263,7 @@ export default function CalendarPageView() {
               setMonthDialogOpen(isNarrow)
             }}
           />
-          <aside className={`${panelClass} hidden p-3 lg:block`} aria-labelledby="calendar-date-detail">
+          <aside className={`${panelClass} hidden min-h-0 overflow-y-auto p-3 lg:block`} aria-labelledby="calendar-date-detail">
             <h2 id="calendar-date-detail" className="mb-2 rounded-md bg-primary-container/14 px-2.5 py-2 text-sm font-semibold text-primary">
               {formatDayHeading(selectedDateKey)}
             </h2>
@@ -287,7 +294,7 @@ export default function CalendarPageView() {
           spans={spans}
           todayKey={todayKey}
           pxPerMin={pxPerMin}
-          maxContainerHeightPx={maxContainerHeightPx}
+          onGridViewportHeight={setGridViewportPx}
           onSelectDate={(dateKey) => {
             setSelectedDateKey(dateKey)
             setView('day')
@@ -308,8 +315,8 @@ export default function CalendarPageView() {
     const dueItems = selectedItems.filter((item) => item.kind === 'task' || item.kind === 'deadline')
     const scheduleItems = selectedItems.filter((item) => item.kind !== 'task' && item.kind !== 'deadline')
     return (
-      <div className="grid items-start gap-3 lg:grid-cols-[17rem_minmax(0,1fr)]">
-        <aside className={`${panelClass} p-3`} aria-labelledby="calendar-tasks">
+      <div className={`grid gap-3 lg:grid-cols-[17rem_minmax(0,1fr)] ${gridMode === 'grid' ? 'h-full min-h-0' : 'items-start'}`}>
+        <aside className={`${panelClass} min-h-0 p-3 ${gridMode === 'grid' ? 'overflow-y-auto' : ''}`} aria-labelledby="calendar-tasks">
           <h2 id="calendar-tasks" className="mb-2 flex items-center gap-2 border-b border-outline-variant pb-2 text-sm font-semibold text-on-surface">
             <ListTodo size={16} aria-hidden="true" />
             Tasks and deadlines
@@ -339,7 +346,7 @@ export default function CalendarPageView() {
             items={scheduleItems}
             isToday={selectedDateKey === todayKey}
             pxPerMin={pxPerMin}
-            maxContainerHeightPx={maxContainerHeightPx}
+            onGridViewportHeight={setGridViewportPx}
             {...itemActions}
           />
         )}
@@ -443,7 +450,13 @@ export default function CalendarPageView() {
           </button>
         </div>
       )}
-      {renderView()}
+      <div
+        ref={bodyRef}
+        className="min-h-0"
+        style={fillsBody && bodyHeight !== null ? { height: bodyHeight } : undefined}
+      >
+        {renderView()}
+      </div>
 
       {view === 'month' && isNarrow && monthDialogOpen && (
         <DayDetailModal

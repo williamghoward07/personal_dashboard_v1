@@ -43,8 +43,8 @@ export default function WorkspacesHelp({ align = 'start' }: { align?: 'start' | 
 
         <Section title="Sources">
           <p>
-            Add a link with Add source, or drop a URL straight onto the list. Edit a source (pencil) to rename it and
-            set its type, citation, DOI and size label; drag cards to reorder them. Attach todos to a source with
+            Add a link with Add source, or drop a URL straight onto the list; its title opens for naming straight away
+            (or click the small pencil beside any title, or double-click it). The card's own pencil sets its type, citation, DOI and size label; drag cards to reorder them. Attach todos to a source with
             + Task.
           </p>
           <p>

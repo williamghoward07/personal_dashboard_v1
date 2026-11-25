@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Check, ExternalLink, Link2, Maximize2, Pencil, Plus, Trash2 } from 'lucide-react'
@@ -358,7 +359,7 @@ export default function SessionPrepPanel({
         </div>
 
         {loading ? (
-          <p className="text-xs text-on-surface-variant">Loading…</p>
+          <LoadingSkeleton label="Loading…" />
         ) : (
           before.length > 0 && <ul className="flex flex-col">{before.map(renderItem)}</ul>
         )}

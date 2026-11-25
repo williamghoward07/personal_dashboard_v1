@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useMemo, useRef, useState } from 'react'
 import { AlertTriangle, BookOpen, ChevronDown, Loader2, Plus } from 'lucide-react'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
@@ -172,7 +173,7 @@ export default function ReadingsSection({
       </form>
 
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : groups.length === 0 ? (
         <p className="text-xs leading-relaxed text-on-surface-variant">
           No readings yet. Add each week&apos;s reading list here, or move an existing source in with its

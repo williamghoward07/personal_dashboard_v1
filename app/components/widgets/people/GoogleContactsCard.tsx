@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { Link2Off, RefreshCw, Users } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -115,7 +116,7 @@ export default function GoogleContactsCard({ onChange }: { onChange: () => void 
       }
     >
       {loading ? (
-        <p>Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : (
         <div className="flex flex-col gap-2">
           {connected ? (

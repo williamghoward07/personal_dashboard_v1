@@ -9,7 +9,7 @@ A single-user personal dashboard. I'm a Geography student and use it every day; 
 ## UI
 - Desktop-first (1440px+). Mobile is out of scope for now; the phone will be a future PWA.
 - Bento grid: no module's card visually dominates another.
-- BIO-SYSTEM remains the default. User-approved Home, Lectures, Calendar, Tasks (`/todos`, `/habits`), Brain dump and Workspaces use the light planning workspace override in `DESIGN.md` and `app/workspace-ui.css`. Preserve that route scope.
+- Every signed-in page uses the light planning workspace override in `DESIGN.md` and `app/workspace-ui.css` (scope set in `AppChrome.tsx`). Only `/design-system-test`, `/glinui-test` and `/health` keep the BIO-SYSTEM default. Preserve that route scope.
 - **All UI follows `DESIGN.md`**, the single source of truth for colours, typography, spacing and component styles. No hardcoded colours, fonts or spacing. Tokens: `app/globals.css` (`@theme`) and `lib/theme.ts` (accent → class maps, `MODULE_ACCENT`). `/design-system-test` renders every shared component in every variant and accent; read it before building new UI.
 - `cn()` (`lib/utils/cn.ts`) registers the custom type scale with tailwind-merge. Add any new `--text-*` token to its `TYPE_SCALE`, or `cn()` silently drops that size next to a text colour.
 - Icons: `lucide-react` only (translate the mockups' Material Symbols).

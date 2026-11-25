@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -83,7 +84,7 @@ export default function AiUsageGlance() {
   return (
     <HomeSectionCard href="/ai-usage" title="AI Usage" icon={<Gauge className="h-4 w-4" />} accent="neutral">
       {loading ? (
-        <p>Loading...</p>
+        <LoadingSkeleton shape="metric" label="Loading..." />
       ) : error ? (
         <p className="text-xs text-on-surface-variant">Couldn&apos;t load AI usage.</p>
       ) : rows.length === 0 ? (

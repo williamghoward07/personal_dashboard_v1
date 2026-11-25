@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, ListTodo, RefreshCw, Wand2, ZoomIn, ZoomOut } from 'lucide-react'
 import { FilterTabs } from '@/components/ui/filter-tabs'
@@ -259,7 +260,7 @@ export default function CalendarPageView() {
             <h2 id="calendar-date-detail" className="mb-2 rounded-md bg-primary-container/14 px-2.5 py-2 text-sm font-semibold text-primary">
               {formatDayHeading(selectedDateKey)}
             </h2>
-            <DayItemsList items={selectedItems} emptyMessage={current ? undefined : "Loading calendar…"} {...itemActions} />
+            {current || selectedItems.length ? <DayItemsList items={selectedItems} {...itemActions} /> : <LoadingSkeleton label="Loading calendar" />}
           </aside>
         </div>
       )
@@ -313,7 +314,7 @@ export default function CalendarPageView() {
             <ListTodo size={16} aria-hidden="true" />
             Tasks and deadlines
           </h2>
-          <DayItemsList items={dueItems} emptyMessage={current ? "No tasks or deadlines due." : "Loading calendar…"} {...itemActions} />
+          {current || dueItems.length ? <DayItemsList items={dueItems} emptyMessage="No tasks or deadlines due." {...itemActions} /> : <LoadingSkeleton label="Loading tasks and deadlines" />}
           {selectedDateKey === todayKey && (
             <button
               type="button"
@@ -442,7 +443,6 @@ export default function CalendarPageView() {
           </button>
         </div>
       )}
-      {!current && <p role="status" className="sr-only">Loading calendar</p>}
       {renderView()}
 
       {view === 'month' && isNarrow && monthDialogOpen && (

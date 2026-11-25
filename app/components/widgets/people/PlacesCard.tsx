@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useState } from 'react'
 import { MapPin, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -65,7 +66,7 @@ export default function PlacesCard({
         }
       >
         {loading ? (
-          <p>Loading...</p>
+          <LoadingSkeleton label="Loading..." />
         ) : places.length === 0 ? (
           <p>No places yet — add one so conversations can be anchored to where they happened.</p>
         ) : (

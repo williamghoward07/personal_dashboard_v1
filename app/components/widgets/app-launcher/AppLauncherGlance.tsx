@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import type { MouseEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -137,7 +138,7 @@ export default function AppLauncherGlance({ span = 1, height }: HomeWidgetProps)
     >
       <div ref={gridRef}>
         {loading || settingsLoading ? (
-          <p>Loading...</p>
+          <LoadingSkeleton shape="tiles" label="Loading..." />
         ) : selectedLinks.length === 0 ? (
           <p>No apps selected yet — choose some from the menu above, or the App Library.</p>
         ) : (

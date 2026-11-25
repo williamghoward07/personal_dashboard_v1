@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, ListTodo, Sunrise } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -241,7 +242,7 @@ export default function HabitBoard({ tabs }: { tabs?: ReactNode }) {
       )}
 
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : habits.length === 0 ? (
         <p className="text-sm text-on-surface-variant">No habits yet — add one to get started.</p>
       ) : (

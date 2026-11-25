@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -88,11 +89,11 @@ export default function AiUsagePage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
-      <h1 className="headline-md text-on-surface">AI Usage</h1>
+    <main className="workspace-page">
+      <h1 className="workspace-page-title text-on-surface">AI Usage</h1>
 
       {loading ? (
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton shape="cards" label="Loading..." />
       ) : error ? (
         <p className="text-sm text-on-surface-variant">Couldn&apos;t load AI usage.</p>
       ) : (

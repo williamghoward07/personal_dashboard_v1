@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Folder, ListTodo, Pencil, Plus, Star, X } from 'lucide-react'
 import { useTodos } from '@/lib/daily-goals/use-todos'
@@ -243,7 +244,7 @@ export default function TodosBoard({ tabs }: { tabs?: ReactNode }) {
           <div className={styles.listBody}>
             <h2>{loading ? 'Loading…' : viewMode === 'completed' ? `${completedTodos.length} completed` : `${sorted.length} task${sorted.length === 1 ? '' : 's'}`}</h2>
             {error && <p className="pb-2 text-xs text-academic-orange">{error}</p>}
-            {loading ? <p>Loading…</p> : viewMode === 'completed' ? <CompletedTodosList todos={completedTodos} todayDateKey={todayDateKey} workspaces={workspaces} onToggle={handleToggle} onToggleStar={toggleStar} onOpen={openTodo} onEdit={setEditingTodo} onDelete={setDeletingTodo} /> : viewMode === 'extended' ? <TodosExtendedView todos={sorted} todayDateKey={todayDateKey} workspaces={workspaces} onToggle={handleToggle} onToggleStar={toggleStar} onOpen={openTodo} onEdit={setEditingTodo} onDelete={setDeletingTodo} /> : sorted.length === 0 ? <p>No tasks found.</p> : <div>{groups.filter((group) => group.todos.length > 0).map((group) => (
+            {loading ? <LoadingSkeleton label="Loading…" /> : viewMode === 'completed' ? <CompletedTodosList todos={completedTodos} todayDateKey={todayDateKey} workspaces={workspaces} onToggle={handleToggle} onToggleStar={toggleStar} onOpen={openTodo} onEdit={setEditingTodo} onDelete={setDeletingTodo} /> : viewMode === 'extended' ? <TodosExtendedView todos={sorted} todayDateKey={todayDateKey} workspaces={workspaces} onToggle={handleToggle} onToggleStar={toggleStar} onOpen={openTodo} onEdit={setEditingTodo} onDelete={setDeletingTodo} /> : sorted.length === 0 ? <p>No tasks found.</p> : <div>{groups.filter((group) => group.todos.length > 0).map((group) => (
               <section key={group.label} aria-label={group.label}>
                 <h3 className={styles.groupTitle}>{group.label}</h3>
                 <ul className={styles.rows}>

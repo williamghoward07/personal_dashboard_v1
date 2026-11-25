@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowUpRight, FolderKanban } from 'lucide-react'
@@ -88,7 +89,7 @@ export default function WorkspacesGlance(dimensions: HomeWidgetDimensions) {
       }
     >
       {!data ? (
-        <p>Loading...</p>
+        <LoadingSkeleton label="Loading..." />
       ) : rows.length === 0 ? (
         <p>
           No active workspaces.{' '}

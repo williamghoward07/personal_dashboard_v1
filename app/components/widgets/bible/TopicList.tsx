@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { listTopics } from '@/lib/bible/topics'
 import { ACCENT_CHIP } from '@/lib/theme'
@@ -24,7 +25,7 @@ export default function TopicList({
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <p className="text-sm text-on-surface-variant">Loading…</p>
+  if (loading) return <LoadingSkeleton label="Loading…" />
   if (topics.length === 0) return <p className="text-sm text-on-surface-variant">No topics yet.</p>
 
   return (

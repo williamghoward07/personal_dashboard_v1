@@ -143,7 +143,7 @@ export default function StatementImportBoard() {
   const includedCount = rows?.filter((r) => r.included).length ?? 0
 
   return (
-    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
+    <main className="workspace-page">
       <div>
         <Link
           href="/money"
@@ -152,7 +152,7 @@ export default function StatementImportBoard() {
           <ArrowLeft className="h-3.5 w-3.5" />
           Money
         </Link>
-        <h1 className="mt-1 font-display text-headline-lg font-bold text-on-surface">Import bank statement</h1>
+        <h1 className="mt-1 workspace-page-title text-on-surface">Import bank statement</h1>
         <p className="mt-1 text-sm text-on-surface-variant">
           Upload any bank or card statement PDF — parsing isn&apos;t tied to a specific bank, it
           looks for a date and a signed amount on each line using a generic UK-statement layout.

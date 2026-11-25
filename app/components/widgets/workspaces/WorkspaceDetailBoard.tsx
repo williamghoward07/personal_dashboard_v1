@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import styles from './workspace-surface.module.css'
 
 import { useState } from 'react'
@@ -93,7 +94,7 @@ export default function WorkspaceDetailBoard({ workspaceId }: { workspaceId: str
   if (workspacesLoading) {
     return (
       <main className={`${styles.surface} ${pageClass}`}>
-        <p className="text-sm text-on-surface-variant">Loading...</p>
+        <LoadingSkeleton shape="cards" label="Loading..." />
       </main>
     )
   }

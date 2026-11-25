@@ -23,15 +23,8 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
 
 function AuthenticatedChrome({ pathname, children }: { pathname: string; children: React.ReactNode }) {
   const account = useChromeAccount()
-  const isWorkspace = pathname === '/' ||
-    pathname === '/lectures' ||
-    pathname.startsWith('/lectures/') ||
-    pathname === '/calendar' ||
-    pathname === '/todos' ||
-    pathname === '/habits' ||
-    pathname === '/brain-dump' ||
-    pathname === '/workspaces' ||
-    pathname.startsWith('/workspaces/')
+  const section = pathname.split('/')[1]
+  const isWorkspace = !['design-system-test', 'glinui-test', 'health'].includes(section)
 
   return (
     <PageTitleProvider>

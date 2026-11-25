@@ -12,7 +12,14 @@ import AnnouncementEntry from './AnnouncementEntry'
  * section. Opens in place; there is no chip when the module has none. The
  * announcements are an extra notification: they never appear in the main flow.
  */
-export default function AnnouncementsChip({ moduleCode }: { moduleCode: string }) {
+export default function AnnouncementsChip({
+  moduleCode,
+  align = 'end',
+}: {
+  moduleCode: string
+  /** Which edge of the chip the panel hangs from: 'end' for a chip in a right-hand corner, 'start' for one near the left. */
+  align?: 'start' | 'end'
+}) {
   const { announcements, unread, markRead } = useAnnouncements(moduleCode)
   const [now] = useState(() => new Date())
 
@@ -20,7 +27,7 @@ export default function AnnouncementsChip({ moduleCode }: { moduleCode: string }
 
   return (
     <Popover
-      align="end"
+      align={align}
       label={`Announcements for ${moduleCode}`}
       panelClassName="w-[min(26rem,calc(100vw-2rem))]"
       trigger={(props) => (

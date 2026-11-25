@@ -45,7 +45,12 @@ function Section({
   children: ReactNode
 }) {
   return (
-    <ModuleGlassCard accent={ACCENT} size="sm" className="flex flex-col gap-2.5">
+    // An open pop-over in the corner lifts this card above the cards after it.
+    <ModuleGlassCard
+      accent={ACCENT}
+      size="sm"
+      className="flex flex-col gap-2.5 has-[[aria-haspopup=dialog][aria-expanded=true]]:z-30"
+    >
       <div className="flex items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-on-surface">
           {icon}

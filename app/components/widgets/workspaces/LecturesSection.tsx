@@ -112,7 +112,7 @@ export default function LecturesSection({
   const upcomingCounts = countByStatus(upcoming)
 
   return (
-    <ModuleGlassCard style={wsAccentStyle} size="sm" className="flex flex-col gap-3">
+    <ModuleGlassCard style={wsAccentStyle} size="sm" className="flex flex-col gap-3 has-[[aria-haspopup=dialog][aria-expanded=true]]:z-30">
       {error === 'not_configured' && (
         <p className="text-sm text-on-surface-variant">
           The timetable isn&apos;t connected — set <code>TIMETABLE_ICS_URL</code> (see the Lectures tab).
@@ -198,7 +198,7 @@ export default function LecturesSection({
             Key dates
             <span className="font-mono text-[11px] font-normal text-on-surface-variant">{moduleCode}</span>
             {upcoming.length > 0 && <StatusCounts counts={upcomingCounts} />}
-            <AnnouncementsChip moduleCode={moduleCode} />
+            <AnnouncementsChip moduleCode={moduleCode} align="start" />
           </h2>
         }
       />

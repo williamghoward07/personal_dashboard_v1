@@ -30,10 +30,56 @@ export interface DashboardConfig {
   token: string
 }
 
-/** The dashboard's reply to POST /api/blackboard/sync. Absent = no dashboard set up. */
-export type UploadResult =
+/**
+ * Two saved dashboards: Live (the production site) and Test (localhost or a
+ * preview URL). Each keeps its own address and token; `active` is the one
+ * syncs go to.
+ */
+export type TargetId = 'live' | 'test'
+
+export interface DashboardTargets {
+  active: TargetId
+  live?: DashboardConfig
+  test?: DashboardConfig
+}
+
+export const TARGET_LABEL: Record<TargetId, string> = { live: 'Live', test: 'Test' }
+
+/**
+ * Reads the stored targets. Installs from before Live/Test have one
+ * `dashboard` entry, which becomes Live.
+ */
+export function readTargets(stored: Record<string, unknown>): DashboardTargets {
+  const targets = stored[STORAGE.dashboards] as DashboardTargets | undefined
+  if (targets) return targets
+  const legacy = stored[STORAGE.dashboard] as DashboardConfig | undefined
+  return legacy?.url && legacy.token ? { active: 'live', live: legacy } : { active: 'live' }
+}
+
+/** The dashboard syncs go to right now, or undefined when the active one isn't set up. */
+export function activeDashboard(targets: DashboardTargets): (DashboardConfig & { target: TargetId }) | undefined {
+  const config = targets[targets.active]
+  return config?.url && config.token ? { ...config, target: targets.active } : undefined
+}
+
+/** "localhost:3000" from "http://localhost:3000". */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}
+
+/**
+ * The dashboard's reply to POST /api/blackboard/sync, tagged with where it
+ * went. Absent = no dashboard set up. `unreachable` = nothing answered (e.g.
+ * the local dev server isn't running).
+ */
+export type UploadResult = { target: TargetId; host: string } & (
   | { ok: true; counts: Record<string, unknown>; bytes?: UploadBytes }
-  | { ok: false; error: string; bytes?: UploadBytes }
+  | { ok: false; error: string; bytes?: UploadBytes; unreachable?: boolean }
+)
 
 /**
  * The latest run, whatever started it. `trigger` is missing on runs from
@@ -115,7 +161,9 @@ export const STORAGE = {
   lastSummary: 'lastSummary',
   syncState: 'syncState',
   session: 'sessionCheck',
+  /** Pre-Live/Test single dashboard. Read once by readTargets, then removed. */
   dashboard: 'dashboard',
+  dashboards: 'dashboards',
   /** TriggerClock fields (triggers.ts), one key each, ms epoch. */
   syncStartedAt: 'syncStartedAt',
   lastAttemptAt: 'lastAttemptAt',

@@ -290,7 +290,7 @@ describe('postToDashboard', () => {
   it('maps 401, 413, network errors, HTML pages and server errors', async () => {
     expect(await postToDashboard(json(401, { error: 'unauthenticated' }), 'u', 't', {}, opts)).toMatchObject({ ok: false, fatal: true, error: 'The dashboard rejected the sync token.' })
     expect(await postToDashboard(async () => new Response('', { status: 413 }), 'u', 't', {}, opts)).toMatchObject({ ok: false, fatal: false, error: 'Snapshot too large for the dashboard' })
-    expect(await postToDashboard(async () => Promise.reject(new TypeError('Failed to fetch')), 'u', 't', {}, opts)).toMatchObject({ ok: false, fatal: true, error: expect.stringMatching(/^Couldn't reach the dashboard \(Failed to fetch\)/) })
+    expect(await postToDashboard(async () => Promise.reject(new TypeError('Failed to fetch')), 'u', 't', {}, opts)).toMatchObject({ ok: false, fatal: true, unreachable: true, error: expect.stringMatching(/^Couldn't reach the dashboard \(Failed to fetch\)/) })
     const html = async () => new Response('<html>Log in</html>', { status: 200, headers: { 'content-type': 'text/html' } })
     expect(await postToDashboard(html, 'u', 't', {}, opts)).toMatchObject({ ok: false, fatal: true, error: expect.stringMatching(/address is probably wrong/) })
     expect(await postToDashboard(json(500, { error: 'sync_failed', detail: 'function not found' }), 'u', 't', {}, opts)).toMatchObject({ ok: false, fatal: false, error: 'The dashboard returned 500: function not found.' })

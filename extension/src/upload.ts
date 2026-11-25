@@ -21,6 +21,8 @@ export type PostOutcome<T> =
       /** The dashboard can't take anything right now (unreachable, wrong address, bad token): stop sending. */
       fatal: boolean
       bytes?: UploadBytes
+      /** Nothing answered at all (e.g. the local dev server isn't running). */
+      unreachable?: boolean
     }
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>
@@ -70,6 +72,7 @@ export async function postToDashboard<T>(
     return {
       ok: false,
       fatal: true,
+      unreachable: true,
       bytes,
       error: `Couldn't reach the dashboard (${err instanceof Error ? err.message : String(err)}). Check the address and your connection.`,
     }

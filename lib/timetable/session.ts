@@ -105,14 +105,16 @@ export function prepStatus(items: ReadingCount, prepDone: boolean): PrepStatus {
 
 /**
  * `pending` until prep is handed in. Then green once marked done or every
- * concept is ticked; amber with concepts outstanding; otherwise red after
- * the session, `pending` before it.
+ * concept is ticked; amber with concepts outstanding. Follow-up is optional:
+ * with no concepts added, handed-in prep plus a finished session is green
+ * (`pending` before the session ends). Only a follow-up the user added keeps
+ * the light from going green.
  */
 export function postStatus(concepts: ReadingCount, notesDone: boolean, prepDone: boolean, ended: boolean): PostStatus {
   if (!prepDone) return 'pending'
   if (notesDone) return 'green'
   if (concepts.total > 0) return concepts.done >= concepts.total ? 'green' : 'amber'
-  return ended ? 'red' : 'pending'
+  return ended ? 'green' : 'pending'
 }
 
 export function hasEnded(session: Pick<TimetableSession, 'start' | 'end'>, now: Date): boolean {

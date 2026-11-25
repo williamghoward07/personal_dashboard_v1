@@ -136,9 +136,9 @@ describe('postStatus', () => {
     expect(postStatus({ done: 1, total: 2 }, true, false, true)).toBe('pending')
   })
 
-  it('is pending before the session and red after it with nothing recorded', () => {
+  it('is pending before the session and green after it when no follow-up was added', () => {
     expect(postStatus({ done: 0, total: 0 }, false, true, false)).toBe('pending')
-    expect(postStatus({ done: 0, total: 0 }, false, true, true)).toBe('red')
+    expect(postStatus({ done: 0, total: 0 }, false, true, true)).toBe('green')
   })
 
   it('is amber with concepts outstanding, green when all ticked or marked done', () => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type MutableRefObject } from 'react'
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { BookOpen, CheckCircle2, ExternalLink, GripVertical, Pencil, Plus, Trash2, X } from 'lucide-react'
 import type { Todo, WorkspaceLink, WorkspaceLinkTodo } from '@/lib/types'
 import { faviconPublicUrl } from '@/lib/workspaces/favicon'
@@ -26,6 +26,8 @@ export default function LinkCard({
   onExternalUrlDrop,
   weekChoices,
   onMarkReading,
+  renameRequested,
+  onRenameHandled,
 }: {
   link: WorkspaceLink
   todos: Todo[]
@@ -44,11 +46,41 @@ export default function LinkCard({
   weekChoices?: number[]
   /** Module workspaces: move this source into the Lectures section's readings. */
   onMarkReading?: () => void
+  /** A just-added link opens its title for naming straight away. */
+  renameRequested?: boolean
+  onRenameHandled?: () => void
 }) {
   const [managingTodos, setManagingTodos] = useState(false)
   const [editing, setEditing] = useState(false)
   const [copied, setCopied] = useState<'citation' | 'doi' | null>(null)
   const [isDragTarget, setIsDragTarget] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [draftTitle, setDraftTitle] = useState('')
+  const titleInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!renameRequested) return
+    setDraftTitle(link.title)
+    setRenaming(true)
+    onRenameHandled?.()
+    // Only when the request arrives; link.title is read once for the draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renameRequested])
+
+  useEffect(() => {
+    if (renaming) titleInputRef.current?.select()
+  }, [renaming])
+
+  const startRename = () => {
+    setDraftTitle(link.title)
+    setRenaming(true)
+  }
+
+  const saveTitle = () => {
+    const next = draftTitle.trim()
+    setRenaming(false)
+    if (next && next !== link.title) void onUpdate(link.id, { title: next })
+  }
 
   // Set optimistically on tick, so a just-finished source greys out in place
   // during its grace period, the same as in the Completed list.
@@ -92,7 +124,7 @@ export default function LinkCard({
       // Not draggable while an inline editor/panel is open — a draggable
       // ancestor turns a mouse drag inside a text input into a card drag,
       // so text in the rename fields couldn't be selected.
-      draggable={!done && !editing && !managingTodos}
+      draggable={!done && !editing && !managingTodos && !renaming}
       onDragStart={(e) => {
         draggingIdRef.current = link.id
         e.dataTransfer.effectAllowed = 'move'
@@ -175,13 +207,51 @@ export default function LinkCard({
 
         <div className={`flex min-w-0 flex-1 flex-col gap-1 transition-opacity ${done ? 'opacity-50' : ''}`}>
           <div className="flex items-start gap-2">
-            <h3
-              className={`min-w-0 flex-1 truncate text-sm font-semibold ${
-                done ? 'text-on-surface-variant line-through' : 'text-on-surface'
-              }`}
-            >
-              {link.title}
-            </h3>
+            {renaming ? (
+              <input
+                ref={titleInputRef}
+                autoFocus
+                value={draftTitle}
+                onChange={(e) => setDraftTitle(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onBlur={saveTitle}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                  if (e.key === 'Enter') saveTitle()
+                  if (e.key === 'Escape') setRenaming(false)
+                }}
+                aria-label="Link title"
+                placeholder="Name this link"
+                className="min-w-0 flex-1 rounded border border-ws-accent/50 bg-surface-container-lowest px-1.5 py-0.5 text-sm font-semibold text-on-surface outline-none"
+              />
+            ) : (
+              <>
+                <h3
+                  onDoubleClick={(e) => {
+                    e.stopPropagation()
+                    startRename()
+                  }}
+                  className={`min-w-0 flex-1 truncate text-sm font-semibold ${
+                    done ? 'text-on-surface-variant line-through' : 'text-on-surface'
+                  }`}
+                >
+                  {link.title}
+                </h3>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    startRename()
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  aria-label={`Rename ${link.title}`}
+                  title="Give this link a title"
+                  className="mt-0.5 shrink-0 rounded p-0.5 text-on-surface-variant/50 transition-colors hover:text-ws-accent focus-visible:text-ws-accent"
+                >
+                  <Pencil className="h-3 w-3" strokeWidth={1.75} />
+                </button>
+              </>
+            )}
             <ExternalLink
               className="mt-0.5 h-3.5 w-3.5 shrink-0 text-on-surface-variant/40 transition-colors group-hover:text-ws-accent"
               strokeWidth={1.75}

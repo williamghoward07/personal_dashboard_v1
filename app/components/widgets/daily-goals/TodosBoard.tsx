@@ -257,6 +257,7 @@ export default function TodosBoard({ tabs }: { tabs?: ReactNode }) {
                       workspace={workspaceFor(todo)}
                       listName={lists.find((list) => list.id === todo.list_id)?.name}
                       selected={viewing?.id === todo.id}
+                      compact
                       onToggle={() => handleToggle(todo.id)}
                       onToggleStar={() => toggleStar(todo.id)}
                       onOpen={() => openTodo(todo)}

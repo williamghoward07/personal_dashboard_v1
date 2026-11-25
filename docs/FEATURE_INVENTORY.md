@@ -75,8 +75,8 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
   up") only appears once handed in, and has no due date.
 - ✅ Split traffic light: left half = prep (red nothing added, amber not
   handed in, green done), right half = follow-up (grey until handed in,
-  then amber concepts outstanding, green done, red once the session ended
-  with nothing).
+  then amber only if concepts to review were added, green once marked done or
+  once the session ended with none added; both green = one merged pill).
 - ✅ **Work list** at the top of `/lectures`, built from Blackboard
   (extension sync, `bb_*` tables) plus the timetable: official assignments,
   AI-found key dates (suggested until confirmed, re-dated or dismissed),
@@ -116,7 +116,7 @@ Status legend: ✅ works · ⚠️ works but rough · 🐛 known bug · 🚧 hal
 
 ### Todos & Reminders (`/todos`)
 - ✅ Todos with lists (colour chips), one level of subtasks, due-time,
-  List / Extended / Completed views, stars (+ Starred filter), a
+  List (compact: one line per task, chevron to expand) / Extended / Completed views, stars (+ Starred filter), a
   workspace chip on todos filed under a workspace.
 - ⚠️ **Microsoft To Do sync** (replaced Apple Reminders/CalDAV, which never
   worked — iCloud only serves placeholder lists for upgraded Reminders).

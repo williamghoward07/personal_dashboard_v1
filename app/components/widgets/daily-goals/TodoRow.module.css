@@ -6,6 +6,13 @@
 .context { display: flex; flex-wrap: wrap; gap: 4px; color: var(--color-on-surface-variant); font-size: 12px; }
 .mobileDue { display: none; }
 .desktopDue { flex-shrink: 0; font-size: 12px; }
+/* Compact list: one line per task; the chevron reveals the rest. */
+.compact { min-height: 32px; padding: 2px 0; gap: 4px; }
+.collapsed .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hiddenWhenCollapsed { display: none; }
+.actions { display: contents; }
+.collapsed .actions { visibility: hidden; }
+.collapsed:hover .actions, .collapsed:focus-within .actions { visibility: visible; }
 @media (max-width: 640px) {
   .row { min-height: 48px; padding: 4px 0; }
   .check { width: 44px; height: 44px; }

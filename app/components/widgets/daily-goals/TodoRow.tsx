@@ -1,6 +1,7 @@
 'use client'
 
-import { Cloud, Pencil, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, Cloud, Pencil, Trash2 } from 'lucide-react'
 import { CountBadge } from '@/components/ui/count-badge'
 import type { Todo } from '@/lib/types'
 import type { WorkspaceTag } from '@/lib/workspaces/use-workspace-lookup'
@@ -16,6 +17,7 @@ export default function TodoRow({
   workspace,
   listName,
   selected = false,
+  compact = false,
   onToggle,
   onToggleStar,
   onOpen,
@@ -28,6 +30,8 @@ export default function TodoRow({
   workspace?: WorkspaceTag
   listName?: string
   selected?: boolean
+  /** One line per task; a chevron expands it to show the list, notes and actions. */
+  compact?: boolean
   onToggle: () => void
   onToggleStar: () => void
   onOpen: () => void
@@ -36,11 +40,13 @@ export default function TodoRow({
 }) {
   const completed = todo.completed_at !== null
   const due = formatDue(todo, todayDateKey)
+  const [expanded, setExpanded] = useState(false)
+  const collapsed = compact && !expanded
 
   return (
     <li
       aria-current={selected ? 'true' : undefined}
-      className={`${styles.row} ${selected ? styles.selected : ''}`}
+      className={`${styles.row} ${compact ? styles.compact : ''} ${collapsed ? styles.collapsed : ''} ${selected ? styles.selected : ''}`}
     >
       <label className={styles.check} onClick={(e) => e.stopPropagation()}>
         <input
@@ -65,15 +71,16 @@ export default function TodoRow({
           </span>
           {!!subtaskCount && <CountBadge count={subtaskCount} className="shrink-0" />}
         </span>
-        <span className={styles.context}>
+        <span className={`${styles.context} ${collapsed ? styles.hiddenWhenCollapsed : ''}`}>
           {workspace && <span>{workspace.title}</span>}
           {listName && <span>{workspace ? '· ' : ''}{listName}</span>}
           {due && <span className={styles.mobileDue}>{workspace || listName ? '· ' : ''}{due.label}</span>}
         </span>
-        {todo.notes && <span className="block truncate text-xs text-on-surface-variant">{todo.notes}</span>}
+        {todo.notes && !collapsed && <span className="block truncate text-xs text-on-surface-variant">{todo.notes}</span>}
       </button>
       {due && <span className={`${styles.desktopDue} ${due.overdue ? 'text-academic-orange' : 'text-on-surface-variant'}`}>{due.label}</span>}
-      <StarButton starred={todo.starred} title={todo.title} onToggle={onToggleStar} alwaysShow largeTarget />
+      <StarButton starred={todo.starred} title={todo.title} onToggle={onToggleStar} alwaysShow largeTarget={!compact} />
+      <span className={compact ? styles.actions : 'contents'}>
       <button
         type="button"
         onClick={(e) => {
@@ -96,6 +103,21 @@ export default function TodoRow({
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
+      </span>
+      {compact && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setExpanded((v) => !v)
+          }}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? 'Show less' : 'Show more'} for ${todo.title}`}
+          className="shrink-0 rounded p-1.5 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+        >
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+      )}
     </li>
   )
 }

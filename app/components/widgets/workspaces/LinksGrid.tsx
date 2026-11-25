@@ -58,6 +58,8 @@ export default function LinksGrid({
   const [isDropTarget, setIsDropTarget] = useState(false)
   // Collapsed by default — finished sources are out of the way but recoverable.
   const [completedOpen, setCompletedOpen] = useState(false)
+  // The link just added: its card opens the title for naming.
+  const [renameId, setRenameId] = useState<string | null>(null)
 
   // Ref, not just state: a fast double Enter fires twice before a re-render.
   const savingRef = useRef(false)
@@ -72,6 +74,7 @@ export default function LinksGrid({
       if (result) {
         setUrlInput('')
         setAddingUrl(false)
+        setRenameId(result.id)
       }
     } finally {
       savingRef.current = false
@@ -132,6 +135,8 @@ export default function LinksGrid({
           onExternalUrlDrop={handleAddUrl}
           weekChoices={weekChoices}
           onMarkReading={markReading ? () => markReading(link) : undefined}
+          renameRequested={renameId === link.id}
+          onRenameHandled={() => setRenameId(null)}
         />
       ))}
 

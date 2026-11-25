@@ -18,6 +18,7 @@ export default function SessionRow({
   postStatus,
   prep,
   showModule = false,
+  marker,
   aside,
   action,
 }: {
@@ -27,6 +28,8 @@ export default function SessionRow({
   /** Readings + prep tasks. */
   prep: ReadingCount
   showModule?: boolean
+  /** A small quiet chip right after the title ("Work set"). */
+  marker?: ReactNode
   aside?: ReactNode
   action?: ReactNode
 }) {
@@ -51,6 +54,7 @@ export default function SessionRow({
             session.type
           )}
         </span>
+        {marker}
         {session.location && (
           <span className="hidden shrink-0 text-xs text-on-surface-variant md:inline">{session.location}</span>
         )}

@@ -24,8 +24,6 @@ import DayHeading from './DayHeading'
 
 const LANE_PX = 20
 
-const HOUR_LABEL_ROOM_PX = 8
-
 function itemKey(item: DayItem): string {
   return `${item.kind}-${item.id}`
 }
@@ -76,10 +74,7 @@ export default function WeekGridView({
   }, [viewportPx, onGridViewportHeight])
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      // A little above the hour line, so that hour's label isn't clipped.
-      top: minutesToPx(defaultScrollMinutes(todayInWeek, nowMinutes), pxPerMin) - HOUR_LABEL_ROOM_PX,
-    })
+    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(todayInWeek, nowMinutes), pxPerMin) })
     // Only re-run when the visible week or zoom level changes — the
     // current-time tick shouldn't yank the user's scroll position back
     // every minute.
@@ -87,8 +82,8 @@ export default function WeekGridView({
   }, [weekKeys[0], pxPerMin])
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-outline-variant/60">
-      <div className="shrink-0 border-b border-outline-variant/60" style={{ paddingRight: scrollbarPx }}>
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
+      <div className="shrink-0 border-b border-outline-variant bg-surface-container/60" style={{ paddingRight: scrollbarPx }}>
         <div className="grid" style={{ gridTemplateColumns: columns }}>
           <div />
           {weekKeys.map((dateKey) => (
@@ -97,7 +92,7 @@ export default function WeekGridView({
               dateKey={dateKey}
               isToday={dateKey === todayKey}
               onClick={() => onSelectDate(dateKey)}
-              className="border-l border-outline-variant/20"
+              className="border-l border-outline-variant/60"
             />
           ))}
         </div>
@@ -114,7 +109,7 @@ export default function WeekGridView({
               <div
                 key={`col-${dateKey}`}
                 style={{ gridColumn: col + 2, gridRow: '1 / -1' }}
-                className="border-l border-outline-variant/20"
+                className="border-l border-outline-variant/60"
               />
             ))}
             {placedBars.map((bar) => (
@@ -161,7 +156,7 @@ export default function WeekGridView({
               const layouts = new Map(layoutOverlappingBlocks(blocks).map((l) => [l.id, l]))
 
               return (
-                <div key={dateKey} className="relative min-w-0 flex-1 border-l border-outline-variant/20">
+                <div key={dateKey} className={`relative min-w-0 flex-1 border-l border-outline-variant/60 first:border-l-0 ${isToday ? 'bg-primary-container/4' : ''}`}>
                   <TimeGridLines pxPerMin={pxPerMin} />
                   {isToday && <CurrentTimeLine nowMinutes={nowMinutes} pxPerMin={pxPerMin} />}
                   {timed.map((item) => {

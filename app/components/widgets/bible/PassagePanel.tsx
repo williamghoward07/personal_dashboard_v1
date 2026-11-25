@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState, type FormEvent } from 'react'
 import { formatReference } from '@/lib/bible/passages'
 import { getPassageNotes, getChapterNotes, addNote } from '@/lib/bible/notes'
@@ -58,7 +59,7 @@ export default function PassagePanel({
         <h4 className="text-xs font-semibold text-on-surface-variant">Notes</h4>
 
         {loading ? (
-          <p className="text-sm text-on-surface-variant">Loading…</p>
+          <LoadingSkeleton label="Loading…" />
         ) : notes.length === 0 && chapterNotes.length === 0 ? (
           <p className="text-sm text-on-surface-variant">No notes yet on this passage.</p>
         ) : (

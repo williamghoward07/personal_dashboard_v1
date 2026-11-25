@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useId, useMemo, useState } from 'react'
 import { AtSign, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -268,7 +269,7 @@ export default function InstagramFollowsCard({ people }: { people: Person[] }) {
         {message && <p className="text-xs text-on-surface-variant">{message}</p>}
 
         {loading ? (
-          <p className="text-xs">Loading…</p>
+          <LoadingSkeleton label="Loading…" />
         ) : follows.length === 0 ? (
           <>
             <p className="text-xs">No follows imported yet.</p>

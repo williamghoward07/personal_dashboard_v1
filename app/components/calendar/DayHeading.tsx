@@ -28,7 +28,7 @@ export default function DayHeading({
       <span
         className={cn(
           'text-[11px] font-semibold uppercase tracking-wide',
-          isToday ? 'text-secondary-container' : 'text-on-surface-variant'
+          isToday ? 'text-primary' : 'text-on-surface-variant'
         )}
       >
         {weekdayShort(dateKey)}
@@ -36,7 +36,7 @@ export default function DayHeading({
       <span
         className={cn(
           'inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-sm font-semibold tabular-nums',
-          isToday ? 'bg-secondary-container text-on-secondary' : 'text-on-surface'
+          isToday ? 'bg-primary-container text-on-primary-container' : 'text-on-surface'
         )}
       >
         {Number(dateKey.slice(-2))}

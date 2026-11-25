@@ -1,50 +1,20 @@
-'use client'
-
-import { useState } from 'react'
-import { ListChecks, ListTodo } from 'lucide-react'
+import Link from 'next/link'
 import HabitBoard from './HabitBoard'
 import TodosBoard from '../daily-goals/TodosBoard'
 
 type Tab = 'habits' | 'todos'
 
-const TABS: { id: Tab; label: string; icon: typeof ListChecks; activeClass: string }[] = [
-  { id: 'habits', label: 'Habits', icon: ListChecks, activeClass: 'text-habit-purple' },
-  { id: 'todos', label: 'Todos', icon: ListTodo, activeClass: 'text-on-surface' },
-]
-
 export default function HabitsTodosBoard({ defaultTab }: { defaultTab: Tab }) {
-  const [activeTab, setActiveTab] = useState<Tab>(defaultTab)
+  const tabs = (
+    <nav aria-label="Tasks and habits" className="inline-flex w-fit rounded-lg border border-outline-variant p-1 text-sm font-semibold">
+      <Link href="/todos" aria-current={defaultTab === 'todos' ? 'page' : undefined} className={`rounded-md px-4 py-2 ${defaultTab === 'todos' ? 'bg-primary-container/15 text-on-surface' : 'text-on-surface-variant'}`}>Todos</Link>
+      <Link href="/habits" aria-current={defaultTab === 'habits' ? 'page' : undefined} className={`rounded-md px-4 py-2 ${defaultTab === 'habits' ? 'bg-primary-container/15 text-on-surface' : 'text-on-surface-variant'}`}>Habits</Link>
+    </nav>
+  )
 
   return (
-    <main className="mx-auto flex w-full max-w-360 flex-1 flex-col gap-6 px-8 py-6">
-      <div role="tablist" aria-label="Habits and todos" className="inline-flex w-fit items-center gap-1 rounded-xl bg-surface-container p-1">
-        {TABS.map(({ id, label, icon: Icon, activeClass }) => {
-          const active = activeTab === id
-          return (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              id={`tab-${id}`}
-              aria-selected={active}
-              aria-controls={`panel-${id}`}
-              onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-2 rounded-lg px-3 py-1.5 font-display text-sm font-semibold transition-colors duration-200 ${
-                active
-                  ? `bg-surface-container-high ${activeClass}`
-                  : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          )
-        })}
-      </div>
-
-      <div id={`panel-${activeTab}`} role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
-        {activeTab === 'habits' ? <HabitBoard /> : <TodosBoard />}
-      </div>
+    <main className="mx-auto flex w-full max-w-360 min-w-0 flex-1 flex-col gap-4 px-4 py-4 sm:px-8 sm:py-6">
+      {defaultTab === 'habits' ? <HabitBoard tabs={tabs} /> : <TodosBoard tabs={tabs} />}
     </main>
   )
 }

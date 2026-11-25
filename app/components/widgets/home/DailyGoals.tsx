@@ -16,7 +16,6 @@ import { useHabitsVersion } from '@/lib/habits/events'
 import { useWorkspaceLookup } from '@/lib/workspaces/use-workspace-lookup'
 import { ModuleGlassCard } from '@/components/ui/module-glass-card'
 import { GlassCardHeader, GlassCardContent } from '@/components/ui/glass-card'
-import { ProgressRing } from '@/components/ui/progress-ring'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import StarButton from '../daily-goals/StarButton'
@@ -136,7 +135,6 @@ export default function DailyGoals() {
   )
 
   const error = todosError ?? domainError
-  const ringPercent = rollup.total > 0 ? Math.round((rollup.completed / rollup.total) * 100) : 0
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -171,14 +169,14 @@ export default function DailyGoals() {
       </div>
 
       <GlassCardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 font-display text-sm font-semibold text-foreground">
+        <div className="-my-2.5 flex items-center justify-between gap-2 [@media(pointer:fine)]:my-0">
+          <h2 className="flex min-w-0 items-center gap-2 font-display text-sm font-semibold text-foreground">
             <Target className="h-4 w-4 text-on-surface-variant" aria-hidden="true" />
-            Daily Goals
+            Personal todos
           </h2>
           <Link
             href="/todos"
-            className="shrink-0 text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline"
+            className="inline-flex min-h-11 shrink-0 items-center text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline [@media(pointer:fine)]:min-h-6"
           >
             All todos →
           </Link>
@@ -186,34 +184,10 @@ export default function DailyGoals() {
       </GlassCardHeader>
 
       <GlassCardContent className="flex flex-col gap-4">
-        {/* Roll-up ring */}
-        <div className="flex flex-col items-center gap-2 py-1">
-          {domainLoading && todosLoading ? (
-            <div className="flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-surface-container-high" />
-          ) : domainError ? (
-            <p className="text-center text-xs text-on-surface-variant">Couldn&apos;t load today&apos;s goals.</p>
-          ) : (
-            <div className={rollup.total === 0 ? 'opacity-60' : undefined}>
-              <ProgressRing accent="neutral" value={ringPercent} size="md" showValue={false} />
-            </div>
-          )}
-          {!(domainLoading && todosLoading) && !domainError && (
-            <span className="font-display text-sm font-semibold text-on-surface">
-              {rollup.total === 0
-                ? 'Nothing scheduled today'
-                : `${rollup.completed}/${rollup.total} today`}
-              {rollup.extraCompletions > 0 && (
-                <span className="ml-1 text-xs font-normal text-on-surface-variant">
-                  +{rollup.extraCompletions} extra
-                </span>
-              )}
-            </span>
-          )}
+        <div className="text-xs text-on-surface-variant">
+          {domainLoading && todosLoading ? 'Loading today…' : domainError ? "Couldn’t load today’s overall progress." :
+            rollup.total === 0 ? 'Today overall: nothing scheduled' : `Today overall: ${rollup.completed}/${rollup.total} complete${rollup.extraCompletions > 0 ? ` · ${rollup.extraCompletions} extra` : ''}`}
         </div>
-
-        {/* Divider, matching the border-t treatment used elsewhere for
-            two-section widget cards (see the old GoalTicker). */}
-        <div className="border-t border-outline-variant/50" />
 
         {/* Todos checklist */}
         <div className="flex flex-col gap-3">
@@ -232,7 +206,7 @@ export default function DailyGoals() {
                 : 'Nothing due, overdue or starred.'}
             </p>
           ) : (
-            <ul className="flex flex-col gap-1">
+            <ul className="divide-y divide-outline-variant/60">
               {checklist.rows.map((todo) => {
                 const completed = todo.completed_at !== null
                 const inputId = `daily-goals-todo-${todo.id}`
@@ -243,42 +217,44 @@ export default function DailyGoals() {
                 const due =
                   dueLabel && (todo.due_time || dueLabel.overdue || todo.due_date !== todayDateKey) ? dueLabel : null
                 return (
-                  <li key={todo.id} className="group flex min-h-7 items-center gap-2">
+                  <li key={todo.id} className="group grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 py-1.5">
                     <input
                       id={inputId}
                       type="checkbox"
                       checked={completed}
                       onChange={() => handleToggle(todo.id, todo.title, completed)}
-                      className="h-4 w-4 shrink-0 cursor-pointer appearance-none rounded border border-outline-variant bg-transparent checked:border-primary-container checked:bg-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-container/50"
+                      className="mt-0.5 h-4 w-4 cursor-pointer appearance-none rounded border border-outline-variant bg-transparent checked:border-primary-container checked:bg-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-container/50"
                     />
                     <label
                       htmlFor={inputId}
-                      className={`min-w-0 flex-1 cursor-pointer truncate text-sm ${
+                      className={`cursor-pointer break-words text-sm ${
                         completed ? 'text-on-surface-variant line-through' : 'text-on-surface'
                       }`}
                     >
                       {todo.title}
                     </label>
-                    {workspace && <WorkspaceChip workspace={workspace} />}
-                    {due && (
-                      <span
-                        className={`shrink-0 text-xs font-medium tabular-nums ${
+                    <div className="col-start-2 flex min-w-0 flex-wrap items-center gap-x-2">
+                      {workspace && <WorkspaceChip workspace={workspace} />}
+                      {due && (
+                        <span className={`text-xs font-medium tabular-nums ${
                           due.overdue ? 'text-academic-orange' : 'text-on-surface-variant'
-                        }`}
-                      >
-                        {due.label}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setEditingTodo(todo)}
-                      aria-label={`Edit ${todo.title}`}
-                      title="Edit"
-                      className="shrink-0 rounded p-1.5 text-on-surface-variant opacity-0 transition-opacity hover:bg-surface-container-high hover:text-on-surface focus-visible:opacity-100 group-hover:opacity-100"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <StarButton starred={todo.starred} title={todo.title} onToggle={() => handleStar(todo.id)} />
+                        }`}>
+                          {due.label}
+                        </span>
+                      )}
+                      <div className="ml-auto flex items-center">
+                        <button
+                          type="button"
+                          onClick={() => setEditingTodo(todo)}
+                          aria-label={`Edit ${todo.title}`}
+                          title="Edit"
+                          className="shrink-0 rounded p-1.5 text-on-surface-variant transition-opacity hover:bg-surface-container-high hover:text-on-surface focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <StarButton starred={todo.starred} title={todo.title} onToggle={() => handleStar(todo.id)} />
+                      </div>
+                    </div>
                   </li>
                 )
               })}
@@ -288,7 +264,7 @@ export default function DailyGoals() {
           {!todosLoading && !todosError && moreParts.length > 0 && (
             <Link
               href="/todos"
-              className="w-fit text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline"
+              className="inline-flex min-h-11 w-fit items-center text-xs font-medium text-on-surface-variant hover:text-on-surface hover:underline [@media(pointer:fine)]:min-h-6"
             >
               {moreParts.join(' · ')} →
             </Link>

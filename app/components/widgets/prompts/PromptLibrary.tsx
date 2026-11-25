@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -61,7 +62,7 @@ export default function PromptLibrary() {
         }
       >
         {loading ? (
-          <p>Loading...</p>
+          <LoadingSkeleton label="Loading..." />
         ) : prompts.length === 0 ? (
           <p>No prompts yet — add one to get started.</p>
         ) : (

@@ -3,6 +3,7 @@
 import type { Task } from '@/lib/types'
 import type { DayItem } from '../calendarItems'
 import { formatSpanEnd } from '../calendarItems'
+import { DeadlineButton } from '../DeadlinePopover'
 
 // A single all-day-strip row — all-day calendar events read as "blocked
 // out" (shaded bar), tasks are clickable (opens TaskDetailModal), activity
@@ -10,7 +11,7 @@ import { formatSpanEnd } from '../calendarItems'
 export default function UntimedItemRow({ item, onSelectTask }: { item: DayItem; onSelectTask: (task: Task) => void }) {
   if (item.kind === 'calendar' && item.allDay) {
     return (
-      <div className="truncate rounded border border-on-surface-variant/30 bg-on-surface-variant/10 px-1.5 py-1 text-[11px] text-on-surface">
+      <div className="truncate rounded bg-habit-purple/16 px-1.5 py-1 text-[11px] text-on-surface">
         {item.title}
         {item.spanStartKey !== item.spanEndKey && (
           <span className="ml-1 text-on-surface-variant">until {formatSpanEnd(item.spanEndKey)}</span>
@@ -24,10 +25,19 @@ export default function UntimedItemRow({ item, onSelectTask }: { item: DayItem; 
       <button
         type="button"
         onClick={() => onSelectTask(item.task)}
-        className="block w-full truncate rounded px-1.5 py-1 text-left text-[11px] text-academic-orange hover:bg-surface-container-high"
+        className="block w-full truncate rounded px-1.5 py-1 text-left text-[11px] bg-tertiary-container/65 text-on-tertiary-container hover:bg-tertiary-container"
       >
         {item.title}
       </button>
+    )
+  }
+
+  if (item.kind === 'deadline') {
+    return (
+      <DeadlineButton
+        item={item.item}
+        className="block w-full rounded px-1.5 py-1 text-[11px] bg-tertiary-container/65 text-on-tertiary-container hover:bg-tertiary-container"
+      />
     )
   }
 

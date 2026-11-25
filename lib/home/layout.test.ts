@@ -17,6 +17,7 @@ import {
   setWidgetSpan,
   spanClass,
   spanFromPointer,
+  studyHomeLayout,
   toggleWidgetHidden,
   visibleWidgets,
 } from './layout'
@@ -61,14 +62,14 @@ describe('defaultHomeLayout', () => {
   it('mirrors the registry', () => {
     const layout = defaultHomeLayout()
     expect(layout.map((e) => e.id)).toEqual([...HOME_WIDGET_IDS])
-    expect(layout.every((e) => e.span === 1)).toBe(true)
+    expect(layout.slice(0, 2).map((e) => [e.id, e.span])).toEqual([['due-soon', 3], ['calendar', 1]])
     expect(isDefaultLayout(layout)).toBe(true)
   })
 
   it('returns a fresh array each call (callers mutate their copy)', () => {
     const a = defaultHomeLayout()
     a[0].span = 4
-    expect(defaultHomeLayout()[0].span).toBe(1)
+    expect(defaultHomeLayout()[0].span).toBe(3)
   })
 })
 
@@ -97,6 +98,27 @@ describe('resolveHomeLayout', () => {
     const resolved = resolveHomeLayout(saved)
     const health = resolved.find((e) => e.id === 'health')
     expect(health).toEqual({ id: 'health', span: 1, hidden: true })
+  })
+
+  it('adds Due soon, visible, to a layout saved before it existed, without disturbing the arrangement', () => {
+    const saved = HOME_WIDGET_IDS.filter((id) => id !== 'due-soon')
+      .reverse()
+      .map((id) => entry(id, id === 'money' ? 3 : 1, id === 'people'))
+    const resolved = resolveHomeLayout(saved)
+    expect(resolved.slice(0, saved.length)).toEqual(saved)
+    expect(resolved[resolved.length - 1]).toEqual({ id: 'due-soon', span: 3, hidden: false })
+  })
+
+  it('puts study priorities and calendar first in the default layout', () => {
+    expect(HOME_WIDGET_IDS.slice(0, 2)).toEqual(['due-soon', 'calendar'])
+    expect(homeWidgetMeta('due-soon')).toMatchObject({ label: 'Study priorities', defaultSpan: 3, defaultHidden: false })
+  })
+
+  it('applies the study preset while preserving visibility and heights', () => {
+    const saved = resolveHomeLayout([{ id: 'money', span: 4, hidden: true, height: 400 }, entry('due-soon', 1, true)])
+    const preset = studyHomeLayout(saved)
+    expect(preset[0]).toEqual({ id: 'due-soon', span: 3, hidden: true })
+    expect(preset.find((e) => e.id === 'money')).toEqual({ id: 'money', span: 1, hidden: true, height: 400 })
   })
 
   it('respects an explicit saved override of a hidden-by-default widget', () => {

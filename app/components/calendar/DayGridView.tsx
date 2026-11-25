@@ -20,8 +20,6 @@ import UntimedItemRow from './time-grid/UntimedItemRow'
 import { useScrollBox } from './time-grid/use-scroll-box'
 import DayHeading from './DayHeading'
 
-const HOUR_LABEL_ROOM_PX = 8
-
 function itemKey(item: DayItem): string {
   return `${item.kind}-${item.id}`
 }
@@ -71,10 +69,7 @@ export default function DayGridView({
   }, [timed, ranges, pxPerMin])
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({
-      // A little above the hour line, so that hour's label isn't clipped.
-      top: minutesToPx(defaultScrollMinutes(isToday, nowMinutes), pxPerMin) - HOUR_LABEL_ROOM_PX,
-    })
+    scrollRef.current?.scrollTo({ top: minutesToPx(defaultScrollMinutes(isToday, nowMinutes), pxPerMin) })
     // Only re-run when the visible day or zoom level changes — the
     // current-time tick shouldn't yank the user's scroll position back
     // every minute.
@@ -82,8 +77,8 @@ export default function DayGridView({
   }, [dateKey, pxPerMin])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-outline-variant/60">
-      <div className="shrink-0 border-b border-outline-variant/60">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
+      <div className="shrink-0 border-b border-outline-variant bg-surface-container/60">
         <div className="flex items-center pr-2">
           <div style={{ width: GUTTER_PX }} className="shrink-0" />
           <DayHeading dateKey={dateKey} isToday={isToday} className="flex-1 justify-start px-2" />
@@ -101,7 +96,7 @@ export default function DayGridView({
       <div ref={scrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
         <div className="relative flex" style={{ height: gridHeightPx(pxPerMin) }}>
           <TimeGridHourLabels pxPerMin={pxPerMin} />
-          <div className="relative flex-1">
+          <div className="relative min-w-0 flex-1">
             <TimeGridLines pxPerMin={pxPerMin} />
             {isToday && <CurrentTimeLine nowMinutes={nowMinutes} pxPerMin={pxPerMin} />}
             {timed.map((item) => {

@@ -2,10 +2,12 @@
 
 import { usePathname } from 'next/navigation'
 import { PageTitleDocumentSync, PageTitleProvider } from '@/lib/page-title'
+import AccountMenu, { useChromeAccount } from './AccountMenu'
 import Sidebar from './Sidebar'
 import TopAppBar from './TopAppBar'
 import MobileBottomNav from './MobileBottomNav'
 import SettingsProvider from './settings/SettingsProvider'
+import styles from './WorkspaceShell.module.css'
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -16,16 +18,29 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
+  return <AuthenticatedChrome pathname={pathname}>{children}</AuthenticatedChrome>
+}
+
+function AuthenticatedChrome({ pathname, children }: { pathname: string; children: React.ReactNode }) {
+  const account = useChromeAccount()
+  const section = pathname.split('/')[1]
+  const isWorkspace = !['design-system-test', 'glinui-test', 'health'].includes(section)
+
   return (
     <PageTitleProvider>
       <SettingsProvider>
         <PageTitleDocumentSync />
-        <Sidebar />
-        <div className="flex min-h-full flex-1 flex-col pt-16 pb-16 md:pl-20 md:pt-0 md:pb-0">
-          <TopAppBar />
-          {children}
+        <div className={isWorkspace ? `workspace-ui ${styles.shell}` : styles.shell}>
+          <Sidebar
+            compact={isWorkspace}
+            accountMenu={isWorkspace ? <AccountMenu account={account} /> : undefined}
+          />
+          <div className={`${styles.content}${isWorkspace ? '' : ` ${styles.legacyContent}`}`}>
+            {!isWorkspace && <TopAppBar account={account} />}
+            {children}
+          </div>
+          <MobileBottomNav />
         </div>
-        <MobileBottomNav />
       </SettingsProvider>
     </PageTitleProvider>
   )

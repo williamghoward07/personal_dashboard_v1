@@ -1,0 +1,398 @@
+.shell {
+  --rail-width: 64px;
+  --rail-expanded-width: 220px;
+  --mobile-bar-height: calc(48px + env(safe-area-inset-top));
+  --legacy-rail-width: 80px;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--mobile-bar-height));
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+
+.legacyContent {
+  min-height: 100dvh;
+  padding-top: 64px;
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--color-surface-container-lowest);
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.legacyRail {
+  display: none;
+}
+
+.railLink:hover,
+.railLink[aria-expanded="true"],
+.accountAction:hover:not(:disabled) {
+  background: var(--color-surface-container-high);
+  color: var(--nav-accent, var(--color-on-surface));
+}
+
+.accountAvatar {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-surface-container-high);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.railLink:hover .accountAvatar,
+.railLink[aria-expanded="true"] .accountAvatar {
+  background: var(--color-surface-bright);
+}
+
+.workspacePanel {
+  position: fixed;
+  inset: calc(var(--mobile-bar-height) + 8px) 12px auto auto;
+  width: 18rem;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - var(--mobile-bar-height) - 80px);
+  margin: 0;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgb(39 43 40 / 0.12);
+}
+
+.workspacePanel:focus-visible {
+  outline: 2px solid var(--color-primary-container);
+  outline-offset: -2px;
+}
+
+.accountPanel {
+  font-size: 13px;
+}
+
+.accountIdentity {
+  color: var(--color-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+
+.accountName {
+  color: var(--color-on-surface);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.accountSection,
+.accountActions {
+  border-top: 1px solid var(--color-outline-variant);
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.accountHeading {
+  margin-bottom: 6px;
+  font-weight: 650;
+}
+
+.connections {
+  display: grid;
+  gap: 6px;
+}
+
+.connection {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.connection > :last-child,
+.connectionDetail {
+  color: var(--color-on-surface-variant);
+}
+
+.connectionDetail {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.accountAction {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 6px;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.accountAction:disabled {
+  opacity: 0.6;
+}
+
+.accountError {
+  padding-inline: 6px;
+  color: var(--color-error);
+  overflow-wrap: anywhere;
+}
+
+.railLink:focus-visible,
+.accountAction:focus-visible {
+  outline: 2px solid var(--color-primary-container);
+  outline-offset: -2px;
+}
+
+@media (width < 48rem) {
+  /* One compact row: brand on the left, capture/settings/account on the right. */
+  .rail:not(.legacyRail) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: env(safe-area-inset-top) 8px 0;
+  }
+
+  .railList,
+  .railLabel {
+    display: none;
+  }
+
+  .railFooter {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 2px;
+    height: 48px;
+  }
+
+  .railLink {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border-radius: 7px;
+    color: var(--color-on-surface-variant);
+  }
+
+  .brand {
+    color: var(--color-primary);
+  }
+
+  .railLink > svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .accountAction,
+  .workspacePanel [role="switch"] {
+    min-height: 44px;
+  }
+}
+
+@media (min-width: 48rem) {
+  .content {
+    min-height: 100dvh;
+    padding-left: var(--rail-width);
+    padding-bottom: 0;
+  }
+
+  .legacyContent {
+    padding-left: var(--legacy-rail-width);
+    padding-top: 0;
+  }
+
+  .rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: var(--rail-width);
+    padding: 8px;
+    background: var(--color-surface-container-lowest);
+    border-right: 1px solid var(--color-outline-variant);
+    border-bottom: 0;
+    transition: width 160ms ease, box-shadow 160ms ease;
+  }
+
+  .rail:not(.legacyRail):has(:focus-visible, [aria-expanded="true"]) {
+    width: var(--rail-expanded-width);
+    box-shadow: 6px 0 20px rgb(39 43 40 / 0.12);
+  }
+
+  .rail:not(.legacyRail):has(:focus-visible, [aria-expanded="true"]) .railLabel {
+    opacity: 1;
+  }
+
+  .railList {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .railList > li,
+  .railFooter {
+    flex-shrink: 0;
+  }
+
+  .railFooter {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 8px;
+    border-top: 1px solid var(--color-outline-variant);
+  }
+
+  .railLink {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    height: 38px;
+    overflow: hidden;
+    padding-inline: 14px;
+    border-radius: 7px;
+    color: var(--color-on-surface-variant);
+    transition: background-color 140ms ease, color 140ms ease;
+  }
+
+  .railLink > svg {
+    flex: none;
+    width: 19px;
+    height: 19px;
+  }
+
+  .accountAvatar {
+    margin-inline: -1.5px;
+  }
+
+  .railLink[aria-current="page"] {
+    background: var(--color-primary-container);
+    color: var(--color-on-primary-container);
+  }
+
+  .rail:not(.legacyRail) .railLink[aria-current="page"] {
+    background: color-mix(in srgb, var(--color-primary-container) 17%, var(--color-surface-container-lowest));
+    color: var(--color-primary);
+  }
+
+  .railLink[aria-current="page"]:focus-visible {
+    outline-color: var(--color-on-primary-container);
+  }
+
+  .rail:not(.legacyRail) .railLink[aria-current="page"]:focus-visible {
+    outline-color: var(--color-primary-container);
+  }
+
+  .railLabel {
+    opacity: 0;
+    font-size: 13px;
+    font-weight: 550;
+    white-space: nowrap;
+    transition: opacity 120ms ease;
+  }
+
+  .brand {
+    flex: none;
+    color: var(--color-primary);
+  }
+
+  .brand .railLabel {
+    font-weight: 700;
+  }
+
+  .legacyRail {
+    align-items: center;
+    gap: 16px;
+    width: var(--legacy-rail-width);
+    padding: 20px 0;
+  }
+
+  .legacyRail .railList,
+  .legacyRail .railFooter {
+    align-items: center;
+    gap: 12px;
+  }
+
+  .legacyRail .railFooter {
+    display: flex;
+    flex-direction: column;
+    padding-top: 0;
+    border: 0;
+  }
+
+  .legacyRail .railLink {
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border-radius: 12px;
+  }
+
+  .legacyRail .railLink > svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .legacyRail .railLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .legacyRail .brand,
+  .legacyRail .railFooter .railLink {
+    background: var(--color-surface-container-high);
+    border: 1px solid var(--color-outline-variant);
+  }
+
+  .legacyRail .brand {
+    width: 40px;
+    height: 40px;
+    color: var(--color-primary-container);
+  }
+
+  .legacyRail .brand:hover {
+    border-color: color-mix(in srgb, var(--color-primary-container) 50%, transparent);
+    box-shadow: 0 0 15px rgb(0 255 157 / 0.2);
+  }
+
+  .legacyRail .railFooter .railLink:hover {
+    background: var(--color-surface-bright);
+  }
+
+  /* The links can scroll independently while the panel opens into the page. */
+  .workspacePanel {
+    inset: auto auto 8px calc(var(--rail-expanded-width) + 8px);
+    max-height: calc(100dvh - 16px);
+  }
+}
+
+@media (min-width: 48rem) and (hover: hover) {
+  .rail:not(.legacyRail):hover {
+    width: var(--rail-expanded-width);
+    box-shadow: 6px 0 20px rgb(39 43 40 / 0.12);
+  }
+
+  .rail:not(.legacyRail):hover .railLabel {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rail,
+  .railLink,
+  .railLabel {
+    transition: none;
+  }
+}

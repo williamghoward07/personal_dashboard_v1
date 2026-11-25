@@ -4,8 +4,10 @@ import LiquidSwitch from '@/app/components/LiquidSwitch'
 import type { Accent } from '@/lib/theme'
 import type { SessionWithPrep } from '@/lib/timetable/session'
 import { sessionHref, sessionMeta } from '@/lib/timetable/format'
+import { useSessionBlackboard } from '@/lib/blackboard/use-session-blackboard'
 import { useSessionPrep } from '@/lib/lectures/use-session-prep'
 import { useSessionTasks } from '@/lib/lectures/use-session-tasks'
+import { matchCount } from './SessionBlackboardBlock'
 import SessionPrepPanel from './SessionPrepPanel'
 
 const TRACK_OPTIONS = [
@@ -31,6 +33,8 @@ export default function ConnectedSessionPrep({
   const tasks = useSessionTasks(session.uid)
   const workspaceId = prep.readings[0]?.workspace_id ?? session.workspaceId
   const isEvent = session.source === 'calendar'
+  // Timetable sessions with a module code only: the hook fetches nothing for null.
+  const blackboard = useSessionBlackboard(isEvent ? null : session)
   // Live from the row, not `session`: the switch flips while the popover
   // still holds the session it was opened with.
   const tracked = isEvent ? (prep.loading ? session.tracked : !!prep.state?.tracked) : true
@@ -84,6 +88,7 @@ export default function ConnectedSessionPrep({
       workspaceHref={workspaceId ? `/workspaces/${workspaceId}` : null}
       // Only timetable sessions: the view finds its session in the feed.
       fullViewHref={isEvent ? null : sessionHref(session.uid)}
+      blackboardCount={matchCount(blackboard.match)}
       showHeader={showHeader}
       headerSlot={trackSwitch || undefined}
       // A module session files a pasted link in its workspace; anything

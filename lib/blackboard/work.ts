@@ -1,0 +1,507 @@
+// The unified "what do I need to do, and when" list: official Blackboard
+// assignments, AI-found key dates, tests from the timetable and (optionally)
+// lecture prep, as one WorkItem shape. Pure: no React, Next or Supabase.
+//
+// Lecture prep keeps its existing semantics: an item is done once handed in
+// (Mark as done), and its Upcoming / Past due / Completed placement comes
+// straight from `assignmentLists` (lib/timetable/session.ts).
+
+import { londonDateKey, londonDayBoundsUTC } from '@/lib/google/london-day'
+import { assignmentLists, hasEnded, type SessionWithPrep } from '@/lib/timetable/session'
+import { addDays, londonToday } from './dates'
+import { normaliseSessionType } from './match'
+import type { BbAssignmentRecord, BbCourseRecord, BbKeyDate } from './types'
+
+// --------------------------------------------------------------- categories --
+
+export const WORK_CATEGORIES = ['summative', 'formative', 'test', 'tutorial', 'session_task', 'other', 'lecture_prep'] as const
+export type WorkCategory = (typeof WORK_CATEGORIES)[number]
+
+export const WORK_CATEGORY_LABEL: Record<WorkCategory, string> = {
+  summative: 'Summative',
+  formative: 'Formative',
+  test: 'Tests',
+  tutorial: 'Tutorial work',
+  session_task: 'Session tasks',
+  other: 'Other',
+  lecture_prep: 'Lecture prep',
+}
+
+export const WORK_TABS = ['upcoming', 'pastDue', 'completed'] as const
+export type WorkTab = (typeof WORK_TABS)[number]
+
+export function isWorkCategory(value: unknown): value is WorkCategory {
+  return typeof value === 'string' && (WORK_CATEGORIES as readonly string[]).includes(value)
+}
+
+// ------------------------------------------------------------------- items --
+
+export interface WorkItem {
+  /** 'bba:<id>' | 'kd:<id>' | 'prep:<uid>' | 'test:<uid>' */
+  key: string
+  source: 'assignment' | 'key_date' | 'prep' | 'session'
+  category: WorkCategory
+  moduleCode: string | null
+  courseName: string | null
+  title: string
+  /** London day key. */
+  dueOn: string | null
+  /** ISO instant, when a time is known. */
+  dueAt: string | null
+  done: boolean
+  doneVia: 'blackboard' | 'dashboard' | 'session' | null
+  /** Set on AI-found key dates only. */
+  ai: { status: 'suggested' | 'confirmed'; from: WorkSourceKind; quote: string; sourceUrl: string | null } | null
+  url: string | null
+  bbStatus?: 'not_submitted' | 'submitted' | 'graded'
+  /** Prep and test items keep their session so the UI can reuse SessionRow. */
+  session?: SessionWithPrep
+  assignmentId?: string
+  keyDateId?: string
+  /** An official assignment with no Blackboard due date, dated by this AI key date. */
+  dueFromKeyDateId?: string
+  /**
+   * Work set FOR this session (AI key dates of category session_task /
+   * tutorial, or naming a session type) that fell on its day. Session items
+   * only; it never changes the session's prep status.
+   */
+  setWork?: SessionSetWork[]
+  /** Announcements about this item: they annotate it, they never compete with it. */
+  notes?: WorkNote[]
+}
+
+/** Where an AI key date was found. Content and documents are primary; an announcement only annotates. */
+export type WorkSourceKind = 'announcement' | 'content' | 'document'
+
+export interface WorkNote {
+  keyDateId: string
+  from: 'announcement'
+  title: string
+  quote: string
+  sourceUrl: string | null
+  status: 'suggested' | 'confirmed'
+}
+
+function sourceKind(kd: Pick<BbKeyDate, 'announcement_id' | 'document_id'>): WorkSourceKind {
+  if (kd.announcement_id) return 'announcement'
+  return kd.document_id ? 'document' : 'content'
+}
+
+/** Same category, or either side is the catch-all. */
+const compatibleCategory = (a: WorkCategory, b: WorkCategory) => a === b || a === 'other' || b === 'other'
+
+export interface SessionSetWork {
+  keyDateId: string
+  title: string
+  category: WorkCategory
+  status: 'suggested' | 'confirmed'
+  from: WorkSourceKind
+  quote: string
+  sourceUrl: string | null
+  done: boolean
+}
+
+type CourseLite = Pick<BbCourseRecord, 'id' | 'module_code' | 'name' | 'url'>
+type AssignmentLite = Pick<
+  BbAssignmentRecord,
+  'id' | 'course_id' | 'title' | 'due_at' | 'status' | 'is_formative' | 'url' | 'done_at' | 'removed_at'
+>
+type KeyDateLite = Pick<
+  BbKeyDate,
+  | 'id'
+  | 'course_id'
+  | 'announcement_id'
+  | 'content_id'
+  | 'document_id'
+  | 'title'
+  | 'category'
+  | 'for_session_type'
+  | 'due_on'
+  | 'due_at'
+  | 'quote'
+  | 'status'
+  | 'assignment_id'
+  | 'done_at'
+>
+
+/**
+ * Official assignment → category: Blackboard's formative flag first, then
+ * the title ("Summative Essay …", "Formative Discussion Post", "… Quiz").
+ */
+export function workCategory(assignment: Pick<BbAssignmentRecord, 'is_formative' | 'title'>): WorkCategory {
+  if (assignment.is_formative === true) return 'formative'
+  if (assignment.is_formative === false) return 'summative'
+  const title = assignment.title
+  if (/\bsummative\b/i.test(title)) return 'summative'
+  if (/\bformative\b/i.test(title)) return 'formative'
+  if (/\b(?:tests?|exams?|examinations?|quiz(?:zes)?)\b/i.test(title)) return 'test'
+  return 'other'
+}
+
+export interface WorkInput {
+  courses: CourseLite[]
+  assignments: AssignmentLite[]
+  keyDates: KeyDateLite[]
+  /** Timetable sessions with prep (useTimetable). */
+  sessions: SessionWithPrep[]
+  /** bb_content id → url, for a key date's source link. */
+  contentUrlById?: Map<string, string | null>
+  /** bb_announcements id → url. */
+  announcementUrlById?: Map<string, string | null>
+  /** bb_documents id → the bb_content id it's attached to. */
+  documentContentId?: Map<string, string>
+  now: Date
+}
+
+const isTestSession = (s: { type: string }) => s.type.trim().toLowerCase() === 'test'
+
+/** Key dates folded into an official assignment: confirmed first, then the earliest. */
+function foldedKeyDate(list: KeyDateLite[] | undefined): KeyDateLite | null {
+  if (!list?.length) return null
+  return [...list].sort(
+    (a, b) => (a.status === 'confirmed' ? 0 : 1) - (b.status === 'confirmed' ? 0 : 1) || a.due_on.localeCompare(b.due_on)
+  )[0]
+}
+
+/**
+ * A `dueAt` that falls on a different London day from its `dueOn` is stale
+ * (the day was edited, the time wasn't): trust the day and drop the time.
+ */
+function consistentDueAt(dueOn: string | null, dueAt: string | null): string | null {
+  if (!dueAt || !dueOn) return dueAt
+  return londonDateKey(dueAt) === dueOn ? dueAt : null
+}
+
+/** Work set for a session: a session task or tutorial task, or any date naming a session type. */
+function isSessionWork(kd: Pick<KeyDateLite, 'category' | 'for_session_type'>): boolean {
+  return kd.category === 'session_task' || kd.category === 'tutorial' || !!kd.for_session_type
+}
+
+/**
+ * Builds every work item. Dismissed key dates never appear. A key date
+ * linked to an official assignment folds into it only when that assignment
+ * is among the live ones loaded; otherwise (removed, or not loaded) it shows
+ * as its own item. Session work (see `isSessionWork`) with a timetable
+ * session of the same module that day attaches to that session's item as
+ * `setWork` instead of being a row; with no such session it stays a row.
+ */
+export function toWorkItems(input: WorkInput): WorkItem[] {
+  const courseById = new Map(input.courses.map((c) => [c.id, c]))
+  const liveAssignments = new Set(input.assignments.filter((a) => !a.removed_at).map((a) => a.id))
+  const live = input.keyDates.filter((kd) => kd.status === 'suggested' || kd.status === 'confirmed')
+  const folds = (kd: KeyDateLite) => !!kd.assignment_id && liveAssignments.has(kd.assignment_id)
+  const byAssignment = new Map<string, KeyDateLite[]>()
+  for (const kd of live) {
+    if (!kd.assignment_id || !folds(kd)) continue
+    byAssignment.set(kd.assignment_id, [...(byAssignment.get(kd.assignment_id) ?? []), kd])
+  }
+
+  const items: WorkItem[] = []
+  const courseIdOf = new Map<WorkItem, string>()
+  const assignmentItem = new Map<string, WorkItem>()
+
+  for (const a of input.assignments) {
+    if (a.removed_at) continue
+    const course = courseById.get(a.course_id)
+    const bbDone = a.status === 'submitted' || a.status === 'graded'
+    const fold = a.due_at ? null : foldedKeyDate(byAssignment.get(a.id))
+    const assignmentRow: WorkItem = {
+      key: `bba:${a.id}`,
+      source: 'assignment',
+      category: workCategory(a),
+      moduleCode: course?.module_code ?? null,
+      courseName: course?.name ?? null,
+      title: a.title,
+      dueOn: a.due_at ? londonDateKey(a.due_at) : (fold?.due_on ?? null),
+      dueAt: a.due_at ?? (fold ? consistentDueAt(fold.due_on, fold.due_at) : null),
+      done: bbDone || !!a.done_at,
+      doneVia: bbDone ? 'blackboard' : a.done_at ? 'dashboard' : null,
+      ai: null,
+      url: a.url ?? course?.url ?? null,
+      bbStatus: a.status,
+      assignmentId: a.id,
+      ...(fold ? { dueFromKeyDateId: fold.id } : {}),
+    }
+    items.push(assignmentRow)
+    courseIdOf.set(assignmentRow, a.course_id)
+    assignmentItem.set(a.id, assignmentRow)
+  }
+
+  const sourceUrl = (kd: KeyDateLite): string | null => {
+    if (kd.content_id) return input.contentUrlById?.get(kd.content_id) ?? null
+    if (kd.document_id) {
+      const contentId = input.documentContentId?.get(kd.document_id)
+      return contentId ? (input.contentUrlById?.get(contentId) ?? null) : null
+    }
+    if (kd.announcement_id) return input.announcementUrlById?.get(kd.announcement_id) ?? null
+    return null
+  }
+
+  const courseByCode = new Map(
+    input.courses.filter((c) => c.module_code).map((c) => [c.module_code as string, c])
+  )
+  const sessionItems: WorkItem[] = []
+  for (const s of input.sessions) {
+    // Same population as assignmentLists: timetable sessions with a module code.
+    if (s.source !== 'timetable' || !s.moduleCode) continue
+    const course = courseByCode.get(s.moduleCode)
+    const base = {
+      moduleCode: s.moduleCode,
+      courseName: course?.name ?? s.moduleName,
+      title: `${s.moduleName} - ${s.type}`,
+      dueOn: londonDateKey(s.start),
+      dueAt: s.start,
+      ai: null,
+      url: null,
+      session: s,
+    }
+    if (isTestSession(s)) {
+      const ended = hasEnded(s, input.now)
+      sessionItems.push({ ...base, key: `test:${s.uid}`, source: 'session', category: 'test', done: ended, doneVia: ended ? 'session' : null })
+    } else {
+      sessionItems.push({
+        ...base,
+        key: `prep:${s.uid}`,
+        source: 'prep',
+        category: 'lecture_prep',
+        done: s.prepDone,
+        doneVia: s.prepDone ? 'dashboard' : null,
+      })
+    }
+  }
+
+  const setWorkTarget = (kd: KeyDateLite, moduleCode: string | null): WorkItem | null => {
+    if (!isSessionWork(kd) || !moduleCode) return null
+    const sameDay = sessionItems
+      .filter((i) => i.moduleCode === moduleCode && i.dueOn === kd.due_on)
+      .sort((a, b) => (a.dueAt ?? '').localeCompare(b.dueAt ?? ''))
+    const type = normaliseSessionType(kd.for_session_type ?? (kd.category === 'tutorial' ? 'tutorial' : null))
+    return (type && sameDay.find((i) => normaliseSessionType(i.session?.type) === type)) || sameDay[0] || null
+  }
+
+  const noteOf = (kd: KeyDateLite): WorkNote => ({
+    keyDateId: kd.id,
+    from: 'announcement',
+    title: kd.title,
+    quote: kd.quote,
+    sourceUrl: sourceUrl(kd),
+    status: kd.status as 'suggested' | 'confirmed',
+  })
+  const addNote = (item: WorkItem, kd: KeyDateLite) => {
+    item.notes = [...(item.notes ?? []), noteOf(kd)]
+  }
+  // Announcement dates that are standalone deadlines: resolved once every primary row exists.
+  const announcementRows: { kd: KeyDateLite; item: WorkItem }[] = []
+
+  for (const kd of live) {
+    if (folds(kd)) {
+      // The official row wins; an announcement's wording stays reachable from it.
+      const official = assignmentItem.get(kd.assignment_id as string)
+      if (official && kd.announcement_id) addNote(official, kd)
+      continue
+    }
+    const course = courseById.get(kd.course_id)
+    const url = sourceUrl(kd)
+    const target = setWorkTarget(kd, course?.module_code ?? null)
+    if (target) {
+      target.setWork = [
+        ...(target.setWork ?? []),
+        {
+          keyDateId: kd.id,
+          title: kd.title,
+          category: kd.category,
+          status: kd.status as 'suggested' | 'confirmed',
+          from: sourceKind(kd),
+          quote: kd.quote,
+          sourceUrl: url,
+          done: !!kd.done_at,
+        },
+      ]
+      continue
+    }
+    const row: WorkItem = {
+      key: `kd:${kd.id}`,
+      source: 'key_date',
+      category: kd.category,
+      moduleCode: course?.module_code ?? null,
+      courseName: course?.name ?? null,
+      title: kd.title,
+      dueOn: kd.due_on,
+      dueAt: consistentDueAt(kd.due_on, kd.due_at),
+      done: !!kd.done_at,
+      doneVia: kd.done_at ? 'dashboard' : null,
+      ai: { status: kd.status as 'suggested' | 'confirmed', from: sourceKind(kd), quote: kd.quote, sourceUrl: url },
+      url: url ?? course?.url ?? null,
+      keyDateId: kd.id,
+    }
+    courseIdOf.set(row, kd.course_id)
+    if (kd.announcement_id) announcementRows.push({ kd, item: row })
+    else items.push(row)
+  }
+
+  // An announcement never competes with a primary item for the same thing:
+  // same course, same London day, compatible category. It annotates it.
+  const primaries = items.filter((i) => i.source === 'assignment' || i.source === 'key_date')
+  for (const { kd, item } of announcementRows) {
+    const primary = primaries.find(
+      (p) =>
+        courseIdOf.get(p) === kd.course_id && p.dueOn === item.dueOn && compatibleCategory(p.category, item.category)
+    )
+    if (primary) addNote(primary, kd)
+    else items.push(item)
+  }
+
+  return [...items, ...sessionItems]
+}
+
+// ------------------------------------------------------------------- lists --
+
+/**
+ * When an item is due, as epoch ms: its `dueAt`, else the end of its London
+ * `dueOn` day (so an all-day item sorts after timed ones that day). A
+ * `dueAt` on a different London day from `dueOn` is ignored (the day wins).
+ * Null when undated.
+ */
+export function workDueInstant(item: Pick<WorkItem, 'dueOn' | 'dueAt'>): number | null {
+  const dueAt = consistentDueAt(item.dueOn, item.dueAt)
+  if (dueAt) return Date.parse(dueAt)
+  if (item.dueOn) return Date.parse(londonDayBoundsUTC(new Date(`${item.dueOn}T12:00:00Z`)).timeMax)
+  return null
+}
+
+/**
+ * Undone and late: its `dueAt` has passed, or (date only) its London day is
+ * over. Prep items: ended and not handed in (`isOverdue`). Timetable tests
+ * are never late — they're done once they end.
+ */
+export function isWorkPastDue(item: WorkItem, now: Date): boolean {
+  if (item.done) return false
+  if (item.source === 'session') return false
+  if (item.source === 'prep' && item.session) return hasEnded(item.session, now)
+  const due = workDueInstant(item)
+  if (due === null) return false
+  return consistentDueAt(item.dueOn, item.dueAt) ? now.getTime() > due : now.getTime() >= due
+}
+
+export type WorkLists = Record<WorkTab, WorkItem[]>
+
+function byDue(direction: 1 | -1) {
+  return (a: WorkItem, b: WorkItem) => {
+    const da = workDueInstant(a)
+    const db = workDueInstant(b)
+    if (da === null || db === null) {
+      if (da !== db) return da === null ? 1 : -1 // undated last either way
+    } else if (da !== db) {
+      return (da - db) * direction
+    }
+    return a.title.localeCompare(b.title) || a.key.localeCompare(b.key)
+  }
+}
+
+/**
+ * Upcoming (soonest first, undated last), Past due (most overdue first) and
+ * Completed (most recent first). Lecture prep is placed exactly as
+ * `assignmentLists` places it.
+ */
+export function workLists(items: WorkItem[], now: Date): WorkLists {
+  const prepSessions = items.filter((i) => i.source === 'prep' && i.session).map((i) => i.session as SessionWithPrep)
+  const prepTabs = assignmentLists(prepSessions, now)
+  const prepTab = new Map<string, WorkTab>()
+  for (const tab of WORK_TABS) for (const s of prepTabs[tab]) prepTab.set(s.uid, tab)
+
+  const lists: WorkLists = { upcoming: [], pastDue: [], completed: [] }
+  for (const item of items) {
+    let tab: WorkTab
+    if (item.source === 'prep' && item.session) {
+      const placed = prepTab.get(item.session.uid)
+      if (!placed) continue
+      tab = placed
+    } else if (item.done) {
+      tab = 'completed'
+    } else {
+      tab = isWorkPastDue(item, now) ? 'pastDue' : 'upcoming'
+    }
+    lists[tab].push(item)
+  }
+  lists.upcoming.sort(byDue(1))
+  lists.pastDue.sort(byDue(1))
+  lists.completed.sort(byDue(-1))
+  return lists
+}
+
+// ----------------------------------------------------------------- filters --
+
+export interface WorkFilter {
+  categories: WorkCategory[] | 'all'
+  /** Module codes. Items with no module (org courses) only show under 'all'. */
+  modules: string[] | 'all'
+}
+
+/** The categories an item is listed under: its own, plus those of the work set for it. */
+export function itemCategories(item: Pick<WorkItem, 'category' | 'setWork'>): WorkCategory[] {
+  return [...new Set([item.category, ...(item.setWork ?? []).map((w) => w.category)])]
+}
+
+export function matchesCategories(item: Pick<WorkItem, 'category' | 'setWork'>, categories: readonly WorkCategory[]): boolean {
+  return itemCategories(item).some((c) => categories.includes(c))
+}
+
+export function applyWorkFilter(items: WorkItem[], filter: WorkFilter): WorkItem[] {
+  return items.filter(
+    (item) =>
+      (filter.categories === 'all' || matchesCategories(item, filter.categories)) &&
+      (filter.modules === 'all' || (item.moduleCode !== null && filter.modules.includes(item.moduleCode)))
+  )
+}
+
+/** Undone, dated, not yet late, and due in the next `days` London days (today included), soonest first. */
+export function dueWithin(items: WorkItem[], now: Date, days: number): WorkItem[] {
+  const today = londonToday(now)
+  const end = addDays(today, days)
+  return items
+    .filter((i) => !i.done && i.dueOn !== null && i.dueOn >= today && i.dueOn < end && !isWorkPastDue(i, now))
+    .sort(byDue(1))
+}
+
+// ------------------------------------------------------------- sync status --
+
+export type SyncState = 'never' | 'fresh' | 'stale' | 'failed'
+
+/** A successful sync older than this is stale. */
+export const SYNC_STALE_MS = 48 * 60 * 60 * 1000
+
+export interface SyncRun {
+  id: string
+  started_at: string
+  finished_at: string
+  trigger: 'manual' | 'visit' | 'daily'
+  ok: boolean
+  counts: Record<string, unknown>
+  error: string | null
+}
+
+export interface SyncStatus {
+  state: SyncState
+  /** When the last successful sync finished. */
+  lastOkAt: string | null
+  /** The last successful run's counts (courses, assignments, content …). */
+  counts: Record<string, unknown> | null
+  /** The latest run, ok or not. */
+  lastRun: SyncRun | null
+}
+
+/**
+ * From the newest runs first: none → never; the latest failed (e.g. logged
+ * out of Blackboard) → failed; the last success over 48 h old → stale;
+ * otherwise fresh.
+ */
+export function syncStatus(runs: SyncRun[], now: Date): SyncStatus {
+  const sorted = [...runs].sort((a, b) => b.finished_at.localeCompare(a.finished_at))
+  const lastRun = sorted[0] ?? null
+  const lastOk = sorted.find((r) => r.ok) ?? null
+  const base = { lastOkAt: lastOk?.finished_at ?? null, counts: lastOk?.counts ?? null, lastRun }
+  if (!lastRun) return { state: 'never', ...base }
+  if (!lastRun.ok) return { state: 'failed', ...base }
+  const age = now.getTime() - Date.parse(lastRun.finished_at)
+  return { state: age > SYNC_STALE_MS ? 'stale' : 'fresh', ...base }
+}

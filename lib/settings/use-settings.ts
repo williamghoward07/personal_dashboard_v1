@@ -14,7 +14,7 @@ export interface UseSettingsResult {
   updateSettings: (patch: UserSettingsPatch) => Promise<void>
 }
 
-const SELECT_COLUMNS = 'home_layout, hidden_nav_items, launcher_link_ids, calendar_view'
+const SELECT_COLUMNS = 'home_layout, hidden_nav_items, launcher_link_ids, calendar_view, work_filter, week_one_start'
 
 // `user_settings` (supabase/migrations/20260920000000_user_settings.sql) is
 // applied by hand, per this repo's convention, so the table may not exist
@@ -24,8 +24,8 @@ const SELECT_COLUMNS = 'home_layout, hidden_nav_items, launcher_link_ids, calend
 // settings-dependent UI (home layout, nav visibility, the launcher).
 //
 // The write path (optimistic update, then persist, then roll back +
-// surface an error on failure) follows lib/workspaces/use-workspaces.ts:87-101
-// exactly.
+// surface an error on failure) follows lib/workspaces/use-workspaces.ts:87-101.
+// It persists only the keys in the patch, never the whole in-memory object.
 export function useSettings(): UseSettingsResult {
   const [settings, setSettings] = useState<UserSettings>(defaultSettings())
   const [loading, setLoading] = useState(true)
@@ -57,9 +57,14 @@ export function useSettings(): UseSettingsResult {
       setSettings(next)
       setError(null)
 
+      // Only the patched columns: after a failed read `previous` is all
+      // defaults, and writing it back would wipe the stored layout, launcher
+      // and week one. The row is keyed by user_id (default auth.uid()), and
+      // every other column has a default, so a first insert of a partial row
+      // is valid.
       const { error: upsertError } = await supabase
         .from('user_settings')
-        .upsert({ ...next, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+        .upsert({ ...patch, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
 
       if (upsertError) {
         setSettings(previous)

@@ -48,6 +48,7 @@ export function FilterTabs<T extends string>({
 }: FilterTabsProps<T>) {
   return (
     <div
+      data-ui="filter-tabs"
       role="group"
       aria-label={ariaLabel}
       className={cn(

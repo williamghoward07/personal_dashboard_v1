@@ -1,0 +1,50 @@
+.status {
+  min-width: 0;
+  width: 100%;
+  color: var(--color-outline-variant);
+}
+
+.rows, .cards, .tiles, .calendar, .metric {
+  display: grid;
+  gap: .6rem;
+}
+
+.item {
+  display: grid;
+  gap: .45rem;
+  align-content: center;
+  min-width: 0;
+  padding-block: .35rem;
+}
+
+.line {
+  display: block;
+  width: 76%;
+  max-width: 16rem;
+  height: .65rem;
+  border-radius: .25rem;
+  background: currentColor;
+}
+
+.line + .line { width: 46%; height: .45rem; opacity: .65; }
+.item:nth-child(2n) .line:first-child { width: 62%; }
+.cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+.cards .item, .calendar .item {
+  border: 1px solid currentColor;
+  border-radius: .65rem;
+  background: var(--color-surface-container-low);
+  padding: 1rem;
+  min-height: 6rem;
+}
+
+.tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tiles .item { justify-items: center; }
+.tiles .line:first-child { width: 2rem; height: 2rem; border-radius: .5rem; }
+.metric .line:first-child { max-width: 6rem; height: 1.4rem; }
+.calendar { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .2rem; }
+.calendar .item { min-height: 15rem; padding: .3rem; align-content: start; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .line { animation: breathe 1.8s ease-in-out infinite alternate; }
+}
+@keyframes breathe { to { opacity: .5; } }

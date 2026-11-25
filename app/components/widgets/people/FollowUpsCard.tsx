@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { BellRing, Check, Pencil, Plus, Trash2, Undo2 } from 'lucide-react'
@@ -81,7 +82,7 @@ export default function FollowUpsCard({
         }
       >
         {loading ? (
-          <p>Loading...</p>
+          <LoadingSkeleton label="Loading..." />
         ) : followUps.length === 0 ? (
           <p>
             Nothing to follow up. Set a reminder from Quick add, or add a &ldquo;bring up next

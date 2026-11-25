@@ -27,12 +27,12 @@ export function useFillViewportHeight(
     measure()
     window.addEventListener('resize', measure)
     // Anything above the element changing height moves it down or up.
-    const observer = new ResizeObserver(measure)
-    if (el.parentElement) observer.observe(el.parentElement)
-    if (el.previousElementSibling) observer.observe(el.previousElementSibling)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    if (el.parentElement) observer?.observe(el.parentElement)
+    if (el.previousElementSibling) observer?.observe(el.previousElementSibling)
     return () => {
       window.removeEventListener('resize', measure)
-      observer.disconnect()
+      observer?.disconnect()
     }
   }, [ref, bottomGapPx, minPx])
 

@@ -9,3 +9,4 @@
 - Not yet applied to the live DB:
   - `20260826000000_notes_documents.sql`
   - `20261009010000_todos_mstodo_steps.sql`
+- A route that uses the service-role client (`lib/supabase/admin.ts`) needs `grant … to service_role` on every table it or its RPC touches. That role bypasses RLS but not plain grants (this silently broke the Blackboard sync until `20261113000000_blackboard_work.sql`, applied 12 Nov 2026).

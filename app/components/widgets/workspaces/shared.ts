@@ -18,21 +18,21 @@ export function accentVars(accent: Accent): CSSProperties {
 export const wsAccentStyle = { '--color-accent': 'var(--color-ws-accent)' } as CSSProperties
 
 export const inputClass =
-  'rounded-md border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:border-ws-accent'
+  'rounded-md border border-outline-variant bg-surface-container-lowest min-h-11 px-2 py-1.5 text-base text-on-surface outline-none sm:text-sm placeholder:text-on-surface-variant/60 focus:border-ws-accent'
 
 export const labelClass = 'flex flex-col gap-1 text-xs text-on-surface-variant'
 
 export const actionButtonClass =
-  'flex items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40'
+  'flex min-h-11 items-center gap-1.5 rounded-md border border-outline-variant px-2.5 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40'
 
 export const primaryButtonClass =
-  'flex items-center gap-1.5 rounded-md bg-ws-accent px-3 py-1.5 text-xs font-semibold text-surface-container-lowest transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40'
+  'flex min-h-11 items-center gap-1.5 rounded-md bg-ws-accent px-3 py-1.5 text-xs font-semibold text-surface-container-lowest transition-[filter] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40'
 
 export const ghostButtonClass =
   'rounded-md px-2.5 py-1.5 text-xs text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface'
 
 export const iconButtonClass =
-  'rounded p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-30'
+  'inline-flex min-h-11 min-w-11 items-center justify-center rounded p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-on-surface disabled:opacity-30'
 
 export const filterChipClass = 'rounded-full border px-2.5 py-1 text-xs transition-colors'
 export const filterChipActiveClass = 'border-ws-accent/50 bg-ws-accent/10 text-ws-accent'

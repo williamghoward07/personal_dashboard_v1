@@ -19,6 +19,7 @@ export function useScrollBox(ref: RefObject<HTMLElement | null>): { height: numb
       setBox((prev) => (prev.height === next.height && prev.scrollbarPx === next.scrollbarPx ? prev : next))
     }
     measure()
+    if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()

@@ -40,7 +40,7 @@ export default function TimeGridPill({
 }) {
   const openSession = useOpenSession()
   const start = item.start
-  const colour = item.kind === 'routine' ? item.colour : null
+  const colour = item.kind === 'routine' ? item.colour : 'var(--color-habit-purple)'
   const widthPct = 100 / columnCount
   const leftPct = column * widthPct
 
@@ -53,8 +53,10 @@ export default function TimeGridPill({
     ...(item.kind === 'session'
       ? sessionPillStyle(item.session)
       : {
-          backgroundColor: colour ? `${colour}33` : 'color-mix(in srgb, var(--color-secondary-container) 16%, transparent)',
-          ...borderColors(colour ?? 'var(--color-secondary-container)'),
+          backgroundColor: `color-mix(in srgb, ${colour} 18%, var(--color-surface-container-low))`,
+          ...borderColors(`color-mix(in srgb, ${colour} 36%, var(--color-surface-container-low))`),
+          borderLeftColor: colour,
+          borderLeftWidth: 3,
         }),
   }
 
@@ -90,7 +92,7 @@ export default function TimeGridPill({
         onClick={(e) => openSession?.(item.session, e.currentTarget)}
         style={style}
         title={tooltip}
-        className="absolute flex cursor-pointer items-start gap-1 overflow-hidden rounded-md border px-1.5 py-px text-left text-[11px] leading-4 text-on-surface"
+        className="absolute flex cursor-pointer items-start gap-1 overflow-hidden rounded-md border px-1.5 py-px text-left text-xs leading-4 text-on-surface hover:brightness-97 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-primary"
       >
         <PrepLight status={item.session.status} postStatus={item.session.postStatus} size="sm" className="mt-1" />
         <span className="min-w-0 flex-1">{content}</span>
@@ -105,7 +107,7 @@ export default function TimeGridPill({
         onClick={() => onSelectRoutineInstance(item.instance)}
         style={style}
         title={tooltip}
-        className="absolute cursor-pointer overflow-hidden rounded-md border px-1.5 py-px text-left text-[11px] leading-4 text-on-surface"
+        className="absolute flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-md border px-1.5 py-px text-left text-xs leading-4 text-on-surface hover:brightness-97 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-primary"
       >
         {content}
       </button>
@@ -120,7 +122,7 @@ export default function TimeGridPill({
       onClick={(e) => eventSession && openSession?.(eventSession, e.currentTarget)}
       style={style}
       title={tooltip}
-      className="absolute cursor-pointer overflow-hidden rounded-md border px-1.5 py-px text-left text-[11px] leading-4 text-on-surface"
+      className="absolute flex cursor-pointer flex-col items-stretch justify-start overflow-hidden rounded-md border px-1.5 py-px text-left text-xs leading-4 text-on-surface hover:brightness-97 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-primary"
     >
       {content}
     </button>

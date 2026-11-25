@@ -4,6 +4,7 @@ import { useDroppable } from '@dnd-kit/core'
 import type { RoutineInstance, Task } from '@/lib/types'
 import type { DayItem } from '../calendarItems'
 import { borderColors, calendarItemSession, formatTime, sessionPillStyle } from '../calendarItems'
+import { DeadlineButton } from '../DeadlinePopover'
 import { useOpenSession } from '../../lectures/SessionPopover'
 
 const START_HOUR = 6
@@ -94,6 +95,8 @@ export default function DayTimeline({
                 >
                   {item.title}
                 </button>
+              ) : item.kind === 'deadline' ? (
+                <DeadlineButton item={item.item} className="hover:underline" />
               ) : (
                 <span className="truncate">{item.title}</span>
               )}

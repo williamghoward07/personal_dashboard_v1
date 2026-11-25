@@ -65,7 +65,7 @@ export default function TodoSyncBar({
     body = (
       <>
         <CloudOff className="h-3.5 w-3.5 shrink-0 text-academic-orange" />
-        <span>To Do sync failed{status.message ? `: ${status.message}` : '.'}</span>
+        <span>Microsoft To Do couldn&apos;t sync. Your saved tasks are still available.</span>
         <button type="button" onClick={onSync} className={linkClass}>
           Retry
         </button>
@@ -84,6 +84,14 @@ export default function TodoSyncBar({
         <p role="status" className="flex flex-wrap items-center gap-1.5">
           {body}
         </p>
+      )}
+      {status.state === 'error' && status.message && (
+        <details className="max-w-full">
+          <summary className="w-fit cursor-pointer py-1 text-on-surface">Sync error details</summary>
+          <p className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all rounded-md border border-outline-variant p-2">
+            {status.message}
+          </p>
+        </details>
       )}
     </div>
   )

@@ -1,5 +1,6 @@
 'use client'
 
+import LoadingSkeleton from '@/app/components/LoadingSkeleton'
 import { useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowRight, Check, ExternalLink, Link2, Maximize2, Pencil, Plus, Trash2 } from 'lucide-react'
@@ -240,6 +241,7 @@ export default function SessionPrepPanel({
   error,
   workspaceHref,
   fullViewHref,
+  blackboardCount = 0,
   showHeader = true,
   headerSlot,
   onAddReading,
@@ -263,6 +265,8 @@ export default function SessionPrepPanel({
   workspaceHref?: string | null
   /** The session's assignment view. */
   fullViewHref?: string | null
+  /** Items Blackboard matched; a quiet link to the full view when above 0. */
+  blackboardCount?: number
   showHeader?: boolean
   /** Shown under the header (the calendar's "track prep" switch). */
   headerSlot?: ReactNode
@@ -355,7 +359,7 @@ export default function SessionPrepPanel({
         </div>
 
         {loading ? (
-          <p className="text-xs text-on-surface-variant">Loading…</p>
+          <LoadingSkeleton label="Loading…" />
         ) : (
           before.length > 0 && <ul className="flex flex-col">{before.map(renderItem)}</ul>
         )}
@@ -420,6 +424,11 @@ export default function SessionPrepPanel({
 
       {(fullViewHref || workspaceHref) && (
         <div className="flex items-center justify-end gap-4">
+          {fullViewHref && blackboardCount > 0 && (
+            <Link href={fullViewHref} className="mr-auto text-xs text-on-surface-variant hover:text-on-surface hover:underline">
+              {blackboardCount} from Blackboard
+            </Link>
+          )}
           {fullViewHref && (
             <Link href={fullViewHref} className={cn('flex items-center gap-1 text-xs font-semibold hover:underline', ACCENT_TEXT[accent])}>
               <Maximize2 className="h-3 w-3" strokeWidth={2} />

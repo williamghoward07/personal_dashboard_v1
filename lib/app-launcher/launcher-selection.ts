@@ -1,11 +1,8 @@
 // Pure logic for the home App Launcher widget: which quick_links appear and
 // in what order (`user_settings.launcher_link_ids` — the single ordered
 // array that is now the launcher's only source of truth, see CLAUDE.md's
-// App Library section on the retired `quick_links.is_pinned`), plus how many
-// tiles a given widget span shows. Framework-agnostic, no Supabase import —
+// App Library section on the retired `quick_links.is_pinned`). Framework-agnostic, no Supabase import —
 // same house style as lib/app-launcher/order.ts.
-
-import type { HomeWidgetSpan } from '@/lib/settings/schema'
 
 export interface SeedableLink {
   id: string
@@ -66,29 +63,4 @@ export function reorderLauncherIds(ids: readonly string[], activeId: string, ove
   const next = ids.slice()
   next.splice(to, 0, next.splice(from, 1)[0])
   return next
-}
-
-// Tailwind only generates classes it can see written out in full — same
-// pattern as lib/workspaces/layout.ts's COLUMN_GRID_CLASS. Columns scale
-// with span so a wider widget shows more apps at roughly the same tile
-// size, while the row count (below) stays fixed so the widget's height
-// doesn't balloon at wide spans.
-export const LAUNCHER_GRID_COLS_CLASS: Record<HomeWidgetSpan, string> = {
-  1: 'grid-cols-4',
-  2: 'grid-cols-8',
-  3: 'grid-cols-12',
-  4: 'grid-cols-[repeat(16,minmax(0,1fr))]',
-}
-
-const LAUNCHER_COLUMNS: Record<HomeWidgetSpan, number> = { 1: 4, 2: 8, 3: 12, 4: 16 }
-const LAUNCHER_ROWS = 2
-
-/**
- * How many app tiles a launcher of this span shows, leaving one slot free
- * for the ever-present "More" tile. 7 at span 1 — matching the old
- * `MAX_TILES` exactly, so a default-span widget looks the same as before
- * this change.
- */
-export function tilesForSpan(span: HomeWidgetSpan): number {
-  return LAUNCHER_COLUMNS[span] * LAUNCHER_ROWS - 1
 }

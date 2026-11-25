@@ -14,9 +14,11 @@ PR: https://github.com/williamghoward07/personal_dashboard_v1/pull/6 (Auto-fix o
 
 Decided: Tasks rows keep separate edit + delete icons (user chose this over preview 04's overflow menu, 17 Nov).
 
-Not done:
-1. Not checked in Safari.
-2. Not pushed, no PR. Don't merge `2c0671f`.
+**25 Nov 2026 — integration (Claude Code).** PR #6 is merged. The following were then merged into main in one pass: Blackboard PR #5 (Ultra Document handbooks, matching gaps, announcements), PR #3 (Live/Test extension switcher, rebased onto the new triggers/handbook code), PR #2 (Tests tab and viewport-filling calendar, ported onto the light shell), `claude/advisor-fable-11ceef` (smarter Brain Dump, Find, Ask) and the compact todo / link-title / lecture-light work that had been left uncommitted in the `link-titles-todo-compact` worktree. tsc clean, vitest 1384 pass.
+
+Deliberately NOT merged: `claude/inspiring-hermann-4a677b` (`2c0671f`, phone Home layout; its `home_layout_phone` migration is already live) and `codex/launcher-folders` (`46e470f`, superseded by the launcher work in main). The other `codex/*` branches are superseded.
+
+Not done: not checked in Safari; the Live/Test side panel and Chrome permission prompts have not been loaded in a real browser; migration `20261113010000_ai_usage_service_role.sql` is not applied on the live DB.
 
 Updated: 16 November 2026, Europe/London.
 
